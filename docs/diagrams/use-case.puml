@@ -27,28 +27,22 @@ Admin --|> Staff
 
 rectangle "ClaimLens" {
   usecase "UC01 Sign in to role workspace" as UC01
-  usecase "UC02 Register claim" as UC02
-  usecase "UC03 Upload claim documents" as UC03
-  usecase UC04 as "UC04 Verify extracted evidence
+  usecase "UC02 Submit claim packet" as UC02
+  usecase UC03 as "UC03 Verify extracted evidence
 --
 extension points
 Page re-read"
-  usecase "UC05 Resolve validation alerts" as UC05
-  usecase "UC06 Review benefit adjudication" as UC06
-  usecase "UC07 Review risk flags" as UC07
-  usecase UC08 as "UC08 Submit recommendation
---
-extension points
-Evidence missing"
-  usecase "UC09 Request additional information" as UC09
-  usecase "UC10 Approve, reject or return claim" as UC10
-  usecase UC11 as "UC11 Publish benefit rule-set version
+  usecase "UC04 Resolve validation alerts" as UC04
+  usecase "UC05 Review benefit adjudication" as UC05
+  usecase "UC06 Review risk flags" as UC06
+  usecase "UC07 Submit recommendation" as UC07
+  usecase "UC08 Approve, reject or return claim" as UC08
+  usecase UC09 as "UC09 Publish benefit rule-set version
 --
 extension points
 Test draft"
-  usecase "UC12 Monitor operations & AI quality" as UC12
-  usecase "UC13 Trace claim decision history" as UC13
-  usecase "UC14 Manage staff access" as UC14
+  usecase "UC10 Monitor AI quality" as UC10
+  usecase "UC11 Trace claim decision history" as UC11
 
   usecase "AI-01 Classify & extract documents" as AI01 <<AI>>
   usecase "AI-02 Map expense lines to benefits" as AI02 <<AI>>
@@ -63,29 +57,24 @@ actor "AI Document\nIntelligence Service" as AISvc <<system>>
 
 Staff -- UC01
 Intake -- UC02
-Intake -- UC03
+Reviewer -- UC03
 Reviewer -- UC04
 Reviewer -- UC05
 Reviewer -- UC06
 Reviewer -- UC07
-Reviewer -- UC08
-Reviewer -- UC09
-Reviewer -- UC13
-Approver -- UC07
+Reviewer -- UC11
+Approver -- UC08
 Approver -- UC10
-Approver -- UC12
-Approver -- UC13
-Admin -- UC11
-Admin -- UC14
+Approver -- UC11
+Admin -- UC09
 
-UC03 ..> AI01 : <<include>>
-AI01 ..> UC04 : <<extend>>\n[page misread]
-UC05 ..> AI03 : <<include>>
-UC06 ..> AI02 : <<include>>
-UC06 ..> SYS01 : <<include>>
-UC08 ..> AI04 : <<include>>
-UC09 ..> UC08 : <<extend>>\n[evidence missing]
-SYS01 ..> UC11 : <<extend>>\n[test run requested]
+UC02 ..> AI01 : <<include>>
+AI01 ..> UC03 : <<extend>>\n[page misread]
+UC04 ..> AI03 : <<include>>
+UC05 ..> AI02 : <<include>>
+UC05 ..> SYS01 : <<include>>
+UC07 ..> AI04 : <<include>>
+SYS01 ..> UC09 : <<extend>>\n[test run requested]
 
 AI01 -- AISvc
 AI02 -- AISvc
@@ -96,17 +85,16 @@ note right of AI01
   AI outputs are suggestions with
   confidence + source region.
   Below threshold → empty or
-  "Needs verification" (UC04).
+  "Needs verification" (UC03).
 end note
 
-note bottom of UC10
+note bottom of UC08
   Maker–checker: the submitter of
-  UC08 cannot perform UC10 (BR-06).
+  UC07 cannot perform UC08 (BR-06).
 end note
 
-note bottom of UC13
+note bottom of UC11
   Reviewer: own claims only.
-  Administrator: no claim content;
-  access log only (UC14).
+  Administrator: no claim content.
 end note
 @enduml

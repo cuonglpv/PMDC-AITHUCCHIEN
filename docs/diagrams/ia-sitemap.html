@@ -91,7 +91,7 @@
   <div class="project-bar">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#1c1c1c" stroke-width="1.4"><rect x="6" y="1.5" width="4" height="3" rx=".6"/><rect x="1.5" y="11.5" width="4" height="3" rx=".6"/><rect x="10.5" y="11.5" width="4" height="3" rx=".6"/><path d="M8 4.5v3.5M3.5 11.5V8h9v3.5"/></svg>
     ClaimLens — Sitemap
-    <small>Information architecture · 24 pages · 4 sidebar groups · Intake Officer, Claims Reviewer, Senior Approver, Administrator</small>
+    <small>Information architecture · 19 pages · 3 sidebar groups · Intake Officer, Claims Reviewer, Senior Approver, Administrator</small>
   </div>
   <div class="legend">Grey header = page · darker header = sidebar group · cards = sections and the tasks done there · violet card = AI-assisted · grey line under a header = roles</div>
   <div class="tree" id="tree"></div>
@@ -108,9 +108,8 @@ const site = ["Sign in", "Public · all roles", [
   ["Work", null, [], [
     ["Intake", "Intake Officer · home", [
       N,
-      ["Tabs", "Drafts · My submissions · Needs information."],
+      ["Tabs", "Drafts · My submissions."],
       ["Claims table", "Open a draft, continue uploading, see status."],
-      ["Supplementary documents", "Add documents to a claim in Needs information before its deadline."],
       ["New claim", "Starts the three-step stepper."],
       ["Empty state", "No drafts vs no results for filters."],
     ], [
@@ -125,27 +124,20 @@ const site = ["Sign in", "Public · all roles", [
     ]],
     ["Review queue", "Claims Reviewer · home", [
       N,
-      ["Queue tabs", "Available · Assigned to me · Needs verification · Needs information · Returned."],
+      ["Queue tabs", "Available · Assigned to me · Needs verification · Returned."],
       ["Priority table", "Claim no., member, amount, status, AI status, age, assignee; sorted by priority, then age."],
       ["Filters", "Status, priority, assignee."],
       ["Start review", "Self-assign; opens Evidence when fields need verification."],
       ["Returned claims", "Approver’s return comment."],
-      ["Needs information", "Response deadline; extend it before it passes."],
       ["Empty states", "Nothing assigned vs no results."],
     ]],
     ["Approval queue", "Senior Approver · home", [
       N,
-      ["Tabs", "Pending · Escalated · Decided by me."],
+      ["Tabs", "Pending · Decided by me."],
       ["Priority table", "Payable, high-value marker (≥ 5,000,000 ₫), open High flags, age."],
-      ["Recommendation preview", "Outcome, payable, reviewer, open flags."],
+      ["Recommendation preview", "Outcome, payable, reviewer, kept flags."],
       ["Open claim", "Goes to the Decision tab."],
       ["Empty state", "No pending recommendations."],
-    ]],
-    ["Search claims", "Intake · Reviewer · Approver", [
-      N,
-      ["Search", "Claim no., member or invoice no."],
-      ["Filters", "Status, plan, date."],
-      ["Results", "Only claims the user may see (BR-11)."],
     ]],
     ["Claim workspace", "Reviewer · Approver", [
       ["Case header", "Claim no., member, policy, service date, status, assignee, rule-set version, payable, primary action by status."],
@@ -161,7 +153,7 @@ const site = ["Sign in", "Public · all roles", [
         ["Line results", "Covered / Partially covered / Excluded per line."],
         ["Overrides", "Overridden lines with their reason."],
         ["Attested AI values", "Auto-accepted values the reviewer confirmed.", true],
-        ["Open flags", "Kept and escalated risk flags."],
+        ["Kept flags", "Risk flags the reviewer kept, with notes."],
       ]],
       ["Documents & evidence", "Claims Reviewer", [
         ["Field list", "Grouped by document, lowest confidence first; remaining counter.", true],
@@ -178,7 +170,6 @@ const site = ["Sign in", "Public · all roles", [
         ["Resolve alert", "Fix data at source; validation re-runs."],
         ["Dismiss alert", "Reason code and note required."],
         ["Clinical check", "Diagnosis vs medication signals go to Risk; “Clinical check not run” if AI is down.", true],
-        ["Request information modal", "Checklist pre-filled from alerts, deadline, template letter, export PDF."],
       ]],
       ["Adjudication", "Reviewer · Approver (read)", [
         ["Benefit mapping", "AI benefit category and confidence per expense line.", true],
@@ -191,14 +182,13 @@ const site = ["Sign in", "Public · all roles", [
         ["Override line drawer", "New amount or result, reason code, note; capped by claimed amount and limit."],
         ["No effective rule set", "Blocker naming the Administrator."],
       ]],
-      ["Risk", "Reviewer · Approver", [
-        ["Flag cards", "Type, severity, source (AI or rule), reason.", true],
-        ["Evidence", "Side-by-side documents and the matching claim."],
+      ["Risk", "Claims Reviewer · Approver (read)", [
+        ["Flag cards", "Type, severity and the AI’s one-sentence reason.", true],
+        ["Evidence", "The expense line, the diagnosis and their source documents."],
         ["Signal, not a finding", "Neutral wording on AI flags; never “fraud”."],
         ["Dismiss flag", "Reason code and note."],
         ["Keep for approver", "Note for the Senior Approver."],
-        ["Add manual flag", "Type, severity, note."],
-        ["Escalate", "Senior Approver only; claim gets the Escalated marker."],
+        ["Approver view", "Kept flags shown read-only when deciding."],
       ]],
       ["Decision", "Reviewer · Approver", [
         ["AI summary draft", "Citation chip on every sentence; uncited sentences flagged.", true],
@@ -219,13 +209,7 @@ const site = ["Sign in", "Public · all roles", [
     ]],
   ]],
   ["Policy", null, [], [
-    ["Members & policies", "Administrator · Intake (read)", [
-      N,
-      ["Member search", "Name, ID or policy no."],
-      ["Member detail", "Policies, coverage period, benefit plan, remaining balance, claim history."],
-      ["Seed data notice", "Read-only in the MVP."],
-    ]],
-    ["Benefit plans", "Administrator · home", [
+    ["Benefit plans", "Administrator · home · Reviewer, Approver (read)", [
       N,
       ["Plan list", "Plans with their current version."],
       ["Versions", "Draft, published, effective-from."],
@@ -250,40 +234,15 @@ const site = ["Sign in", "Public · all roles", [
     ]],
   ]],
   ["Insights", null, [], [
-    ["Operations dashboard", "Senior Approver", [
+    ["AI quality dashboard", "Senior Approver", [
       N,
-      ["Filters", "Date range, plan."],
-      ["KPI tiles", "Open claims, median handling time, approved in full, AI fields corrected, signals dismissed."],
-      ["Claims by status", "Count per lifecycle state."],
-      ["Backlog age", "0–2, 3–5, > 5 working days."],
-      ["Reviewer workload", "Claims per reviewer."],
-      ["Outcomes", "Approved, partially approved, rejected, returned."],
-      ["Drill down & export", "Open claims; export XLSX."],
-    ]],
-    ["AI quality", "Senior Approver", [
-      N,
-      ["Low-confidence rate", "Fields needing verification or entry ÷ fields extracted.", true],
-      ["Correction rate by field", "Fields changed by a person ÷ fields suggested.", true],
-      ["Flag dismissal rate", "Flags dismissed ÷ flags raised.", true],
-      ["Clinical false positives", "From the golden-case set.", true],
-      ["Filters & export", "Model version, date; export."],
-    ]],
-    ["Audit log", "Senior Approver · Administrator", [
-      N,
-      ["Filters", "Actor, event type, date, claim no."],
-      ["Claim events", "Senior Approver."],
-      ["Access log", "Sign-ins, role changes, claim opens by claim no. — Administrator."],
-      ["Event detail", "Before/after values, actor, time."],
-    ]],
-  ]],
-  ["Administration", null, [], [
-    ["Staff accounts", "Administrator", [
-      N,
-      ["Staff table", "Name, email, role, status."],
-      ["Create account modal", "Exactly one role per account."],
-      ["Edit role", "Audited with before/after role."],
-      ["Disable / enable", "Disabled users get the generic sign-in error."],
-      ["Self-protection", "No own role change or disable."],
+      ["Filters", "Date range, model version."],
+      ["KPI tiles", "Fields extracted, low-confidence rate, correction rate, mapping auto-accepted, signals dismissed.", true],
+      ["Low confidence by document type", "Where AI is least sure.", true],
+      ["Corrections by field", "Fields changed by a person ÷ fields suggested.", true],
+      ["Mapping auto-accept by category", "Mappings accepted without a person ÷ mappings suggested.", true],
+      ["Flag dismissal by signal type", "Flags dismissed ÷ flags raised; clinical false positives.", true],
+      ["Drill down & export", "Open the claims behind a metric; export XLSX."],
     ]],
   ]],
   ["Profile", "All roles", [N, ["Profile details", "Name, email, role."], ["Sign out", "Ends the session."]]],

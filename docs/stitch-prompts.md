@@ -98,7 +98,7 @@ ClaimLens is a desktop web workbench where health insurance claims staff verify 
 **Page Structure:**
 1. Global shell: 240px black left sidebar with "ClaimLens" wordmark (small magnifying-lens mark + wordmark), groups WORK / POLICY / INSIGHTS, line icons + labels; 56px white top bar with global search "Search claim no., member or invoice no.", notification bell, avatar.
 2. Content area on Warm Paper with a page title in Lexend Exa uppercase and a mono kicker above it.
-3. Key screens of the product: Review queue (data table of claims), Claim workspace (case header, tabs, three columns: document rail, working panel, document viewer, sticky action bar), Upload with AI page check, Operations dashboard, Sign in.
+3. Key screens of the product: Review queue (data table of claims), Claim workspace (case header, tabs, three columns: document rail, working panel, document viewer, sticky action bar), Upload with AI page check, AI quality dashboard, Sign in.
 4. Sample data is Vietnamese (names with diacritics, e.g. Nguyễn Văn An, Phòng khám Đa khoa Hồng Ngọc); UI labels are English.
 ```
 
@@ -121,10 +121,10 @@ Review queue for a Claims Reviewer: a dense, prioritised data table of outpatien
 - 2px radius, flat, 36px compact rows, line icons, no gradients/emoji
 
 **Page Structure:**
-1. Sidebar: ClaimLens wordmark; WORK group with "Review queue" active (badge 12), "Search claims"; POLICY group with "Benefit plans"; user block at bottom "Trần Thu Hà · Claims Reviewer".
+1. Sidebar: ClaimLens wordmark; WORK group with "Review queue" active (badge 12); POLICY group with "Benefit plans"; user block at bottom "Trần Thu Hà · Claims Reviewer".
 2. Top bar: global search field, bell with dot, avatar "TH".
 3. Page header: mono kicker "WORK / 02" in #C8001F; title "REVIEW QUEUE" in Lexend Exa; right side secondary button "Filters" and primary red button "Open next claim  N".
-4. Tabs with mono count badges: Assigned to me 12 (active, 2px ink underline) · Needs verification 5 · Needs information 3 · Returned 1.
+4. Tabs with mono count badges: Assigned to me 12 (active, 2px ink underline) · Needs verification 5 · Returned 1.
 5. Filter row: chips "Priority: All", "Plan: All", "Service date: Last 30 days", search-in-table input "Filter by claim no. or member"; right side text "12 claims · sorted by priority".
 6. Data table (white, mono uppercase headers on paper): Priority (icon + "High/Medium/Low") · Claim no. (mono) · Member · Plan · Service date · Claimed (right-aligned mono) · Status pill · To verify (count with violet AI sparkle) · Alerts (crimson blocking / amber warning counts with icons) · Signals (rust flag count) · Age (e.g. "2d 4h") · Assignee initials.
    Rows:
@@ -133,7 +133,7 @@ Review queue for a Claims Reviewer: a dense, prioritised data table of outpatien
    - High · CLM-2026-000177 · Đỗ Quang Huy · SILVER-OP · 09/10/2026 · 2,180,000 ₫ · Returned · 0 · 0 · 1 signal · 3d 2h · TH
    - Medium · CLM-2026-000195 · Lê Thị Mai · GOLD-OP · 15/10/2026 · 640,000 ₫ · Ready for review · 0 · 0 · 0 · 6h · TH
    - Medium · CLM-2026-000188 · Vũ Đức Thắng · BASIC-OP · 13/10/2026 · 920,000 ₫ · Needs verification · 2 · 0 · 0 · 1d 2h · TH
-   - Medium · CLM-2026-000172 · Hoàng Thu Trang · GOLD-OP · 07/10/2026 · 1,760,000 ₫ · Needs information · 0 · 1 warning · 0 · 4d · TH
+   - Medium · CLM-2026-000172 · Hoàng Thu Trang · GOLD-OP · 07/10/2026 · 1,760,000 ₫ · Needs verification · 0 · 1 warning · 0 · 4d · TH
    - Low · CLM-2026-000199 · Ngô Bảo Châu · SILVER-OP · 16/10/2026 · 350,000 ₫ · Ready for review · 0 · 0 · 0 · 2h · TH
    - Low · CLM-2026-000201 · Bùi Minh Khoa · BASIC-OP · 16/10/2026 · 480,000 ₫ · Processing · — · — · — · 25m · TH
 7. Table footer: pagination "1–8 of 12", rows per page; keyboard hint in mono "↑↓ move · Enter open · N next claim".
@@ -159,9 +159,9 @@ Review queue for a Claims Reviewer: a calm, prioritised list of claims to work o
 - 2px radius, flat, line icons, no gradients, no emoji
 
 **Page Structure:**
-1. Sidebar: "ClaimLens" wordmark; Review queue (active, count 12), Search claims, Benefit plans; user "Trần Thu Hà · Claims Reviewer" at the bottom.
+1. Sidebar: "ClaimLens" wordmark; Review queue (active, count 12), Benefit plans; user "Trần Thu Hà · Claims Reviewer" at the bottom.
 2. Header: title "REVIEW QUEUE"; right: red primary button "Open next claim".
-3. Tabs: Assigned to me 12 (active) · Needs verification 5 · Needs information 3 · Returned 1.
+3. Tabs: Assigned to me 12 (active) · Needs verification 5 · Returned 1.
 4. One filter row: search input "Claim no. or member" and a "Filters" button. Nothing else.
 5. Table, 7 columns, 44px rows: Priority (icon + word) · Claim no. · Member · Service date · Claimed (right-aligned) · Status pill · Needs attention (small icons with counts: violet sparkle = fields to verify, crimson = blocking alert, rust flag = signal; empty if none).
    - High · CLM-2026-000184 · Nguyễn Văn An · 12/10/2026 · 1,400,000 ₫ · In review · rust flag 1
@@ -169,7 +169,7 @@ Review queue for a Claims Reviewer: a calm, prioritised list of claims to work o
    - High · CLM-2026-000177 · Đỗ Quang Huy · 09/10/2026 · 2,180,000 ₫ · Returned · rust flag 1
    - Medium · CLM-2026-000195 · Lê Thị Mai · 15/10/2026 · 640,000 ₫ · Ready for review · —
    - Medium · CLM-2026-000188 · Vũ Đức Thắng · 13/10/2026 · 920,000 ₫ · Needs verification · sparkle 2
-   - Medium · CLM-2026-000172 · Hoàng Thu Trang · 07/10/2026 · 1,760,000 ₫ · Needs information · —
+   - Medium · CLM-2026-000172 · Hoàng Thu Trang · 07/10/2026 · 1,760,000 ₫ · Needs verification · —
 6. Footer: "1–6 of 12" and page arrows.
 ```
 
@@ -208,7 +208,7 @@ Claim workspace, Evidence tab: a Claims Reviewer verifies AI-extracted fields si
       - Service date — "12/10/2026" — High (accepted, TH)
       Below the list: ghost button "Re-run AI on this page" with note "Verified fields are kept".
    c. Zone C — Context rail (480px): document viewer on #E9E7E2 showing a scanned Vietnamese clinic invoice "HÓA ĐƠN" page 1 of 2, toolbar with zoom − 100% +, rotate, page selector "p1 / 2"; the line "Kem dưỡng phục hồi da Obagi … 300,000" is enclosed by a square violet source-highlight box with a small mono tag "line_4.description · 0.78".
-4. Sticky action bar (white, hairline top, 64px): left "3 fields to verify · 0 blocking alerts"; right secondary "Request information", secondary "Save draft", primary red "Accept & next  A".
+4. Sticky action bar (white, hairline top, 64px): left "3 fields to verify · 0 blocking alerts"; right secondary "Save draft", primary red "Accept & next  A".
 ```
 
 **Prompt chỉnh sửa:**
@@ -259,7 +259,7 @@ Claim workspace, Evidence tab. One job only: the reviewer checks AI-extracted fi
    - Invoice no. · HN-0045821 + AI mark · Check
    - Collapsed row "4 accepted fields" with a chevron (closed)
 5. Right column (480px): the scanned Vietnamese invoice page, with ONE violet box around the line "Kem dưỡng phục hồi da Obagi … 300,000". Controls: zoom − / +, page "1 / 2". Nothing else.
-6. Bottom bar (56px, white): left "3 fields to verify"; right secondary "Request information" and red primary "Accept & next".
+6. Bottom bar (56px, white): left "3 fields to verify"; right red primary "Accept & next".
 ```
 
 #### Chuỗi chỉnh sửa bản v1 (mỗi lần dán một dòng, theo thứ tự)
@@ -268,7 +268,7 @@ Claim workspace, Evidence tab. One job only: the reviewer checks AI-extracted fi
 - **R2** `Simplify the case header to one row: claim number, member name, plan and service date on the left; status pill and one primary button "Verify next field" on the right. Remove the four amount tiles, DOB, citizen ID, channel, episode ID, corporate account, OCR confidence and stage chips.`
 - **R3** `Typography: use Be Vietnam Pro sentence case for all labels, names and descriptions; keep IBM Plex Mono only for money, codes and dates; at most one small uppercase kicker per column. The member name is not uppercase.`
 - **R4** `Left column: one row per document (thumbnail, name, one status icon). Remove the document descriptions, the engine extraction card and the extracted entities list.`
-- **R5** `Bottom bar: keep only "3 fields to verify" on the left and two buttons on the right: "Request information" (secondary) and "Accept & next" (red primary). Remove keyboard chips, totals and the decline/approve buttons.`
+- **R5** `Bottom bar: keep only "3 fields to verify" on the left and one button on the right: "Accept & next" (red primary). Remove keyboard chips, totals and the decline/approve buttons.`
 - **R6** `Top bar: keep only the search field, notifications and avatar. Sidebar: remove the "Claim workspace" item; tabs must read Overview · Evidence · Validation · Adjudication · Risk · Decision · Timeline.`
 - **R7** `Replace sample data: claim CLM-2026-000184, Nguyễn Văn An, Gold Outpatient, service 12/10/2026, invoice total 1,400,000 ₫, selected field line 4 "Kem dưỡng phục hồi da Obagi" 300,000 ₫ highlighted on the invoice.`
 
@@ -369,8 +369,8 @@ Claim workspace, Decision tab. One job: the reviewer checks the AI-drafted summa
    b. "Recommendation": three radio cards in one row — Approve full · Approve partial (selected, 2px ink border) · Reject. Below: amount "800,000 ₫" (read-only, mono) and a "Reason" select showing "Exclusion and limit applied".
 5. Right column (480px):
    a. "Before you submit": 4 short lines with icons — ✓ No blocking alerts · ✓ Categories confirmed · ✓ Summary written · ⚠ 1 open signal.
-   b. One rust signal card: flag icon, "Ultrasound may not match diagnosis", small label "AI signal — not a finding", ghost buttons Dismiss · Keep · Escalate.
-6. Bottom bar (56px): left "1 open signal"; right secondary "Request information" and red primary "Submit recommendation".
+   b. One rust signal card: flag icon, "Ultrasound may not match diagnosis", small label "AI signal — not a finding", ghost buttons Dismiss · Keep.
+6. Bottom bar (56px): left "1 open signal"; right red primary "Submit recommendation".
 ```
 
 **Prompt chỉnh sửa:**
@@ -411,34 +411,33 @@ New claim, step 3 of 3. One job: the Intake Officer uploads the claim documents 
 
 ---
 
-## SCR-50 — Operations dashboard
+## SCR-50 — AI quality dashboard
 
 ```text
-Operations dashboard for a Senior Approver. One job: see at a glance where the backlog is and whether AI is helping. Keep it minimal — four charts, a few big numbers, generous white space. Vibe: calm, editorial, data-driven.
+AI quality dashboard for a Senior Approver. One job: see whether AI is helping and where people still correct it. Keep it minimal — four charts, a few big numbers, generous white space. Vibe: calm, editorial, data-driven.
 
 **DESIGN SYSTEM (REQUIRED):**
 - RESTRAINT (most important): show ONLY the elements listed below. No extra charts, tables, legends or annotations beyond what is listed. Labels of at most 4 words.
 - Type: Lexend Exa for the page title and big numbers; Be Vietnam Pro sentence case for labels; IBM Plex Mono for small numbers, dates and axis labels.
 - Platform: Web, desktop 1440px. Canvas Warm Paper #F4F3EF, white cards with 1px #D8D6D1 hairlines, no shadows, 32px gaps
-- Shell: 240px black sidebar #090909 with Approval queue, Search claims, Benefit plans, Operations dashboard, AI quality, Audit log; "Operations dashboard" active (#1D1C1C + 2px #EB0029 left bar); user "Lê Minh Quân · Senior approver"
-- Charts: ink #090909 and greys only; Signal Red #EB0029 for the one bar that needs attention; Insight Violet #6D28D9 only for AI metrics; flat bars, thin gridlines, no gradients
+- Shell: 240px black sidebar #090909 with Approval queue, Benefit plans, AI quality dashboard; "AI quality dashboard" active (#1D1C1C + 2px #EB0029 left bar); user "Lê Minh Quân · Senior approver"
+- Charts: ink #090909 and greys for counts; Insight Violet #6D28D9 for AI rates; Signal Red #EB0029 for the one bar above target; flat bars, thin gridlines, no gradients
 - 2px radius, line icons, no emoji
 
 **Page Structure:**
-1. Header: title "OPERATIONS"; right: date range "01/10/2026 – 31/10/2026", "All plans" select, secondary button "Export XLSX".
+1. Header: title "AI QUALITY"; right: date range "01/10/2026 – 31/10/2026", "Model v2.4 (current)" select, secondary button "Export XLSX".
 2. Five number tiles in one row (label, big number, one small delta line):
-   Open claims 146 (+12) · Median handling time 2.4 d (−0.6 d) · Approved in full 61% · AI fields corrected 18% (violet) · Signals dismissed 72%.
+   Fields extracted 4,812 (+9%) · Low-confidence rate 14% (violet) · Fields corrected 18% (violet) · Mappings auto-accepted 71% (violet) · Signals dismissed 72% (violet).
 3. Two charts side by side:
-   - "Claims by status": horizontal bars — Processing 9, Needs verification 31, Ready for review 22, In review 38, Needs information 14, Pending approval 32.
-   - "Backlog age": four columns — <1 d 52, 1–3 d 61, 3–7 d 24, >7 d 9 (red, small label "Over SLA").
+   - "Low confidence by document type": horizontal ink bars — Invoice 9%, Receipt 12%, Prescription 21%, Visit summary 26%, Lab result 14%.
+   - "Flag dismissal by signal type": four columns — Medication 78% (red, small label "Above target"), Service 64%, Lab test 51%, Quantity 40%; note "Target: ≤ 70%".
 4. Two charts side by side:
-   - "Workload per reviewer": 4 rows with name and a thin bar — Trần Thu Hà 12, Nguyễn Hải Yến 18, Đặng Văn Long 9, Phan Thùy Linh 21 (amber icon).
+   - "Mapping auto-accepted by category" (violet bars): Consultation 92%, Lab test 81%, Medication 68%, Imaging 57%, Procedure 49% (amber icon).
    - "AI corrections by field" (violet bars): Diagnosis 34%, Line description 21%, Total amount 9%, Invoice no. 6%, Service date 3%.
 ```
 
 **Prompt chỉnh sửa:**
-- `Use only ink and greys for chart bars; keep red only for the ">7 d" bar and violet only for the AI chart.`
-- `Add an "Outcomes" chart below as a single stacked bar per week: Approved, Partially approved, Rejected, Returned, in ink and grey shades with a small legend.`
+- `Use violet only for AI rates; keep red only for the "Medication" column above the 70% target.`
 
 ---
 
@@ -490,7 +489,7 @@ Stitch đã nhận DESIGN.md của mình. Stitch chuyển phần token sang bộ
 | SCR-31 Evidence | [png](ui/scr-31-evidence.png) · [html](ui/scr-31-evidence.html) | Tốt | Pill "Check needed" xuống dòng và đè lên nút Accept; trường đã duyệt hiện "Verified + ổ khoá" thay vì chữ viết tắt "TH"; giá trị *Check* thiếu dấu ✦ AI; "3 fields to verify" chữ đỏ; top bar có "T. Harrison" |
 | SCR-33 Adjudication | — | **Chưa sinh lại** | File export vẫn là bản cũ (còn "Review checklist", "T. Harrison"). Sinh lại bằng prompt SCR-33 mới |
 | SCR-35 Decision | [png](ui/scr-35-decision.png) · [html](ui/scr-35-decision.html) | Rất tốt | "Approve partial" bị viền của thẻ đè lên; ô Reason bị cắt chữ ("…limit appl") |
-| SCR-50 Operations | [png](ui/scr-50-operations.png) · [html](ui/scr-50-operations.html) | Rất tốt | Top bar thừa ("STATUS: STREAM LIVE", ⌘K, 2 avatar); ô tìm kiếm dùng mono; người dùng ghi "Intake Officer · Operations Lead"; sidebar có Review queue/Intake |
+| SCR-50 Operations (nay là AI quality) | [png](ui/scr-50-ai-quality.png) · [html](ui/scr-50-ai-quality.html) | Rất tốt | Top bar thừa ("STATUS: STREAM LIVE", ⌘K, 2 avatar); ô tìm kiếm dùng mono; người dùng ghi "Intake Officer · Operations Lead"; sidebar có Review queue/Intake |
 
 **Lỗi chung: shell không đồng nhất.** Mỗi màn một kiểu logo ("ClaimLens.", "■ CLAIMLENS", ô "CL"), một kiểu avatar, và sidebar không theo role. DESIGN.md đã bổ sung quy tắc shell (logo cố định, top bar chỉ có avatar chữ viết tắt, mục sidebar theo role). Nạp lại DESIGN.md rồi dùng prompt **SH** dưới đây cho từng màn.
 
@@ -503,9 +502,9 @@ Stitch đã nhận DESIGN.md của mình. Stitch chuyển phần token sang bộ
 
 | Màn | `<ROLE ITEMS>` | `<USER>` |
 |---|---|---|
-| SCR-13 | Intake, Search claims, Members | Phạm Gia Bảo · Intake officer |
-| SCR-20, 31, 33, 35 | Review queue, Search claims, Benefit plans | Trần Thu Hà · Claims reviewer |
-| SCR-50 | Approval queue, Search claims, Benefit plans, Operations dashboard, AI quality, Audit log | Lê Minh Quân · Senior approver |
+| SCR-13 | Intake | Phạm Gia Bảo · Intake officer |
+| SCR-20, 31, 33, 35 | Review queue, Benefit plans | Trần Thu Hà · Claims reviewer |
+| SCR-50 | Approval queue, Benefit plans, AI quality dashboard | Lê Minh Quân · Senior approver |
 
 **Theo từng màn:**
 - **SCR-01 · F1** `Remove the corner texts "V2.4 · STAGING" and "SECURE GATEWAY · NODE-SGN-04"; keep only the wordmark top-left and "ClaimLens · synthetic data only" in the footer.`
@@ -601,3 +600,11 @@ Các file `.png` của 4 màn này vẫn là ảnh chụp gốc của Stitch (fo
 ## Gộp role (31/10/2026)
 
 Hệ thống còn 4 role: Intake Officer, Claims Reviewer, Senior Approver (kiêm dashboard vận hành) và Administrator (rule set + tài khoản). SCR-50 nay thuộc **Senior Approver**: [ui/scr-50-operations.html](ui/scr-50-operations.html) đã được sửa tay (sidebar thêm Approval queue và Benefit plans, người dùng "Lê Minh Quân · Senior approver", avatar "LQ"). File `.png` đã được chụp lại từ HTML (Chrome headless, 1280 px × 1.25). Nếu sinh lại trong Stitch, dùng prompt **SH** với dòng SCR-50 ở bảng trên.
+
+## Thu gọn phạm vi (31/10/2026)
+
+Sau khi gỡ các chức năng không liên quan AI (yêu cầu bổ sung thông tin, quản lý tài khoản, escalate, cờ thủ công, dashboard vận hành, audit log, tìm kiếm claim, trang member), các màn đã sửa trực tiếp trên HTML rồi chụp lại PNG bằng Chrome headless:
+- Sidebar của mọi màn bỏ "Search claims" và "Members"; ô tìm trên top bar đổi thành "Go to claim no.".
+- SCR-20: bỏ tab "Needs information".
+- SCR-35: bỏ nút "Escalate" ở thẻ tín hiệu và nút "Request information" ở thanh dưới.
+- SCR-50: đổi thành **AI quality dashboard** ([html](ui/scr-50-ai-quality.html) · [png](ui/scr-50-ai-quality.png)); prompt ở mục SCR-50 phía trên đã viết lại theo màn mới.

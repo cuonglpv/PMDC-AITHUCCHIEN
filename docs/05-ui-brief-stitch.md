@@ -43,7 +43,7 @@ Nguồn: Stitch docs (*Effective Prompting*, *DESIGN.md overview & specification
 3. `SCR-35` Claim workspace — Decision (bản tóm tắt AI soạn có trích dẫn, chọn đề xuất)
 4. `SCR-20` Review queue (danh sách hồ sơ theo độ ưu tiên)
 5. `SCR-13` Upload tài liệu và kiểm tra trang bằng AI
-6. `SCR-50` Operations dashboard (kèm chất lượng AI)
+6. `SCR-50` AI quality dashboard
 
 ## 2b. Moodboard tham khảo (bạn gửi)
 

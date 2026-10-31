@@ -257,6 +257,42 @@ File đã cập nhật: README, 03 (actor, diagram, matrix, BR-11, UC01, UC06, U
 
 ## 8. Feature map viết lại (31/10/2026)
 
-Feature map cũ (9 nhánh, khoảng 82 mục) được làm từ giai đoạn research, còn khoảng 10 mục nằm ngoài MVP hoặc lệch quy tắc (giao lại claim, sửa priority bằng tay, phát hiện chứng từ bị sửa, thư quyết định, đổi mật khẩu…). Bản mới giữ template XMind 3 tầng: **sản phẩm → 11 nhóm chức năng → 45 chức năng**, nội dung tiếng Anh, chỉ gồm chức năng thuộc MVP. Điều này cũng đóng phần còn lại của AUD-33.
+Feature map cũ (9 nhánh, khoảng 82 mục) được làm từ giai đoạn research, còn khoảng 10 mục nằm ngoài MVP hoặc lệch quy tắc (giao lại claim, sửa priority bằng tay, phát hiện chứng từ bị sửa, thư quyết định, đổi mật khẩu…). Bản mới giữ template XMind 3 tầng: **sản phẩm → nhóm chức năng → chức năng** (11 nhóm, 45 chức năng; sau mục 9 còn 10 nhóm, 38 chức năng), nội dung tiếng Anh, chỉ gồm chức năng thuộc MVP. Điều này cũng đóng phần còn lại của AUD-33.
 
 File: `02_Feature_Map.xmind`. Ảnh `docs/images/feature-map.png` cần export lại từ XMind.
+
+## 9. Thu gọn phạm vi, giữ rõ nghiệp vụ AI (31/10/2026)
+
+**Quyết định của user:** gỡ các use case và chức năng không liên quan đến AI, giữ nguyên 4 năng lực AI (AI-01 đến AI-04) và mọi điểm người kiểm soát (verify, override, dismiss/keep, attest, maker–checker).
+
+| Gỡ | Lý do |
+|---|---|
+| UC09 Request additional information (US19) | Không có AI; kéo theo 2 trạng thái `NeedsInformation`, `Closed`, job hết hạn, thư mẫu, upload bổ sung. Approver đã có Return, Reviewer đã có Reject. |
+| UC14 Manage staff access (US02) | Quản trị thuần tuý; tài khoản dùng seed. |
+| Escalate flag, cờ thủ công, near-duplicate risk flag | Điều tra nằm ngoài MVP; cờ AI (AI-03) đủ minh hoạ; trùng hoá đơn chính xác vẫn là Alert. |
+| Phần vận hành của UC12 (backlog, workload) | Không liên quan AI; UC còn lại là *Monitor AI quality*. |
+| Audit log, access log (SCR-52) | Tab Timeline (UC13 cũ) đã cho thấy AI run, model version, sửa đổi trước/sau. |
+| Search claims (SCR-22), Members & policies (SCR-40) | Hàng đợi đủ để tìm việc; tìm member nằm ở bước 1 của New claim; top bar chỉ còn tra số claim. |
+| Gộp UC02 Register claim + UC03 Upload documents | Thành *UC02 Submit claim packet*. |
+
+**Kết quả:** 14 → **11 use case**; 25 → **23 story** (Must 18 / 85 điểm, Should 5 / 17 điểm; US14 và US21 hạ còn 3 điểm vì bớt phạm vi); 11 → **9 trạng thái**; 24 → **19 page**; role giữ 4 (Administrator chỉ còn quản lý rule set). Use case và story được **đánh số lại**; mã màn hình (SCR) giữ nguyên, màn bị gỡ để lại khoảng trống. SCR-50 đổi thành *AI quality dashboard* (gộp SCR-51), file prototype đổi tên thành `scr-50-ai-quality`.
+
+Các mục 1–8 ở trên giữ mã cũ. Bảng đối chiếu:
+
+| Use case cũ | Mới | | Story cũ | Mới | | Story cũ | Mới |
+|---|---|---|---|---|---|---|---|
+| UC01 | UC01 | | US01 | US01 | | US14 | US13 |
+| UC02, UC03 | UC02 | | US02 | — (gỡ) | | US15 | US14 |
+| UC04 | UC03 | | US03 | US02 | | US16 | US15 |
+| UC05 | UC04 | | US04 | US03 | | US17 | US16 |
+| UC06 | UC05 | | US05 | US04 | | US18 | US17 |
+| UC07 | UC06 | | US06 | US05 | | US19 | — (gỡ) |
+| UC08 | UC07 | | US07 | US06 | | US20 | US18 |
+| UC09 | — (gỡ) | | US08 | US07 | | US21 | US19 |
+| UC10 | UC08 | | US09 | US08 | | US22 | US20 |
+| UC11 | UC09 | | US10 | US09 | | US23 | US21 |
+| UC12 | UC10 | | US11 | US10 | | US24 | US22 |
+| UC13 | UC11 | | US12 | US11 | | US25 | US23 |
+| UC14 | — (gỡ) | | US13 | US12 | | | |
+
+**File đã cập nhật:** 03 (viết lại), 08 (viết lại), 04 (sitemap, sidebar, screen inventory, luồng, API), `use-case.puml`, README, DESIGN.md, 05-ui-brief, stitch-prompts, `relume-sitemap.md`, `ia-sitemap.html` và ảnh sitemap, `02_Feature_Map.xmind` (10 nhóm, 38 chức năng), các prototype SCR-13, 20, 31, 33, 35, 50 (HTML và PNG).

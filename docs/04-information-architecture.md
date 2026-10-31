@@ -24,14 +24,13 @@ ClaimLens
     │   │   │   ├── 1 Member & policy
     │   │   │   ├── 2 Claim details
     │   │   │   └── 3 Documents & submit
-    │   │   ├── My submissions                    /intake?tab=submitted
-    │   │   └── Needs information (add documents) /intake?tab=needs-info
+    │   │   └── My submissions                    /intake?tab=submitted
     │   │
     │   ├── Review queue                          /queue                     Claims Reviewer
-    │   │   └── tabs: Available · Assigned to me · Needs verification · Needs information · Returned
+    │   │   └── tabs: Available · Assigned to me · Needs verification · Returned
     │   │
     │   ├── Approval queue                        /approvals                 Senior Approver
-    │   │   └── tabs: Pending · Escalated · Decided by me
+    │   │   └── tabs: Pending · Decided by me
     │   │
     │   └── Claim workspace                       /claims/:id                Reviewer, Approver (scoped by BR-11)
     │       ├── Overview                          /claims/:id/overview
@@ -42,17 +41,12 @@ ClaimLens
     │       ├── Decision                          /claims/:id/decision
     │       ├── Timeline                          /claims/:id/timeline
     │       └── (drawers / modals)
-    │           ├── Request information           modal
     │           ├── Override line                 drawer
-    │           ├── Dismiss / keep flag (Reviewer) · Escalate flag (Approver)   modal
+    │           ├── Dismiss / keep flag           modal
     │           └── Approve · Reject · Return     modal
     │
-    ├── Search claims                             /claims                    Intake, Reviewer, Approver (scoped by BR-11)
-    │
     ├── Policy
-    │   ├── Members & policies                    /members                   Administrator, Intake (read; seeded data in MVP)
-    │   │   └── Member detail                     /members/:id
-    │   └── Benefit plans                         /plans                     Administrator
+    │   └── Benefit plans                         /plans                     Administrator (Reviewer, Approver read)
     │       └── Plan                              /plans/:id
     │           ├── Versions                      /plans/:id/versions
     │           ├── Rule set editor (draft)       /plans/:id/versions/:v
@@ -60,20 +54,17 @@ ClaimLens
     │           └── Test run                      /plans/:id/versions/:v/test
     │
     ├── Insights
-    │   ├── Operations dashboard                  /insights/operations       Senior Approver
-    │   ├── AI quality                            /insights/ai-quality       Senior Approver
-    │   └── Audit log                             /insights/audit            Senior Approver (claim events), Administrator (access log only)
-    │
-    ├── Administration
-    │   └── Staff accounts                        /admin/staff               Administrator
+    │   └── AI quality dashboard                  /insights/ai-quality       Senior Approver
     │
     ├── Profile                                   /profile                   all
     └── 403 / 404                                 /403  /404
 ```
 
+Staff accounts, members and policies are seeded in the MVP, so there are no administration or member pages. Member search lives in step 1 of the New claim stepper.
+
 ## Navigation model
 
-Global shell: **left sidebar** (collapsible, icon + label) · **top bar** (global claim search by claim no. / member / invoice no., notifications, profile) · **content area**.
+Global shell: **left sidebar** (collapsible, icon + label) · **top bar** (go to a claim by claim no., notifications, profile) · **content area**.
 
 Sidebar items are rendered per role — never shown disabled.
 
@@ -82,13 +73,8 @@ Sidebar items are rendered per role — never shown disabled.
 | Work | Intake | ● home | | | |
 | Work | Review queue | | ● home | | |
 | Work | Approval queue | | | ● home | |
-| Work | Search claims | ✓ | ✓ | ✓ | |
-| Policy | Members & policies | read | | | ✓ |
 | Policy | Benefit plans | | read | read | ● home |
-| Insights | Operations dashboard | | | ✓ | |
-| Insights | AI quality | | | ✓ | |
-| Insights | Audit log | | | ✓ claim events | ✓ access log |
-| Admin | Staff accounts | | | | ✓ |
+| Insights | AI quality dashboard | | | ✓ | |
 
 ● = landing page after sign-in (US01). Every home screen is in the Must release.
 
@@ -130,7 +116,6 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | InReview, blocking alert open | Resolve next alert | — |
 | InReview, no blocking alert | Run adjudication / Continue to decision | — |
 | InReview, decision tab | Submit recommendation (with attestation) | — |
-| NeedsInformation | (read-only, waiting for documents) | — |
 | PendingApproval | (read-only) | Approve · Partially approve · Reject · Return |
 
 ## Screen inventory
@@ -138,35 +123,31 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | Screen ID | Screen | Presentation | Role(s) | Stories |
 |---|---|---|---|---|
 | `SCR-01` | Sign in | Page | all | US01 |
-| `SCR-10` | Intake home (drafts, submitted, needs information) | Page | Intake | US03, US04, US19 |
-| `SCR-11` | New claim stepper — member & policy | Step page | Intake | US03 |
-| `SCR-12` | New claim stepper — claim details | Step page | Intake | US03 |
-| `SCR-13` | Documents & submit (upload, AI page check; also supplementary upload) | Step page | Intake | US04, US05, US19 |
-| `SCR-20` | Review queue | Page | Reviewer | US01, US25 |
-| `SCR-21` | Approval queue | Page | Approver | US18, US20 |
-| `SCR-22` | Search claims | Page | Intake, Reviewer, Approver | US25 |
-| `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver | US18, US20 |
-| `SCR-31` | Claim workspace — Documents & evidence | Tab | Reviewer | US05, US06, US07 |
-| `SCR-32` | Claim workspace — Validation | Tab | Reviewer | US08, US09 |
-| `SCR-33` | Claim workspace — Adjudication | Tab | Reviewer, Approver | US11, US12, US13, US14, US17 |
-| `SCR-34` | Claim workspace — Risk | Tab | Reviewer, Approver | US09, US10, US15, US20 |
-| `SCR-35` | Claim workspace — Decision | Tab | Reviewer, Approver | US16, US18, US20 |
-| `SCR-36` | Claim workspace — Timeline | Tab | Reviewer (own claims), Approver | US24 |
-| `SCR-37` | Request information | Modal | Reviewer | US19 |
-| `SCR-38` | Override line | Drawer | Reviewer | US17 |
-| `SCR-39` | Decision confirmation (approve / partially approve / reject / return) | Modal | Approver | US20 |
-| `SCR-40` | Members & policies / member detail (read-only, seeded) | Page | Administrator, Intake (read) | US03 |
-| `SCR-41` | Benefit plans & versions | Page | Administrator | US21 |
-| `SCR-42` | Rule set editor | Page with tabs | Administrator | US21 |
-| `SCR-43` | Rule set test run (synthetic sample claims) | Page | Administrator | US22 |
-| `SCR-50` | Operations dashboard | Page | Approver | US23 |
-| `SCR-51` | AI quality | Page | Approver | US23 |
-| `SCR-52` | Audit log | Page | Approver (claim events), Administrator (access log only) | US24, US02 |
-| `SCR-60` | Staff accounts (+ form modal) | Page | Administrator | US02 |
+| `SCR-10` | Intake home (drafts, submitted) | Page | Intake | US02, US03 |
+| `SCR-11` | New claim stepper — member & policy | Step page | Intake | US02 |
+| `SCR-12` | New claim stepper — claim details | Step page | Intake | US02 |
+| `SCR-13` | Documents & submit (upload, AI page check) | Step page | Intake | US03, US04 |
+| `SCR-20` | Review queue | Page | Reviewer | US01, US23 |
+| `SCR-21` | Approval queue | Page | Approver | US17, US18 |
+| `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver | US17, US18 |
+| `SCR-31` | Claim workspace — Documents & evidence | Tab | Reviewer | US04, US05, US06 |
+| `SCR-32` | Claim workspace — Validation | Tab | Reviewer | US07, US08 |
+| `SCR-33` | Claim workspace — Adjudication | Tab | Reviewer, Approver (read) | US10, US11, US12, US13, US16 |
+| `SCR-34` | Claim workspace — Risk | Tab | Reviewer, Approver (read) | US09, US14, US18 |
+| `SCR-35` | Claim workspace — Decision | Tab | Reviewer, Approver | US15, US17, US18 |
+| `SCR-36` | Claim workspace — Timeline | Tab | Reviewer (own claims), Approver | US22 |
+| `SCR-38` | Override line | Drawer | Reviewer | US16 |
+| `SCR-39` | Decision confirmation (approve / partially approve / reject / return) | Modal | Approver | US18 |
+| `SCR-41` | Benefit plans & versions | Page | Administrator; Reviewer, Approver (read) | US19 |
+| `SCR-42` | Rule set editor | Page with tabs | Administrator | US19 |
+| `SCR-43` | Rule set test run (synthetic sample claims) | Page | Administrator | US20 |
+| `SCR-50` | AI quality dashboard | Page | Approver | US21 |
 | `SCR-70` | Profile | Page | all | — (shell only; change password out of MVP) |
 | `SCR-90` | 403 / 404 | Page | all | cross-cutting |
 
-**Priority screens for UI design** (highest value, design first): `SCR-31` Evidence, `SCR-33` Adjudication, `SCR-35` Decision, `SCR-20` Review queue, `SCR-13` Upload, `SCR-50` Operations dashboard.
+Screen IDs are kept stable; removed screens leave gaps (SCR-22 Search claims, SCR-37 Request information, SCR-40 Members & policies, SCR-51 AI quality — merged into SCR-50, SCR-52 Audit log, SCR-60 Staff accounts).
+
+**Priority screens for UI design** (highest value, design first): `SCR-31` Evidence, `SCR-33` Adjudication, `SCR-35` Decision, `SCR-20` Review queue, `SCR-13` Upload, `SCR-50` AI quality dashboard.
 
 ## Screen hierarchy
 
@@ -179,9 +160,8 @@ flowchart TB
 
     shell --> queue["SCR-20 Review queue"]
     shell --> approvals["SCR-21 Approval queue"]
-    shell --> search["SCR-22 Search claims"]
 
-    queue & approvals & search --> ws["Claim workspace /claims/:id"]
+    queue & approvals --> ws["Claim workspace /claims/:id"]
     ws --> ov["SCR-30 Overview"]
     ws --> ev["SCR-31 Evidence"]
     ws --> va["SCR-32 Validation"]
@@ -190,16 +170,11 @@ flowchart TB
     ws --> de["SCR-35 Decision"]
     ws --> tl["SCR-36 Timeline"]
     ad --> ovr["SCR-38 Override drawer"]
-    va & de --> req["SCR-37 Request info modal"]
     de --> conf["SCR-39 Decision modal"]
 
-    shell --> members["SCR-40 Members & policies"]
     shell --> plans["SCR-41 Benefit plans"] --> editor["SCR-42 Rule set editor"] --> test["SCR-43 Test run"]
 
-    shell --> opsd["SCR-50 Operations"]
-    shell --> aiq["SCR-51 AI quality"]
-    shell --> audit["SCR-52 Audit log"]
-    shell --> staff["SCR-60 Staff accounts"]
+    shell --> aiq["SCR-50 AI quality dashboard"]
     shell --> profile["SCR-70 Profile"]
     shell --> err["SCR-90 403 / 404"]
 
@@ -225,7 +200,6 @@ flowchart LR
     risk -->|yes| rk["Risk tab<br/>dismiss / keep for approver"] --> dec
     risk -->|no| dec["Decision tab<br/>edit AI summary, choose outcome"]
     dec --> att["Attest auto-accepted<br/>AI values"] --> sub["Submit → Pending approval"]
-    fix -.->|"evidence missing"| ri["Request information"]
     calc -.->|"edit data"| val
 ```
 
@@ -237,21 +211,17 @@ flowchart LR
     d --> e["AI page check<br/>type + quality per page"]
     e -->|low quality| f["Re-capture hint"] --> d
     e -->|ok| g["Submit"] --> h["Processing → Review queue"]
-    n["Needs information tab<br/>open claim"] --> d
 ```
-
-The same upload step serves supplementary documents for a claim in `NeedsInformation`; only the new pages are processed (US19).
 
 ### Approver: decision
 
 ```mermaid
 flowchart LR
-    a["Approval queue"] --> b["Overview: amount, outcome,<br/>overrides, open flags"] --> c{"Agree?"}
+    a["Approval queue"] --> b["Overview: amount, outcome,<br/>overrides, kept flags"] --> c{"Agree?"}
     c -->|yes| d["Approve / Partial / Reject<br/>confirm amount + reason"] --> bal{"Balance unchanged<br/>since calculation?"}
     bal -->|yes| e["Decision recorded,<br/>balance consumed"]
     bal -->|no| rc["Blocked: re-run<br/>adjudication"]
     c -->|"needs work or<br/>evidence missing"| f["Return with comment"] --> g["Back to reviewer<br/>(Returned tab)"]
-    c -->|"flag needs<br/>investigation"| esc["Escalate flag<br/>(Escalated marker)"]
 ```
 
 ## AI interaction patterns
@@ -295,7 +265,7 @@ Consistent words across UI, docs and code:
 | Claim case | Claim | File, ticket |
 | Extracted value | Field | Data point |
 | Deterministic issue (incl. exact duplicate) — Validation tab | Alert | Error (unless system error) |
-| AI signal or near-duplicate — Risk tab | Risk flag / Signal | Fraud, suspicious customer |
+| AI clinical signal — Risk tab | Risk flag / Signal | Fraud, suspicious customer |
 | AI value at or above threshold | Auto-accepted suggestion | Verified, confirmed |
 | Rule engine output per line | Line result | AI decision |
 | Reviewer proposal | Recommendation | Decision |
@@ -319,15 +289,14 @@ UI labels are in **English** (decided in the UI brief); sample data such as name
 |---|---|
 | Sign in | `login`, `logout`, `getMe` |
 | Intake | `searchMembers`, `getPolicySummary`, `createClaim`, `uploadDocument`, `deleteDocument`, `submitClaim` |
-| Queues & search | `listClaims` (filters: status, assignee, priority; scoped by BR-11), `startReview` (self-assign) |
+| Queues | `listClaims` (filters: status, assignee, priority; scoped by BR-11), `getClaimByNumber` (top-bar lookup), `startReview` (self-assign) |
 | Evidence | `listDocuments`, `getPage`, `listFields`, `acceptField`, `updateField`, `reclassifyPage`, `rerunExtraction` |
 | Validation | `listAlerts`, `resolveAlert`, `dismissAlert` |
 | Adjudication | `listExpenseLines`, `confirmMapping`, `runAdjudication`, `getCalculationRevision`, `overrideLine` |
-| Risk | `listFlags`, `addFlag`, `dismissFlag`, `keepFlag`, `escalateFlag` (Approver only) |
-| Decision | `getSummaryDraft`, `submitRecommendation` (with attestation), `createInfoRequest`, `extendInfoDeadline`, `decideClaim`, `returnClaim` |
-| Timeline / audit | `getClaimTimeline`, `listAuditEvents` (Approver), `listAccessLog` (Administrator) |
-| Policy | `listPlans`, `createPlanVersion`, `updateRuleSet`, `publishPlanVersion`, `testRuleSet`, `listMembers`, `getMember` |
-| Insights | `getOperationsMetrics`, `getAiQualityMetrics`, `exportReport` |
-| Staff | `listStaff`, `createStaff`, `updateStaff`, `setStaffStatus` |
+| Risk | `listFlags`, `dismissFlag`, `keepFlag` |
+| Decision | `getSummaryDraft`, `submitRecommendation` (with attestation), `decideClaim`, `returnClaim` |
+| Timeline | `getClaimTimeline` |
+| Policy | `listPlans`, `createPlanVersion`, `updateRuleSet`, `publishPlanVersion`, `testRuleSet` |
+| AI quality | `getAiQualityMetrics`, `exportReport` |
 
 **Related:** [Use cases](03-use-cases.md) · [User stories](08-invest-requirements.md)

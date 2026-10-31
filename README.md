@@ -10,7 +10,7 @@ Requirements define what ClaimLens must do, who uses it, where AI is allowed to 
 
 ### 1.1 Feature map
 
-The feature map has three levels: the product, 11 feature areas and the functions in each. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
+The feature map has three levels: the product, 10 feature areas and the functions in each. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
 
 ![ClaimLens feature map](docs/images/feature-map.png)
 
@@ -37,7 +37,7 @@ Before submitting a recommendation, the reviewer attests to every auto-accepted 
 
 ### 1.3 INVEST requirements
 
-The MVP backlog includes 25 user stories across 9 epics. Before a story is ready for development, it is checked against INVEST.
+The MVP backlog includes 23 user stories across 9 epics. Before a story is ready for development, it is checked against INVEST.
 
 | Criterion | Meaning in ClaimLens |
 |---|---|
@@ -49,18 +49,18 @@ The MVP backlog includes 25 user stories across 9 epics. Before a story is ready
 | **Testable** | Every story has Given/When/Then acceptance criteria, including permission, threshold and AI-unavailable behaviour. |
 
 ```text
-US01–US02, US25   E1 Access & routing
-US03–US04         E2 Intake
-US05–US07         E3 Document AI
-US08–US10         E4 Validation
-US11–US14         E5 Adjudication
-US15              E6 Risk
-US16–US20         E7 Decision
-US21–US22         E8 Policy rules
-US23–US24         E9 Oversight
+US01, US23        E1 Access & routing
+US02–US03         E2 Intake
+US04–US06         E3 Document AI
+US07–US09         E4 Validation
+US10–US13         E5 Adjudication
+US14              E6 Risk
+US15–US18         E7 Decision
+US19–US20         E8 Policy rules
+US21–US22         E9 AI oversight
 ```
 
-The MVP release is all **Must** stories (19 stories, 88 points). **Should** stories (6 stories, 24 points) follow in the next increment; each has a manual equivalent, so the product works without them. Seven stories carry AI (US05, US06, US07, US10, US11, US15, US16). The complete backlog, acceptance criteria and per-story INVEST review are maintained in [INVEST Requirements](docs/08-invest-requirements.md).
+The MVP release is all **Must** stories (18 stories, 85 points). **Should** stories (5 stories, 17 points) follow in the next increment; each has a manual equivalent, so the product works without them. Eight stories carry AI (US04, US05, US06, US09, US10, US14, US15, US21). The complete backlog, acceptance criteria and per-story INVEST review are maintained in [INVEST Requirements](docs/08-invest-requirements.md).
 
 ### 1.4 Use cases
 
@@ -76,10 +76,10 @@ flowchart TB
 
     subgraph system["ClaimLens — System Boundary"]
         direction LR
-        intakeCases["<b>Intake Officer</b><br/><br/>UC01 Sign in<br/>UC02 Register claim<br/>UC03 Upload claim documents"]
-        reviewerCases["<b>Claims Reviewer</b><br/><br/>UC01 Sign in<br/>UC04 Verify extracted evidence<br/>UC05 Resolve validation alerts<br/>UC06 Review benefit adjudication<br/>UC07 Review risk flags (dismiss / keep)<br/>UC08 Submit recommendation<br/>UC09 Request additional information<br/>UC13 Trace decision history (own claims)"]
-        approverCases["<b>Senior Approver</b><br/><br/>UC01 Sign in<br/>UC07 Review risk flags (escalate)<br/>UC10 Approve, reject or return claim<br/>UC12 Monitor operations & AI quality<br/>UC13 Trace decision history"]
-        governCases["<b>Administrator</b><br/><br/>UC01 Sign in<br/>UC11 Publish benefit rule-set version<br/>UC14 Manage staff access"]
+        intakeCases["<b>Intake Officer</b><br/><br/>UC01 Sign in<br/>UC02 Submit claim packet"]
+        reviewerCases["<b>Claims Reviewer</b><br/><br/>UC01 Sign in<br/>UC03 Verify extracted evidence<br/>UC04 Resolve validation alerts<br/>UC05 Review benefit adjudication<br/>UC06 Review risk flags<br/>UC07 Submit recommendation<br/>UC11 Trace decision history (own claims)"]
+        approverCases["<b>Senior Approver</b><br/><br/>UC01 Sign in<br/>UC08 Approve, reject or return claim<br/>UC10 Monitor AI quality<br/>UC11 Trace decision history"]
+        governCases["<b>Administrator</b><br/><br/>UC01 Sign in<br/>UC09 Publish benefit rule-set version"]
         aiCases["<b>AI-assisted (included only)</b><br/><br/>AI-01 Classify & extract documents<br/>AI-02 Map expense lines to benefits<br/>AI-03 Detect clinical inconsistencies<br/>AI-04 Draft evidence-backed summary"]
         sysCases["<b>Deterministic</b><br/><br/>SYS-01 Evaluate policy rules"]
     end
@@ -106,7 +106,7 @@ flowchart TB
     style system fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
 ```
 
-AI use cases are never started by a person: they are included by a business use case or extend one at a declared extension point, and always lead into a human verification step. AI is deliberately absent from benefit calculation, eligibility, rule authoring, approval, access control and request letters.
+AI use cases are never started by a person: they are included by a business use case or extend one at a declared extension point, and always lead into a human verification step. AI is deliberately absent from benefit calculation, eligibility, rule authoring, approval and access control. Staff accounts, members and policies are seeded in the MVP.
 
 For the full UML diagram with `«include»` / `«extend»` relationships, actor specifications and the reasoning behind each AI placement, see [Actors, roles, and use cases](docs/03-use-cases.md). A strict PlantUML version is in [use-case.puml](docs/diagrams/use-case.puml).
 
@@ -117,14 +117,13 @@ For the full UML diagram with `«include»` / `«extend»` relationships, actor 
 | Register claims and upload documents | Yes | No | No | No |
 | Verify evidence, resolve alerts, review adjudication | No | Yes | No | No |
 | Override a line result (reason required) | No | Yes | No | No |
-| Submit recommendation, request information | No | Yes | No | No |
-| Handle risk flags | No | Dismiss / keep | Escalate | No |
+| Submit recommendation | No | Yes | No | No |
+| Handle AI risk flags | No | Dismiss / keep | Read kept flags | No |
 | Approve, partially approve, reject or return | No | No | Yes | No |
 | Publish benefit rule sets | No | Read | Read | Yes |
 | See medical and identity data | Claims they registered | Assigned claims | Yes | No |
-| Operations and AI quality dashboards | No | No | Yes | No |
-| Audit log | No | No | Claim events | Access log only |
-| Staff accounts | No | No | No | Yes (not their own role) |
+| AI quality dashboard | No | No | Yes | No |
+| Claim timeline | No | Own claims | Yes | No |
 
 The backend must enforce RBAC, maker–checker and data visibility (BR-11); hiding frontend controls serves UI/UX only. All business rules (BR-01 to BR-13) are listed in [Actors, roles, and use cases](docs/03-use-cases.md#business-rules-referenced-by-use-cases).
 
@@ -138,9 +137,6 @@ stateDiagram-v2
     Processing --> ReadyForReview: all required fields auto-accepted
     NeedsVerification --> ReadyForReview: required fields accepted
     ReadyForReview --> InReview: assigned reviewer starts review
-    InReview --> NeedsInformation: request information
-    NeedsInformation --> Processing: supplementary documents submitted
-    NeedsInformation --> Closed: deadline passed
     InReview --> PendingApproval: submit recommendation
     PendingApproval --> InReview: return for rework
     PendingApproval --> Approved: payable equals claimed
@@ -149,10 +145,9 @@ stateDiagram-v2
     Approved --> [*]
     PartiallyApproved --> [*]
     Rejected --> [*]
-    Closed --> [*]
 ```
 
-The requirements were audited end to end; all 38 findings and how each was resolved are recorded in the [Audit report](docs/09-audit-report.md).
+The requirements were audited end to end; all 38 findings, how each was resolved and the later scope changes (four roles, 11 use cases) are recorded in the [Audit report](docs/09-audit-report.md).
 
 ## 2. Information Architecture, Screen Hierarchy, and UI/UX
 
@@ -166,31 +161,25 @@ Public
 
 Authenticated
 ├── Work
-│   ├── Intake                 (new claim stepper, submissions, needs information)
+│   ├── Intake                 (new claim stepper, submissions)
 │   ├── Review queue           (available, assigned to me, needs verification, returned)
-│   ├── Approval queue         (pending, escalated, decided by me)
-│   ├── Claim workspace        (overview, evidence, validation, adjudication, risk, decision, timeline)
-│   └── Search claims
+│   ├── Approval queue         (pending, decided by me)
+│   └── Claim workspace        (overview, evidence, validation, adjudication, risk, decision, timeline)
 ├── Policy
-│   ├── Members & policies
 │   └── Benefit plans          (versions, rule set editor, test run)
 ├── Insights
-│   ├── Operations dashboard
-│   ├── AI quality
-│   └── Audit log
-├── Administration
-│   └── Staff accounts
+│   └── AI quality dashboard
 ├── Profile
 └── 403 / 404
 ```
 
-The sitemap below shows every page with its sections and the tasks done there (24 pages; AI-assisted sections in violet). Its source is [ia-sitemap.html](docs/diagrams/ia-sitemap.html), and the page and task list is in [Relume sitemap input](docs/relume-sitemap.md).
+The sitemap below shows every page with its sections and the tasks done there (19 pages; AI-assisted sections in violet). Its source is [ia-sitemap.html](docs/diagrams/ia-sitemap.html), and the page and task list is in [Relume sitemap input](docs/relume-sitemap.md).
 
 ![ClaimLens sitemap](docs/images/ia-sitemap-relume.png)
 
 ### 2.2 Screen hierarchy
 
-Sign in leads to the authenticated shell: a left sidebar, a top bar with global claim search, and the content area. The core screen is the **Claim workspace**, a three-zone layout: a document rail on the left, the working panel in the middle, and a context rail on the right that highlights the source region of the selected value. Overrides use a drawer; requests for information, flag actions and decisions use modals.
+Sign in leads to the authenticated shell: a left sidebar, a top bar with a claim-number lookup, and the content area. The core screen is the **Claim workspace**, a three-zone layout: a document rail on the left, the working panel in the middle, and a context rail on the right that highlights the source region of the selected value. Overrides use a drawer; flag actions and decisions use modals.
 
 AI output follows shared interaction patterns: an AI suggestion marker, a confidence level (High / Check / Missing), a source pin, "signal, not finding" wording for risk flags, citation chips in drafted summaries, and a fallback banner when AI is unavailable.
 
@@ -218,9 +207,9 @@ The UI is generated with [Google Stitch](https://stitch.withgoogle.com) from a d
 
 ![Review queue](docs/ui/scr-20-review-queue.png)
 
-#### Operations dashboard
+#### AI quality dashboard
 
-![Operations dashboard](docs/ui/scr-50-operations.png)
+![AI quality dashboard](docs/ui/scr-50-ai-quality.png)
 
 The Claim workspace screens (Evidence, Adjudication, Decision) are still being iterated in Stitch.
 

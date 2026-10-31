@@ -426,7 +426,7 @@ The palette is mostly neutral: ink, warm paper and white make up about 90 % of e
 
 ### Semantic states (always with icon + text)
 - **Approval Green (#11703C)** on **Mint Wash (#E7F4EC)**: Approved, Partially approved, confidence *High*, passed checks.
-- **Caution Amber (#8A4B00)** on **Cream Wash (#FDF3DE)**: Needs verification, Needs information, confidence *Check*, AI fallback banner, non-blocking alerts.
+- **Caution Amber (#8A4B00)** on **Cream Wash (#FDF3DE)**: Needs verification, confidence *Check*, AI fallback banner, non-blocking alerts.
 - **Decline Crimson (#A40022)** on **Blush Wash (#FBEAEC)**: Rejected, blocking alerts, confidence *Missing*, destructive buttons, exclusions (`EX-04`). This is deliberately darker than Signal Red so that "brand action" and "negative outcome" never look the same.
 - **Ledger Blue (#1E4FB5)** on **Sky Wash (#E9EFFB)**: in-progress states (Processing, Ready for review, In review) and informational notes.
 
@@ -440,12 +440,11 @@ The palette is mostly neutral: ink, warm paper and white make up about 90 % of e
 ### Status pill mapping
 | Claim status | Pill | Icon |
 |---|---|---|
-| Draft, Closed | neutral (stone / ink) | circle-dashed, archive |
+| Draft | neutral (stone / ink) | circle-dashed |
 | Processing | info | loader |
 | Needs verification | warning | eye |
 | Ready for review, In review | info | inbox, user-check |
 | Returned (queue tab / flag, status stays In review) | warning | undo-2 |
-| Needs information | warning | mail-question |
 | Pending approval | pending (ink / white) | hourglass |
 | Approved, Partially approved | success | check-circle, circle-half |
 | Rejected | danger | x-circle |
@@ -483,8 +482,8 @@ Formatting rules: money is an integer VND with comma thousand separators and a t
 **Grid & rhythm.** 4 px base unit. The 1440 px reference uses a 12-column content grid with 16 px gutters and 24 px page margins. Vertical rhythm uses 8, 12, 16 and 24 px; panels never use more than 24 px inner padding inside the workspace.
 
 **Application shell.**
-- **Left sidebar**, 240 px wide (collapses to 64 px), ink black. It holds the ClaimLens wordmark at the top (identical on every screen: a small Signal Red square followed by "ClaimLens" in Be Vietnam Pro 600, sentence case), then groups (`WORK`, `POLICY`, `INSIGHTS`, `ADMIN`) as Shell Pink mono kickers. The sidebar is always expanded (240 px) on list and dashboard pages and collapsed (64 px, icons only) inside the Claim workspace. Items per role: Intake Officer: Intake, Search claims, Members. Claims Reviewer: Review queue, Search claims, Benefit plans. Senior Approver: Approval queue, Search claims, Benefit plans, Operations dashboard, AI quality, Audit log. Administrator: Benefit plans, Members, Audit log, Staff accounts. The bottom user block shows name + role. Items have a line icon and a label; the active item gets the Shell Raised background and a 2 px Signal Red bar on the left. Items are rendered per role and never shown disabled.
-- **Top bar**, 56 px, white with a hairline bottom border. It holds global claim search (claim no. / member / invoice no.), notifications and the profile avatar. The avatar shows only the signed-in user's initials in an ink circle. No name, role, environment, version or status chips.
+- **Left sidebar**, 240 px wide (collapses to 64 px), ink black. It holds the ClaimLens wordmark at the top (identical on every screen: a small Signal Red square followed by "ClaimLens" in Be Vietnam Pro 600, sentence case), then groups (`WORK`, `POLICY`, `INSIGHTS`) as Shell Pink mono kickers. The sidebar is always expanded (240 px) on list and dashboard pages and collapsed (64 px, icons only) inside the Claim workspace. Items per role: Intake Officer: Intake. Claims Reviewer: Review queue, Benefit plans. Senior Approver: Approval queue, Benefit plans, AI quality dashboard. Administrator: Benefit plans. The bottom user block shows name + role. Items have a line icon and a label; the active item gets the Shell Raised background and a 2 px Signal Red bar on the left. Items are rendered per role and never shown disabled.
+- **Top bar**, 56 px, white with a hairline bottom border. It holds a claim lookup ("Go to claim no."), notifications and the profile avatar. The avatar shows only the signed-in user's initials in an ink circle. No name, role, environment, version or status chips.
 - **Content area** on Warm Paper.
 
 **Claim workspace (core screen), three zones under a persistent case header:**
@@ -565,7 +564,7 @@ A sharp, near-square language that suits ledgers and documents.
 
 **Source highlight box.** Square 2 px Insight Violet outline with a 12 % violet fill over the page region, with a small mono tag on the box (`total_amount · 0.62`).
 
-**Risk signal card.** Rust Wash card with a flag icon and neutral wording ("Possible duplicate invoice", "Medication may not match diagnosis"). It lists the evidence chips and offers three actions: Dismiss with reason, Keep, Escalate. Never use the word "fraud".
+**Risk signal card.** Rust Wash card with a flag icon and neutral wording ("Medication may not match diagnosis"). It lists the evidence chips and offers two actions: Dismiss with reason, Keep for approver. Never use the word "fraud".
 
 **Alerts.** Blocking alerts use Blush Wash with a crimson octagon-alert icon. Non-blocking alerts use Cream Wash with an amber triangle-alert icon. Each shows the rule or check code in mono.
 
