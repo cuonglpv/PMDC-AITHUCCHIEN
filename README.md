@@ -8,12 +8,9 @@ The product rests on one principle: **AI reads, the Rule Engine calculates, peop
 
 Requirements define what ClaimLens must do, who uses it, where AI is allowed to help, and the observable conditions of success. User stories are reviewed with INVEST and traced to use cases, business rules and screens.
 
-### 1.1 Product mind map
+### 1.1 Feature map
 
-The product research and feature map are maintained as XMind files:
-
-- [Product research](01_Product_Research.xmind): problem, users, claim workflow, AI capabilities, risks, a worked example and the technology direction.
-- [Feature map](02_Feature_Map.xmind): the feature breakdown by module.
+![ClaimLens feature map](docs/images/feature-map.png)
 
 ### 1.2 Who decides what
 
