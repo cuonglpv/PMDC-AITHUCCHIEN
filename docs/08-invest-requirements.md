@@ -34,7 +34,7 @@ Each story delivers one observable outcome for one role, can be built and demoed
 | ID | User story | Value | Pts | Priority | Depends on | BR |
 |---|---|---|---|---|---|---|
 | US01 | As a **staff member**, I want to sign in and land on my role's home so that I start working on what is assigned to me. | Focused start | 3 | Must | Seeded accounts | BR-11, BR-12 |
-| US02 | As a **System Administrator**, I want to create, disable and assign a role to staff accounts and review the access log so that only authorised people handle medical data. | Access control | 3 | Must | US01 | BR-11, BR-12 |
+| US02 | As an **Administrator**, I want to create, disable and assign a role to staff accounts and review the access log so that only authorised people handle medical data. | Access control | 3 | Must | US01 | BR-11, BR-12 |
 | US03 | As an **Intake Officer**, I want to find a member and register a claim against their active policy so that the case starts with the correct coverage context. | Correct linkage | 3 | Must | Seeded members & policies | BR-01, BR-12 |
 | US04 | As an **Intake Officer**, I want to upload PDF/JPG/PNG documents and submit them for processing so that the reviewer receives a complete packet. | Fast intake | 5 | Must | US03 | BR-12 |
 | US05 | 🟣 AI · As an **Intake Officer**, I want each page automatically classified and checked for readability so that wrong or blurry documents are caught before submission. | Fewer re-requests | 5 | Must | US04 | BR-03 |
@@ -53,25 +53,25 @@ Each story delivers one observable outcome for one role, can be built and demoed
 | US18 | As a **Claims Reviewer**, I want to submit an approve / partial / reject recommendation to the approval queue so that the decision moves to an accountable approver. | Workflow handoff | 3 | Must | US13 | BR-03, BR-09, BR-13 |
 | US19 | As a **Claims Reviewer**, I want to request missing or corrected documents with a pre-filled checklist and deadline so that the claim can be completed. | Faster completion | 3 | Should | US08 | BR-12 |
 | US20 | As a **Senior Approver**, I want to approve, partially approve, reject or return a recommendation I did not prepare so that every final decision has two-person control. | Accountability | 5 | Must | US18 | BR-01, BR-06, BR-08, BR-10, BR-13 |
-| US21 | As a **Policy Administrator**, I want to configure and publish a versioned benefit rule set (categories, exclusions, waiting period, reimbursement rate, limits) linked to clause text so that adjudication reflects the contract. | Accurate coverage | 8 | Must | — | BR-04, BR-05 |
-| US22 | As a **Policy Administrator**, I want to test a draft rule set against sample claims before publishing so that rule errors are caught before they affect payments. | Safe changes | 3 | Should | US21 | BR-04 |
-| US23 | As an **Operations Manager**, I want a dashboard of backlog, handling time, outcomes and AI correction rates so that I can balance workload and judge whether AI is helping. | Operational control | 5 | Should | US18 | BR-11 |
+| US21 | As an **Administrator**, I want to configure and publish a versioned benefit rule set (categories, exclusions, waiting period, reimbursement rate, limits) linked to clause text so that adjudication reflects the contract. | Accurate coverage | 8 | Must | — | BR-04, BR-05 |
+| US22 | As an **Administrator**, I want to test a draft rule set against synthetic sample claims before publishing so that rule errors are caught before they affect payments. | Safe changes | 3 | Should | US21 | BR-04 |
+| US23 | As a **Senior Approver**, I want a dashboard of backlog, handling time, outcomes and AI correction rates so that I can balance workload and judge whether AI is helping. | Operational control | 5 | Should | US18 | BR-11 |
 | US24 | As a **Senior Approver**, I want a claim timeline showing every correction, AI run, rule version, override and decision so that any outcome can be reconstructed. | Auditability | 3 | Must | US14 | BR-11, BR-12 |
 | US25 | As a **Claims Reviewer**, I want to pick up the next claim from my review queue, sorted by priority, so that each claim has one owner and urgent work is handled first. | No duplicated work | 3 | Must | US01, US04 | BR-09, BR-11 |
 
-MVP release = all **Must** stories (19 stories, 88 pts). **Should** stories (6 stories, 24 pts) follow in the next increment; the product works without them because each has a manual equivalent. In a Must-only release the Operations Manager lands on the Audit log (US24) until US23 ships, and requests for information are handled outside the system.
+MVP release = all **Must** stories (19 stories, 88 pts). **Should** stories (6 stories, 24 pts) follow in the next increment; the product works without them because each has a manual equivalent. In a Must-only release requests for information are handled outside the system.
 
 ## Acceptance criteria
 
 ### US01 — Sign in to role home
-- **Given** an active account, **when** valid credentials are submitted, **then** the user lands on their role home (Intake → Intake; Reviewer → Review queue; Approver → Approval queue; Policy Admin → Benefit plans; Ops → Operations dashboard, or Audit log while US23 is not released; Sys Admin → Staff accounts) and sees only permitted navigation.
+- **Given** an active account, **when** valid credentials are submitted, **then** the user lands on their role home (Intake → Intake; Reviewer → Review queue; Approver → Approval queue; Administrator → Benefit plans) and sees only permitted navigation.
 - **Given** invalid credentials or a disabled account, **when** sign-in is attempted, **then** the same generic error appears and no account state is disclosed.
 - **Given** a signed-in user without permission, **when** a protected URL is opened directly, **then** the 403 page is shown with a link back to the role home.
 
 ### US02 — Manage staff access
 - **Given** the admin creates or edits an account, **when** it is saved, **then** it has exactly one role and an audit event stores the before/after role, actor and time.
 - **Given** an account is disabled, **when** that user tries to sign in, **then** sign-in fails with the generic error.
-- **Given** the admin selects their own account, **when** they try to disable it, **then** the action is blocked.
+- **Given** the admin selects their own account, **when** they try to disable it or change its role, **then** the action is blocked.
 - **Given** the admin opens the access log, **then** it lists sign-ins, role changes and claim-open events (claim number only) without any medical or identity values.
 
 ### US03 — Register claim
@@ -184,19 +184,19 @@ MVP release = all **Must** stories (19 stories, 88 pts). **Should** stories (6 s
 - **Given** a published version, **then** it cannot be edited, only superseded by a new version.
 
 ### US22 — Test rule set
-- **Given** a draft rule set and selected sample claims, **when** the test runs, **then** per-line results of the draft appear next to the current published version with differences highlighted.
+- **Given** a draft rule set and selected synthetic sample claims (no real claim content, BR-11), **when** the test runs, **then** per-line results of the draft appear next to the current published version with differences highlighted.
 - **Given** a test run, **then** no real claim, balance or decision is changed.
 
 ### US23 — Operations dashboard
 - **Given** a date range and plan filter, **then** the dashboard shows counts by status, backlog age buckets (0–2, 3–5, > 5 working days), median handling time (submission → decision), outcomes and workload per reviewer.
 - **Given** the AI quality view, **then** it shows low-confidence rate (fields marked Needs verification or Needs entry ÷ fields extracted), correction rate by field (fields changed by a person ÷ fields suggested by AI) and flag dismissal rate (flags dismissed ÷ flags raised).
 - **Given** export is clicked, **then** an XLSX of the filtered data is downloaded.
-- **Given** a drill-down to a claim, **then** medical and identity values are masked.
+- **Given** a drill-down to a claim, **then** the claim workspace opens with the same scope as the approval queue.
 
 ### US24 — Claim timeline
 - **Given** a claim, **when** the Timeline opens, **then** it lists in order: status changes, uploads, AI runs (model version), field corrections (before/after), alerts resolved, flags, calculation revisions, overrides and decisions, each with actor and time.
 - **Given** a Claims Reviewer, **then** the timeline is available only for claims they handled.
-- **Given** an Operations Manager, **then** medical and identity values in the timeline and audit log are masked.
+- **Given** an Administrator, **then** the claim timeline is not available (403).
 
 ### US25 — Pick up claim from review queue
 - **Given** the review queue, **then** it has tabs Available · Assigned to me · Needs verification · Needs information · Returned, sorted by priority (BR-09) then age.
@@ -210,8 +210,8 @@ MVP release = all **Must** stories (19 stories, 88 pts). **Should** stories (6 s
 
 | Story | I | N | V | E | S | T | Notes |
 |---|---|---|---|---|---|---|---|
-| US01 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Ops home falls back to Audit log in a Must-only release. |
-| US02 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | One role per account; access log without claim content. |
+| US01 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Four roles, each with a home screen that is in the Must release. |
+| US02 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | One role per account; no self role change; access log without claim content. |
 | US03 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Uses seeded member/policy data; no external lookup. |
 | US04 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Limits explicit; supplementary upload is in US19. |
 | US05 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Runs before submission; quality threshold is configured. |
@@ -238,11 +238,11 @@ MVP release = all **Must** stories (19 stories, 88 pts). **Should** stories (6 s
 
 ## Cross-cutting acceptance constraints
 
-- Roles: `INTAKE_OFFICER`, `CLAIMS_REVIEWER`, `SENIOR_APPROVER`, `POLICY_ADMIN`, `OPS_MANAGER`, `SYSTEM_ADMIN`. The API enforces RBAC; the UI only hides.
+- Roles: `INTAKE_OFFICER`, `CLAIMS_REVIEWER`, `SENIOR_APPROVER`, `ADMINISTRATOR`. The API enforces RBAC; the UI only hides.
 - AI results are stored as suggestions with confidence, source region, model version and run ID; accepted values are stored separately from raw AI output, with `acceptedBy` = threshold or user (BR-03).
 - Money is stored as integer VND; all rule evaluation is deterministic and reproducible.
 - Every state change, correction, override, dismissal, decision and claim access writes an audit event (BR-12).
-- Medical and identity data follow BR-11 (masked for Ops, hidden from Sys Admin).
+- Medical and identity data follow BR-11 (hidden from the Administrator).
 - Only synthetic or de-identified claim data is used in the MVP.
 
 ## Definition of Done

@@ -232,3 +232,25 @@ Sau khi sửa nhóm Critical + Major, tài liệu đủ điều kiện làm đ�
 | AUD-38 | Đã sửa một phần | `.puml` có extension points, AISvc khai báo sau boundary. **Chưa render được PlantUML** vì máy không có Java/PlantUML — chỉ kiểm tra cú pháp bằng mắt. |
 
 **Điểm sau sửa:** Must = 19 story / **88 pts**; Should = 6 story / **24 pts**.
+
+## 7. Thay đổi sau audit — gộp còn 4 role (31/10/2026)
+
+**Quyết định của user:** giảm từ 6 role xuống 4 (phương án B). Luồng xử lý claim (UC02–UC10) và maker–checker giữ nguyên.
+
+| Trước | Sau | Lý do |
+|---|---|---|
+| Intake Officer | Intake Officer | Giữ nguyên. |
+| Claims Reviewer | Claims Reviewer | Giữ nguyên. |
+| Senior Approver + Operations Manager | **Senior Approver** (`SENIOR_APPROVER`) | Ops chỉ xem; Approver là cấp quản lý và đã được xem dữ liệu y tế, nên không cần chế độ masked riêng. Approver nhận UC12 (dashboard, AI quality) và audit log claim events. |
+| Policy Administrator + System Administrator | **Administrator** (`ADMINISTRATOR`) | Cả hai chỉ cấu hình hệ thống, không xử lý claim. Administrator nhận UC11 và UC14, không xem nội dung claim. |
+
+Ràng buộc mới đi kèm:
+- Administrator không được tự đổi role hay tự khoá tài khoản của mình (UC14, AC US02), vì một người nay vừa sửa được rule set vừa cấp được quyền.
+- Test run rule set (UC11 *Test draft*, US22) chỉ dùng **synthetic sample claims**, để Administrator không thấy nội dung claim thật (BR-11).
+
+Các kết quả xử lý trước bị thay thế:
+- **AUD-01:** phần "Ops xem masked" không còn; BR-11 chỉ còn Intake (claim mình tạo), Reviewer được giao và Senior Approver xem dữ liệu y tế; Administrator không xem nội dung claim.
+- **AUD-16:** không còn vấn đề home của Ops; mọi role đều có home nằm trong bản Must (Approver → Approval queue, Administrator → Benefit plans).
+- **AUD-31, AUD-32:** "Policy Admin" đổi thành Administrator; Claim workspace không còn quyền "read: Ops, masked".
+
+File đã cập nhật: README, 03 (actor, diagram, matrix, BR-11, UC01, UC06, UC11–UC14), `use-case.puml`, 04 (sitemap, sidebar, screen inventory, API), 08 (US01, US02, US21–US24, ràng buộc chung), stitch-prompts, `scr-50-operations.html` và `.png` (chụp lại từ HTML), `02_Feature_Map.xmind` (nhánh 01, 05, 09 và thumbnail), `docs/images/feature-map.png`. `01_Product_Research.xmind` giữ nguyên 6 nhóm người dùng vì là tài liệu nghiên cứu đầu vào.

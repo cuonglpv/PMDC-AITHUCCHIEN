@@ -8,6 +8,8 @@ The IA is organised around **one claim case** and **one work queue per role**. S
 
 ## Sitemap
 
+A visual sitemap with the sections and tasks of every page is in [images/ia-sitemap-relume.png](images/ia-sitemap-relume.png) (source: [diagrams/ia-sitemap.html](diagrams/ia-sitemap.html)).
+
 ```text
 ClaimLens
 │
@@ -31,7 +33,7 @@ ClaimLens
     │   ├── Approval queue                        /approvals                 Senior Approver
     │   │   └── tabs: Pending · Escalated · Decided by me
     │   │
-    │   └── Claim workspace                       /claims/:id                Reviewer, Approver (read: Ops, masked — BR-11)
+    │   └── Claim workspace                       /claims/:id                Reviewer, Approver (scoped by BR-11)
     │       ├── Overview                          /claims/:id/overview
     │       ├── Documents & evidence              /claims/:id/evidence
     │       ├── Validation                        /claims/:id/validation
@@ -45,12 +47,12 @@ ClaimLens
     │           ├── Dismiss / keep flag (Reviewer) · Escalate flag (Approver)   modal
     │           └── Approve · Reject · Return     modal
     │
-    ├── Search claims                             /claims                    Intake, Reviewer, Approver, Ops (scoped by BR-11)
+    ├── Search claims                             /claims                    Intake, Reviewer, Approver (scoped by BR-11)
     │
     ├── Policy
-    │   ├── Members & policies                    /members                   Policy Admin, Intake (read; seeded data in MVP)
+    │   ├── Members & policies                    /members                   Administrator, Intake (read; seeded data in MVP)
     │   │   └── Member detail                     /members/:id
-    │   └── Benefit plans                         /plans                     Policy Admin
+    │   └── Benefit plans                         /plans                     Administrator
     │       └── Plan                              /plans/:id
     │           ├── Versions                      /plans/:id/versions
     │           ├── Rule set editor (draft)       /plans/:id/versions/:v
@@ -58,12 +60,12 @@ ClaimLens
     │           └── Test run                      /plans/:id/versions/:v/test
     │
     ├── Insights
-    │   ├── Operations dashboard                  /insights/operations       Ops Manager
-    │   ├── AI quality                            /insights/ai-quality       Ops Manager
-    │   └── Audit log                             /insights/audit            Ops Manager (claim events, masked), Sys Admin (access log only)
+    │   ├── Operations dashboard                  /insights/operations       Senior Approver
+    │   ├── AI quality                            /insights/ai-quality       Senior Approver
+    │   └── Audit log                             /insights/audit            Senior Approver (claim events), Administrator (access log only)
     │
     ├── Administration
-    │   └── Staff accounts                        /admin/staff               Sys Admin
+    │   └── Staff accounts                        /admin/staff               Administrator
     │
     ├── Profile                                   /profile                   all
     └── 403 / 404                                 /403  /404
@@ -75,22 +77,22 @@ Global shell: **left sidebar** (collapsible, icon + label) · **top bar** (globa
 
 Sidebar items are rendered per role — never shown disabled.
 
-| Sidebar group | Item | Intake | Reviewer | Approver | Policy Admin | Ops | Sys Admin |
-|---|---|---|---|---|---|---|---|
-| Work | Intake | ● home | | | | | |
-| Work | Review queue | | ● home | | | | |
-| Work | Approval queue | | | ● home | | | |
-| Work | Search claims | ✓ | ✓ | ✓ | | ✓ | |
-| Policy | Members & policies | read | | | ✓ | | |
-| Policy | Benefit plans | | read | read | ● home | | |
-| Insights | Operations dashboard | | | | | ● home | |
-| Insights | AI quality | | | | | ✓ | |
-| Insights | Audit log | | | | | ✓ masked | ✓ access log |
-| Admin | Staff accounts | | | | | | ● home |
+| Sidebar group | Item | Intake | Reviewer | Approver | Administrator |
+|---|---|---|---|---|---|
+| Work | Intake | ● home | | | |
+| Work | Review queue | | ● home | | |
+| Work | Approval queue | | | ● home | |
+| Work | Search claims | ✓ | ✓ | ✓ | |
+| Policy | Members & policies | read | | | ✓ |
+| Policy | Benefit plans | | read | read | ● home |
+| Insights | Operations dashboard | | | ✓ | |
+| Insights | AI quality | | | ✓ | |
+| Insights | Audit log | | | ✓ claim events | ✓ access log |
+| Admin | Staff accounts | | | | ✓ |
 
-● = landing page after sign-in (US01). In a Must-only release (US23 not shipped) the Operations Manager lands on Audit log.
+● = landing page after sign-in (US01). Every home screen is in the Must release.
 
-Data visibility follows BR-11: medical and identity values are shown only to the Intake Officer who registered the claim, the assigned Reviewer and Senior Approvers; Ops sees them masked; Sys Admin never opens claim content.
+Data visibility follows BR-11: medical and identity values are shown only to the Intake Officer who registered the claim, the assigned Reviewer and Senior Approvers; the Administrator never opens claim content.
 
 ## The core screen: Claim workspace
 
@@ -142,25 +144,25 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | `SCR-13` | Documents & submit (upload, AI page check; also supplementary upload) | Step page | Intake | US04, US05, US19 |
 | `SCR-20` | Review queue | Page | Reviewer | US01, US25 |
 | `SCR-21` | Approval queue | Page | Approver | US18, US20 |
-| `SCR-22` | Search claims | Page | Intake, Reviewer, Approver, Ops | US25 |
-| `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver, Ops (masked) | US18, US20 |
+| `SCR-22` | Search claims | Page | Intake, Reviewer, Approver | US25 |
+| `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver | US18, US20 |
 | `SCR-31` | Claim workspace — Documents & evidence | Tab | Reviewer | US05, US06, US07 |
 | `SCR-32` | Claim workspace — Validation | Tab | Reviewer | US08, US09 |
 | `SCR-33` | Claim workspace — Adjudication | Tab | Reviewer, Approver | US11, US12, US13, US14, US17 |
 | `SCR-34` | Claim workspace — Risk | Tab | Reviewer, Approver | US09, US10, US15, US20 |
 | `SCR-35` | Claim workspace — Decision | Tab | Reviewer, Approver | US16, US18, US20 |
-| `SCR-36` | Claim workspace — Timeline | Tab | Reviewer (own claims), Approver, Ops (masked) | US24 |
+| `SCR-36` | Claim workspace — Timeline | Tab | Reviewer (own claims), Approver | US24 |
 | `SCR-37` | Request information | Modal | Reviewer | US19 |
 | `SCR-38` | Override line | Drawer | Reviewer | US17 |
 | `SCR-39` | Decision confirmation (approve / partially approve / reject / return) | Modal | Approver | US20 |
-| `SCR-40` | Members & policies / member detail (read-only, seeded) | Page | Policy Admin, Intake (read) | US03 |
-| `SCR-41` | Benefit plans & versions | Page | Policy Admin | US21 |
-| `SCR-42` | Rule set editor | Page with tabs | Policy Admin | US21 |
-| `SCR-43` | Rule set test run | Page | Policy Admin | US22 |
-| `SCR-50` | Operations dashboard | Page | Ops | US23 |
-| `SCR-51` | AI quality | Page | Ops | US23 |
-| `SCR-52` | Audit log | Page | Ops (claim events, masked), Sys Admin (access log only) | US24, US02 |
-| `SCR-60` | Staff accounts (+ form modal) | Page | Sys Admin | US02 |
+| `SCR-40` | Members & policies / member detail (read-only, seeded) | Page | Administrator, Intake (read) | US03 |
+| `SCR-41` | Benefit plans & versions | Page | Administrator | US21 |
+| `SCR-42` | Rule set editor | Page with tabs | Administrator | US21 |
+| `SCR-43` | Rule set test run (synthetic sample claims) | Page | Administrator | US22 |
+| `SCR-50` | Operations dashboard | Page | Approver | US23 |
+| `SCR-51` | AI quality | Page | Approver | US23 |
+| `SCR-52` | Audit log | Page | Approver (claim events), Administrator (access log only) | US24, US02 |
+| `SCR-60` | Staff accounts (+ form modal) | Page | Administrator | US02 |
 | `SCR-70` | Profile | Page | all | — (shell only; change password out of MVP) |
 | `SCR-90` | 403 / 404 | Page | all | cross-cutting |
 
@@ -323,7 +325,7 @@ UI labels are in **English** (decided in the UI brief); sample data such as name
 | Adjudication | `listExpenseLines`, `confirmMapping`, `runAdjudication`, `getCalculationRevision`, `overrideLine` |
 | Risk | `listFlags`, `addFlag`, `dismissFlag`, `keepFlag`, `escalateFlag` (Approver only) |
 | Decision | `getSummaryDraft`, `submitRecommendation` (with attestation), `createInfoRequest`, `extendInfoDeadline`, `decideClaim`, `returnClaim` |
-| Timeline / audit | `getClaimTimeline`, `listAuditEvents` (masked for Ops), `listAccessLog` (Sys Admin) |
+| Timeline / audit | `getClaimTimeline`, `listAuditEvents` (Approver), `listAccessLog` (Administrator) |
 | Policy | `listPlans`, `createPlanVersion`, `updateRuleSet`, `publishPlanVersion`, `testRuleSet`, `listMembers`, `getMember` |
 | Insights | `getOperationsMetrics`, `getAiQualityMetrics`, `exportReport` |
 | Staff | `listStaff`, `createStaff`, `updateStaff`, `setStaffStatus` |

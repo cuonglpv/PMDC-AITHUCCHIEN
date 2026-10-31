@@ -69,17 +69,15 @@ flowchart TB
         intake(["Intake Officer"])
         reviewer(["Claims Reviewer"])
         approver(["Senior Approver"])
-        policy(["Policy Administrator"])
-        ops(["Operations Manager"])
-        admin(["System Administrator"])
+        admin(["Administrator"])
     end
 
     subgraph system["ClaimLens — System Boundary"]
         direction LR
         intakeCases["<b>Intake Officer</b><br/><br/>UC01 Sign in<br/>UC02 Register claim<br/>UC03 Upload claim documents"]
         reviewerCases["<b>Claims Reviewer</b><br/><br/>UC01 Sign in<br/>UC04 Verify extracted evidence<br/>UC05 Resolve validation alerts<br/>UC06 Review benefit adjudication<br/>UC07 Review risk flags (dismiss / keep)<br/>UC08 Submit recommendation<br/>UC09 Request additional information<br/>UC13 Trace decision history (own claims)"]
-        approverCases["<b>Senior Approver</b><br/><br/>UC01 Sign in<br/>UC07 Review risk flags (escalate)<br/>UC10 Approve, reject or return claim<br/>UC13 Trace decision history"]
-        governCases["<b>Governance</b><br/><br/>UC11 Publish benefit rule-set version<br/>UC12 Monitor operations & AI quality<br/>UC13 Trace decision history (masked)<br/>UC14 Manage staff access"]
+        approverCases["<b>Senior Approver</b><br/><br/>UC01 Sign in<br/>UC07 Review risk flags (escalate)<br/>UC10 Approve, reject or return claim<br/>UC12 Monitor operations & AI quality<br/>UC13 Trace decision history"]
+        governCases["<b>Administrator</b><br/><br/>UC01 Sign in<br/>UC11 Publish benefit rule-set version<br/>UC14 Manage staff access"]
         aiCases["<b>AI-assisted (included only)</b><br/><br/>AI-01 Classify & extract documents<br/>AI-02 Map expense lines to benefits<br/>AI-03 Detect clinical inconsistencies<br/>AI-04 Draft evidence-backed summary"]
         sysCases["<b>Deterministic</b><br/><br/>SYS-01 Evaluate policy rules"]
     end
@@ -89,7 +87,7 @@ flowchart TB
     intake --> intakeCases
     reviewer --> reviewerCases
     approver --> approverCases
-    policy & ops & admin --> governCases
+    admin --> governCases
     intakeCases & reviewerCases -.-> aiCases
     reviewerCases & governCases -.-> sysCases
     aiCases --- aisvc
@@ -98,7 +96,7 @@ flowchart TB
     classDef primary fill:#1a56db,color:#fff,stroke:#123c99
     classDef ai fill:#7c3aed,color:#fff,stroke:#5b21b6
     classDef sys fill:#0f766e,color:#fff,stroke:#0b524c
-    class intake,reviewer,approver,policy,ops,admin,aisvc actor
+    class intake,reviewer,approver,admin,aisvc actor
     class intakeCases,reviewerCases,approverCases,governCases primary
     class aiCases ai
     class sysCases sys
@@ -112,21 +110,21 @@ For the full UML diagram with `«include»` / `«extend»` relationships, actor 
 
 ### 1.5 Roles and permissions
 
-| Capability | Intake | Reviewer | Approver | Policy Admin | Ops Manager | Sys Admin |
-|---|---|---|---|---|---|---|
-| Register claims and upload documents | Yes | No | No | No | No | No |
-| Verify evidence, resolve alerts, review adjudication | No | Yes | No | No | No | No |
-| Override a line result (reason required) | No | Yes | No | No | No | No |
-| Submit recommendation, request information | No | Yes | No | No | No | No |
-| Handle risk flags | No | Dismiss / keep | Escalate | No | No | No |
-| Approve, partially approve, reject or return | No | No | Yes | No | No | No |
-| Publish benefit rule sets | No | Read | Read | Yes | No | No |
-| See medical and identity data | Claims they registered | Assigned claims | Yes | No | Masked | No |
-| Operations and AI quality dashboards | No | No | No | No | Yes | No |
-| Audit log | No | No | No | No | Claim events, masked | Access log only |
-| Staff accounts | No | No | No | No | No | Yes |
+| Capability | Intake | Reviewer | Approver | Administrator |
+|---|---|---|---|---|
+| Register claims and upload documents | Yes | No | No | No |
+| Verify evidence, resolve alerts, review adjudication | No | Yes | No | No |
+| Override a line result (reason required) | No | Yes | No | No |
+| Submit recommendation, request information | No | Yes | No | No |
+| Handle risk flags | No | Dismiss / keep | Escalate | No |
+| Approve, partially approve, reject or return | No | No | Yes | No |
+| Publish benefit rule sets | No | Read | Read | Yes |
+| See medical and identity data | Claims they registered | Assigned claims | Yes | No |
+| Operations and AI quality dashboards | No | No | Yes | No |
+| Audit log | No | No | Claim events | Access log only |
+| Staff accounts | No | No | No | Yes (not their own role) |
 
-The backend must enforce RBAC, maker–checker and data masking; hiding frontend controls serves UI/UX only. All business rules (BR-01 to BR-13) are listed in [Actors, roles, and use cases](docs/03-use-cases.md#business-rules-referenced-by-use-cases).
+The backend must enforce RBAC, maker–checker and data visibility (BR-11); hiding frontend controls serves UI/UX only. All business rules (BR-01 to BR-13) are listed in [Actors, roles, and use cases](docs/03-use-cases.md#business-rules-referenced-by-use-cases).
 
 ### 1.6 Claim lifecycle
 
@@ -183,6 +181,10 @@ Authenticated
 ├── Profile
 └── 403 / 404
 ```
+
+The sitemap below shows every page with its sections and the tasks done there (24 pages; AI-assisted sections in violet). Its source is [ia-sitemap.html](docs/diagrams/ia-sitemap.html), and the page and task list is in [Relume sitemap input](docs/relume-sitemap.md).
+
+![ClaimLens sitemap](docs/images/ia-sitemap-relume.png)
 
 ### 2.2 Screen hierarchy
 

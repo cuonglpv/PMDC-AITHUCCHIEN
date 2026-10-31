@@ -18,16 +18,12 @@ actor "Staff" as Staff <<abstract>>
 actor "Intake Officer" as Intake
 actor "Claims Reviewer" as Reviewer
 actor "Senior Approver" as Approver
-actor "Policy Administrator" as PolicyAdmin
-actor "Operations Manager" as Ops
-actor "System Administrator" as SysAdmin
+actor "Administrator" as Admin
 
 Intake --|> Staff
 Reviewer --|> Staff
 Approver --|> Staff
-PolicyAdmin --|> Staff
-Ops --|> Staff
-SysAdmin --|> Staff
+Admin --|> Staff
 
 rectangle "ClaimLens" {
   usecase "UC01 Sign in to role workspace" as UC01
@@ -77,11 +73,10 @@ Reviewer -- UC09
 Reviewer -- UC13
 Approver -- UC07
 Approver -- UC10
+Approver -- UC12
 Approver -- UC13
-PolicyAdmin -- UC11
-Ops -- UC12
-Ops -- UC13
-SysAdmin -- UC14
+Admin -- UC11
+Admin -- UC14
 
 UC03 ..> AI01 : <<include>>
 AI01 ..> UC04 : <<extend>>\n[page misread]
@@ -110,8 +105,8 @@ note bottom of UC10
 end note
 
 note bottom of UC13
-  Ops Manager: medical and identity
-  data masked. Reviewer: own claims.
-  Sys Admin: access log only (UC14).
+  Reviewer: own claims only.
+  Administrator: no claim content;
+  access log only (UC14).
 end note
 @enduml

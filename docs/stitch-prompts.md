@@ -414,13 +414,13 @@ New claim, step 3 of 3. One job: the Intake Officer uploads the claim documents 
 ## SCR-50 — Operations dashboard
 
 ```text
-Operations dashboard for an Operations Manager. One job: see at a glance where the backlog is and whether AI is helping. Keep it minimal — four charts, a few big numbers, generous white space. Vibe: calm, editorial, data-driven.
+Operations dashboard for a Senior Approver. One job: see at a glance where the backlog is and whether AI is helping. Keep it minimal — four charts, a few big numbers, generous white space. Vibe: calm, editorial, data-driven.
 
 **DESIGN SYSTEM (REQUIRED):**
 - RESTRAINT (most important): show ONLY the elements listed below. No extra charts, tables, legends or annotations beyond what is listed. Labels of at most 4 words.
 - Type: Lexend Exa for the page title and big numbers; Be Vietnam Pro sentence case for labels; IBM Plex Mono for small numbers, dates and axis labels.
 - Platform: Web, desktop 1440px. Canvas Warm Paper #F4F3EF, white cards with 1px #D8D6D1 hairlines, no shadows, 32px gaps
-- Shell: 240px black sidebar #090909, "Operations dashboard" active (#1D1C1C + 2px #EB0029 left bar)
+- Shell: 240px black sidebar #090909 with Approval queue, Search claims, Benefit plans, Operations dashboard, AI quality, Audit log; "Operations dashboard" active (#1D1C1C + 2px #EB0029 left bar); user "Lê Minh Quân · Senior approver"
 - Charts: ink #090909 and greys only; Signal Red #EB0029 for the one bar that needs attention; Insight Violet #6D28D9 only for AI metrics; flat bars, thin gridlines, no gradients
 - 2px radius, line icons, no emoji
 
@@ -505,7 +505,7 @@ Stitch đã nhận DESIGN.md của mình. Stitch chuyển phần token sang bộ
 |---|---|---|
 | SCR-13 | Intake, Search claims, Members | Phạm Gia Bảo · Intake officer |
 | SCR-20, 31, 33, 35 | Review queue, Search claims, Benefit plans | Trần Thu Hà · Claims reviewer |
-| SCR-50 | Operations dashboard, AI quality, Audit log, Search claims | Lê Thanh Tâm · Operations manager |
+| SCR-50 | Approval queue, Search claims, Benefit plans, Operations dashboard, AI quality, Audit log | Lê Minh Quân · Senior approver |
 
 **Theo từng màn:**
 - **SCR-01 · F1** `Remove the corner texts "V2.4 · STAGING" and "SECURE GATEWAY · NODE-SGN-04"; keep only the wordmark top-left and "ClaimLens · synthetic data only" in the footer.`
@@ -597,3 +597,7 @@ Các file `.png` của 4 màn này vẫn là ảnh chụp gốc của Stitch (fo
 | 9 | Số tiền dạng `800,000 ₫` font mono căn phải; ngày dạng dd/MM/yyyy | IA › Responsive & a11y |
 | 10 | Tương phản ≥ 4.5:1; tên tiếng Việt hiển thị đúng dấu | WCAG AA |
 | 11 | Số liệu khớp golden case (1,400,000 → 1,100,000 → 880,000 → 800,000) | 08 › US13 |
+
+## Gộp role (31/10/2026)
+
+Hệ thống còn 4 role: Intake Officer, Claims Reviewer, Senior Approver (kiêm dashboard vận hành) và Administrator (rule set + tài khoản). SCR-50 nay thuộc **Senior Approver**: [ui/scr-50-operations.html](ui/scr-50-operations.html) đã được sửa tay (sidebar thêm Approval queue và Benefit plans, người dùng "Lê Minh Quân · Senior approver", avatar "LQ"). File `.png` đã được chụp lại từ HTML (Chrome headless, 1280 px × 1.25). Nếu sinh lại trong Stitch, dùng prompt **SH** với dòng SCR-50 ở bảng trên.

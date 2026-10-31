@@ -1,0 +1,322 @@
+<!doctype html>
+<!-- Relume-style sitemap of the ClaimLens IA. Source of docs/images/ia-sitemap-relume.png; content mirrors docs/relume-sitemap.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ClaimLens sitemap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #f1f0ee;
+    --header: #e4e2de;
+    --group: #dcd9d4;
+    --line: #a9a6a0;
+    --ink: #1c1c1c;
+    --muted: #6b6965;
+    --card-border: #1c1c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #board { display: inline-block; padding: 40px 56px 64px; }
+
+  .project-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--header); border-radius: 8px;
+    padding: 12px 16px; font-weight: 600; font-size: 15px;
+  }
+  .project-bar small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 8px; }
+  .legend { margin: 10px 2px 0; font-size: 12px; color: var(--muted); }
+
+  /* tree */
+  .tree { display: flex; justify-content: center; margin-top: 28px; }
+  .tree ul { display: flex; padding: 28px 0 0; margin: 0; position: relative; list-style: none; }
+  .tree > ul { padding-top: 0; }
+  .tree li { position: relative; padding: 28px 10px 0; display: flex; flex-direction: column; align-items: center; }
+  .tree > ul > li { padding-top: 0; }
+  .tree li::before, .tree li::after {
+    content: ""; position: absolute; top: 0; width: 50%; height: 28px;
+    border-top: 1.5px solid var(--line);
+  }
+  .tree li::before { right: 50%; }
+  .tree li::after { left: 50%; border-left: 1.5px solid var(--line); }
+  .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+  .tree li:last-child::before { border-right: 1.5px solid var(--line); border-radius: 0 8px 0 0; }
+  .tree li:first-child::after { border-radius: 8px 0 0 0; }
+  .tree li:only-child::before { display: none; }
+  .tree li:only-child::after { border-top: 0; border-radius: 0; left: 50%; width: 0; }
+  .tree > ul > li::before, .tree > ul > li::after { display: none; }
+  .tree ul ul::before {
+    content: ""; position: absolute; top: 0; left: 50%; height: 28px;
+    border-left: 1.5px solid var(--line);
+  }
+
+  /* page node */
+  .page { width: 236px; }
+  .page-header {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--header); border-radius: 6px;
+    padding: 9px 10px; font-weight: 600; font-size: 13.5px;
+  }
+  .page-header svg { flex: none; }
+  .page-header .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .page-header .more { color: var(--muted); letter-spacing: 1px; font-weight: 600; }
+  .page.group .page-header { background: var(--group); text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
+  .role { font-size: 11px; color: var(--muted); padding: 6px 4px 0; }
+  .sections {
+    margin-top: 6px; background: #fff; border-radius: 6px; padding: 6px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .section {
+    border: 1.25px solid var(--card-border); border-radius: 4px;
+    padding: 7px 8px; background: #fff;
+  }
+  .section b { display: block; font-size: 12px; font-weight: 600; line-height: 1.3; }
+  .section span { display: block; font-size: 10.5px; line-height: 1.35; color: #4a4845; margin-top: 2px; }
+  .section.ai { border-color: #6d28d9; }
+  .section.ai b::after {
+    content: "AI"; margin-left: 6px; font-size: 9px; font-weight: 600; color: #6d28d9;
+    border: 1px solid #6d28d9; border-radius: 3px; padding: 0 3px; vertical-align: 1px;
+  }
+</style>
+</head>
+<body>
+<div id="board">
+  <div class="project-bar">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#1c1c1c" stroke-width="1.4"><rect x="6" y="1.5" width="4" height="3" rx=".6"/><rect x="1.5" y="11.5" width="4" height="3" rx=".6"/><rect x="10.5" y="11.5" width="4" height="3" rx=".6"/><path d="M8 4.5v3.5M3.5 11.5V8h9v3.5"/></svg>
+    ClaimLens — Sitemap
+    <small>Information architecture · 24 pages · 4 sidebar groups · Intake Officer, Claims Reviewer, Senior Approver, Administrator</small>
+  </div>
+  <div class="legend">Grey header = page · darker header = sidebar group · cards = sections and the tasks done there · violet card = AI-assisted · grey line under a header = roles</div>
+  <div class="tree" id="tree"></div>
+</div>
+
+<script>
+const N = "Navbar";
+// [name, roles, sections, children]; a section is "Title" or ["Title", "tasks", ai?]; null roles marks a sidebar group
+const site = ["Sign in", "Public · all roles", [
+    ["Sign-in form", "Email and password; sign in."],
+    ["Generic error", "Same message for wrong credentials or a disabled account."],
+    ["Role routing", "Opens the role home; protected URLs go to 403."],
+  ], [
+  ["Work", null, [], [
+    ["Intake", "Intake Officer · home", [
+      N,
+      ["Tabs", "Drafts · My submissions · Needs information."],
+      ["Claims table", "Open a draft, continue uploading, see status."],
+      ["Supplementary documents", "Add documents to a claim in Needs information before its deadline."],
+      ["New claim", "Starts the three-step stepper."],
+      ["Empty state", "No drafts vs no results for filters."],
+    ], [
+      ["New claim", "Intake Officer", [
+        ["Step 1 · Member & policy", "Search by name, ID or policy no.; status, coverage period, remaining balance; “No member found”."],
+        ["Step 2 · Claim details", "Service date, provider, claimed total, channel; warning when outside coverage."],
+        ["Step 3 · Documents", "Drag-and-drop PDF/JPG/PNG (≤ 20 MB, ≤ 30 pages); progress; remove file."],
+        ["AI page check", "Page type and confidence; choose type if Unclassified; Low quality re-capture hint; replace page.", true],
+        ["AI unavailable banner", "Pages stay Unclassified; submission continues."],
+        ["Submit", "Disabled while uploading; claim moves to Processing."],
+      ]],
+    ]],
+    ["Review queue", "Claims Reviewer · home", [
+      N,
+      ["Queue tabs", "Available · Assigned to me · Needs verification · Needs information · Returned."],
+      ["Priority table", "Claim no., member, amount, status, AI status, age, assignee; sorted by priority, then age."],
+      ["Filters", "Status, priority, assignee."],
+      ["Start review", "Self-assign; opens Evidence when fields need verification."],
+      ["Returned claims", "Approver’s return comment."],
+      ["Needs information", "Response deadline; extend it before it passes."],
+      ["Empty states", "Nothing assigned vs no results."],
+    ]],
+    ["Approval queue", "Senior Approver · home", [
+      N,
+      ["Tabs", "Pending · Escalated · Decided by me."],
+      ["Priority table", "Payable, high-value marker (≥ 5,000,000 ₫), open High flags, age."],
+      ["Recommendation preview", "Outcome, payable, reviewer, open flags."],
+      ["Open claim", "Goes to the Decision tab."],
+      ["Empty state", "No pending recommendations."],
+    ]],
+    ["Search claims", "Intake · Reviewer · Approver", [
+      N,
+      ["Search", "Claim no., member or invoice no."],
+      ["Filters", "Status, plan, date."],
+      ["Results", "Only claims the user may see (BR-11)."],
+    ]],
+    ["Claim workspace", "Reviewer · Approver", [
+      ["Case header", "Claim no., member, policy, service date, status, assignee, rule-set version, payable, primary action by status."],
+      ["Tab bar", "Overview · Evidence · Validation · Adjudication · Risk · Decision · Timeline."],
+      ["Document rail", "Pages by type with quality and AI status (Queued, Reading, Done, Failed)."],
+      ["Source viewer", "Highlighted page region or rule clause for the selected row."],
+      ["Sticky action bar", "Progress counters and the next action."],
+      ["System states", "Recalculating, conflict with another user, AI fallback banner."],
+    ], [
+      ["Overview", "Reviewer · Approver", [
+        ["Claim summary", "Member, policy, provider, dates, claimed total."],
+        ["Recommendation", "Outcome type, payable, reviewer."],
+        ["Line results", "Covered / Partially covered / Excluded per line."],
+        ["Overrides", "Overridden lines with their reason."],
+        ["Attested AI values", "Auto-accepted values the reviewer confirmed.", true],
+        ["Open flags", "Kept and escalated risk flags."],
+      ]],
+      ["Documents & evidence", "Claims Reviewer", [
+        ["Field list", "Grouped by document, lowest confidence first; remaining counter.", true],
+        ["Confidence", "High · Check · Missing, with the AI marker.", true],
+        ["Verify field", "Accept, edit or mark Not present; reviewer initials replace the AI marker."],
+        ["Source pin", "Click a field to highlight its page region."],
+        ["Draw source region", "Required before accepting a value without a source."],
+        ["Page re-read", "Reclassify a page and re-run AI on that page only.", true],
+        ["Manual entry", "Enter fields beside the viewer when AI is unavailable."],
+      ]],
+      ["Validation", "Claims Reviewer", [
+        ["Alerts", "Blocking / Warning with conflicting values and their sources."],
+        ["Checks", "Required documents, name & policy match, dates, invoice total = sum of lines, exact duplicate."],
+        ["Resolve alert", "Fix data at source; validation re-runs."],
+        ["Dismiss alert", "Reason code and note required."],
+        ["Clinical check", "Diagnosis vs medication signals go to Risk; “Clinical check not run” if AI is down.", true],
+        ["Request information modal", "Checklist pre-filled from alerts, deadline, template letter, export PDF."],
+      ]],
+      ["Adjudication", "Reviewer · Approver (read)", [
+        ["Benefit mapping", "AI benefit category and confidence per expense line.", true],
+        ["Confirm category", "Required below 0.85; chosen from the rule-set categories."],
+        ["Run adjudication", "Uses the rule-set version effective on the service date."],
+        ["Line results", "Covered / Partially covered / Excluded, covered amount, rule code, clause."],
+        ["Payable formula", "Eligible × reimbursement rate, capped by the remaining limit."],
+        ["Remaining balance", "Before and projected after."],
+        ["Calculation revisions", "Numbered revisions; changed lines highlighted."],
+        ["Override line drawer", "New amount or result, reason code, note; capped by claimed amount and limit."],
+        ["No effective rule set", "Blocker naming the Administrator."],
+      ]],
+      ["Risk", "Reviewer · Approver", [
+        ["Flag cards", "Type, severity, source (AI or rule), reason.", true],
+        ["Evidence", "Side-by-side documents and the matching claim."],
+        ["Signal, not a finding", "Neutral wording on AI flags; never “fraud”."],
+        ["Dismiss flag", "Reason code and note."],
+        ["Keep for approver", "Note for the Senior Approver."],
+        ["Add manual flag", "Type, severity, note."],
+        ["Escalate", "Senior Approver only; claim gets the Escalated marker."],
+      ]],
+      ["Decision", "Reviewer · Approver", [
+        ["AI summary draft", "Citation chip on every sentence; uncited sentences flagged.", true],
+        ["Edit summary", "Records whether the text was AI-drafted and edited."],
+        ["Recommendation type", "Proposed from the payable; reason if changed."],
+        ["High flag warning", "Shown to the reviewer and the approver."],
+        ["Attestation", "Confirm every auto-accepted AI value used in the calculation.", true],
+        ["Submit recommendation", "Disabled with the missing item named."],
+        ["Approver decision", "Approve · Partially approve · Reject · Return with comment."],
+        ["Confirmation modal", "Claim no., outcome, final amount, reason code."],
+        ["Guards", "Maker–checker block; balance changed → re-run adjudication."],
+      ]],
+      ["Timeline", "Reviewer (own claims) · Approver", [
+        ["Event list", "Status, uploads, AI runs with model version, corrections before/after, alerts, flags, revisions, overrides, decision."],
+        ["Actor and time", "On every event."],
+        ["Filters", "By event type."],
+      ]],
+    ]],
+  ]],
+  ["Policy", null, [], [
+    ["Members & policies", "Administrator · Intake (read)", [
+      N,
+      ["Member search", "Name, ID or policy no."],
+      ["Member detail", "Policies, coverage period, benefit plan, remaining balance, claim history."],
+      ["Seed data notice", "Read-only in the MVP."],
+    ]],
+    ["Benefit plans", "Administrator · home", [
+      N,
+      ["Plan list", "Plans with their current version."],
+      ["Versions", "Draft, published, effective-from."],
+      ["Create draft version", "Copy of the current version to edit."],
+      ["Actions", "Open the rule set editor; run a test."],
+    ], [
+      ["Rule set editor", "Administrator", [
+        ["Covered categories", "Benefit categories with rule codes."],
+        ["Exclusions", "Excluded services, e.g. EX-04."],
+        ["Waiting periods", "Per category."],
+        ["Reimbursement rate", "Share the insurer pays, e.g. 80%."],
+        ["Limits", "Per-visit and annual."],
+        ["Rule code & clause", "On every rule."],
+        ["Publish", "Effective-from later than current; published versions read-only."],
+      ]],
+      ["Rule set test run", "Administrator", [
+        ["Sample claims", "Pick synthetic claims only."],
+        ["Run draft", "Same engine as adjudication."],
+        ["Comparison", "Per-line results, draft vs current."],
+        ["Differences", "Highlighted; no real claim or balance changes."],
+      ]],
+    ]],
+  ]],
+  ["Insights", null, [], [
+    ["Operations dashboard", "Senior Approver", [
+      N,
+      ["Filters", "Date range, plan."],
+      ["KPI tiles", "Open claims, median handling time, approved in full, AI fields corrected, signals dismissed."],
+      ["Claims by status", "Count per lifecycle state."],
+      ["Backlog age", "0–2, 3–5, > 5 working days."],
+      ["Reviewer workload", "Claims per reviewer."],
+      ["Outcomes", "Approved, partially approved, rejected, returned."],
+      ["Drill down & export", "Open claims; export XLSX."],
+    ]],
+    ["AI quality", "Senior Approver", [
+      N,
+      ["Low-confidence rate", "Fields needing verification or entry ÷ fields extracted.", true],
+      ["Correction rate by field", "Fields changed by a person ÷ fields suggested.", true],
+      ["Flag dismissal rate", "Flags dismissed ÷ flags raised.", true],
+      ["Clinical false positives", "From the golden-case set.", true],
+      ["Filters & export", "Model version, date; export."],
+    ]],
+    ["Audit log", "Senior Approver · Administrator", [
+      N,
+      ["Filters", "Actor, event type, date, claim no."],
+      ["Claim events", "Senior Approver."],
+      ["Access log", "Sign-ins, role changes, claim opens by claim no. — Administrator."],
+      ["Event detail", "Before/after values, actor, time."],
+    ]],
+  ]],
+  ["Administration", null, [], [
+    ["Staff accounts", "Administrator", [
+      N,
+      ["Staff table", "Name, email, role, status."],
+      ["Create account modal", "Exactly one role per account."],
+      ["Edit role", "Audited with before/after role."],
+      ["Disable / enable", "Disabled users get the generic sign-in error."],
+      ["Self-protection", "No own role change or disable."],
+    ]],
+  ]],
+  ["Profile", "All roles", [N, ["Profile details", "Name, email, role."], ["Sign out", "Ends the session."]]],
+  ["403 / 404", "All roles", [["Message", "Forbidden or not found."], ["Back to role home", "Safe route back."]]],
+]];
+
+const pageIcon = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1c1c1c" stroke-width="1.3"><path d="M3 1.5h5.5L11 4v8.5H3z"/><path d="M8.5 1.5V4H11"/></svg>';
+const groupIcon = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1c1c1c" stroke-width="1.3"><path d="M1.5 3.5h4l1 1.5h6v7h-11z"/></svg>';
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+function node([name, roles, sections, children]) {
+  const li = document.createElement("li");
+  const isGroup = roles === null;
+  let html = `<div class="page${isGroup ? " group" : ""}"><div class="page-header">${isGroup ? groupIcon : pageIcon}<span class="name">${esc(name)}</span><span class="more">···</span></div>`;
+  if (roles) html += `<div class="role">${esc(roles)}</div>`;
+  if (sections.length) {
+    html += `<div class="sections">` + sections.map(s => {
+      const [t, d, ai] = typeof s === "string" ? [s, "", false] : s;
+      return `<div class="section${ai ? " ai" : ""}"><b>${esc(t)}</b>${d ? `<span>${esc(d)}</span>` : ""}</div>`;
+    }).join("") + `</div>`;
+  }
+  li.innerHTML = html + "</div>";
+  if (children && children.length) {
+    const ul = document.createElement("ul");
+    children.forEach(c => ul.appendChild(node(c)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+const root = document.createElement("ul");
+root.appendChild(node(site));
+document.getElementById("tree").appendChild(root);
+</script>
+</body>
+</html>

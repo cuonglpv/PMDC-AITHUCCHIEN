@@ -33,11 +33,9 @@ Thresholds are seed configuration per field group; there is no threshold UI in t
 |---|---|---|---|
 | Intake Officer | Primary | `INTAKE_OFFICER` | Registers claims, links the policy, uploads the claim packet and supplementary documents. |
 | Claims Reviewer | Primary | `CLAIMS_REVIEWER` | Picks up claims, verifies evidence, resolves alerts, prepares the recommendation. |
-| Senior Approver | Primary | `SENIOR_APPROVER` | Approves, rejects or returns recommendations; escalates flags for investigation. |
-| Policy Administrator | Primary | `POLICY_ADMIN` | Maintains versioned benefit rule sets. Member and policy data are seeded in the MVP. |
-| Operations Manager | Primary | `OPS_MANAGER` | Monitors throughput, backlog, AI quality and audit history (medical data masked). |
-| System Administrator | Primary | `SYSTEM_ADMIN` | Manages staff accounts, role assignment and the access log; sees no claim content. |
-| Staff | Abstract (generalization) | — | Parent of all six roles; carries UC01. |
+| Senior Approver | Primary | `SENIOR_APPROVER` | Approves, rejects or returns recommendations; escalates flags for investigation; monitors throughput, backlog, AI quality and the claim audit history. |
+| Administrator | Primary | `ADMINISTRATOR` | Maintains versioned benefit rule sets, staff accounts, role assignment and the access log; sees no claim content. Member and policy data are seeded in the MVP. |
+| Staff | Abstract (generalization) | — | Parent of all four roles; carries UC01. |
 | AI Document Intelligence Service | Secondary (system) | — | OCR, page classification, quality check, extraction, term normalization, clinical consistency signals, summary drafts. |
 
 The Policyholder is an indirect beneficiary and has no portal in the MVP.
@@ -53,9 +51,7 @@ flowchart LR
         intake["👤 Intake Officer"]
         reviewer["👤 Claims Reviewer"]
         approver["👤 Senior Approver"]
-        policy["👤 Policy Administrator"]
-        ops["👤 Operations Manager"]
-        admin["👤 System Administrator"]
+        admin["👤 Administrator"]
     end
 
     staff["👤 Staff<br/>(abstract)"]
@@ -112,15 +108,13 @@ flowchart LR
         aisvc["⚙ AI Document<br/>Intelligence Service"]
     end
 
-    intake & reviewer & approver & policy & ops & admin -->|"is a"| staff
+    intake & reviewer & approver & admin -->|"is a"| staff
 
     staff --- uc01
     intake --- uc02 & uc03
     reviewer --- uc04 & uc05 & uc06 & uc07 & uc08 & uc09 & uc13
-    approver --- uc07 & uc10 & uc13
-    policy --- uc11
-    ops --- uc12 & uc13
-    admin --- uc14
+    approver --- uc07 & uc10 & uc12 & uc13
+    admin --- uc11 & uc14
 
     uc03 -.->|"«include»"| ai01
     ai01 -.->|"«extend» [page misread]"| uc04
@@ -138,7 +132,7 @@ flowchart LR
     classDef usecase fill:#1a56db,color:#fff,stroke:#123c99
     classDef ai fill:#7c3aed,color:#fff,stroke:#5b21b6
     classDef sys fill:#0f766e,color:#fff,stroke:#0b524c
-    class intake,reviewer,approver,policy,ops,admin,aisvc actor
+    class intake,reviewer,approver,admin,aisvc actor
     class staff abstract
     class uc01,uc02,uc03,uc04,uc05,uc06,uc07,uc08,uc09,uc10,uc11,uc12,uc13,uc14 usecase
     class ai01,ai02,ai03,ai04 ai
@@ -176,24 +170,24 @@ Deliberately **no AI** in: benefit calculation, eligibility, rule authoring (UC1
 
 ## Role × use case matrix
 
-| Use case | Intake | Reviewer | Approver | Policy Admin | Ops Mgr | Sys Admin |
-|---|---|---|---|---|---|---|
-| UC01 Sign in | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| UC02 Register claim | ✓ | | | | | |
-| UC03 Upload documents | ✓ (incl. supplementary) | | | | | |
-| UC04 Verify extracted evidence | | ✓ | | | | |
-| UC05 Resolve validation alerts | | ✓ | | | | |
-| UC06 Review benefit adjudication | | ✓ | | | | |
-| UC07 Review risk flags | | ✓ (dismiss / keep) | ✓ (escalate) | | | |
-| UC08 Submit recommendation | | ✓ | | | | |
-| UC09 Request additional information | | ✓ | | | | |
-| UC10 Approve / reject / return | | | ✓ | | | |
-| UC11 Publish benefit rule-set version | | | | ✓ | | |
-| UC12 Monitor operations & AI quality | | | | | ✓ | |
-| UC13 Trace decision history | | own claims | ✓ | | ✓ (masked) | |
-| UC14 Manage staff access | | | | | | ✓ (incl. access log) |
+| Use case | Intake | Reviewer | Approver | Administrator |
+|---|---|---|---|---|
+| UC01 Sign in | ✓ | ✓ | ✓ | ✓ |
+| UC02 Register claim | ✓ | | | |
+| UC03 Upload documents | ✓ (incl. supplementary) | | | |
+| UC04 Verify extracted evidence | | ✓ | | |
+| UC05 Resolve validation alerts | | ✓ | | |
+| UC06 Review benefit adjudication | | ✓ | | |
+| UC07 Review risk flags | | ✓ (dismiss / keep) | ✓ (escalate) | |
+| UC08 Submit recommendation | | ✓ | | |
+| UC09 Request additional information | | ✓ | | |
+| UC10 Approve / reject / return | | | ✓ | |
+| UC11 Publish benefit rule-set version | | | | ✓ |
+| UC12 Monitor operations & AI quality | | | ✓ | |
+| UC13 Trace decision history | | own claims | ✓ | |
+| UC14 Manage staff access | | | | ✓ (incl. access log) |
 
-Menus and actions are not rendered without permission; the API enforces RBAC independently. "Masked" means medical and identity values are replaced by placeholders (BR-11).
+Menus and actions are not rendered without permission; the API enforces RBAC independently (BR-11).
 
 ## Claim lifecycle
 
@@ -239,7 +233,7 @@ stateDiagram-v2
 | BR-08 | Deterministic problems are **Alerts** (Validation). AI signals and near-duplicates are **Risk flags** (Risk). A risk flag is a signal, not a fraud finding. Only a Senior Approver escalates a flag; the investigation itself is outside the MVP. |
 | BR-09 | Approval queue priority: payable ≥ high-value threshold (seed value 5,000,000 VND), then open High flags, then age. Every recommendation still requires a Senior Approver (BR-01). |
 | BR-10 | Benefit balance is consumed only when a claim is approved; pending claims show a projected balance. At decision time the system re-checks the remaining balance; if it changed since the calculation revision, approval is blocked until adjudication is re-run. |
-| BR-11 | Medical documents, medical field values and identity data are visible only to roles working on the claim (Intake Officer who registered it, assigned Reviewer, Senior Approvers). Operations Manager sees them masked; System Administrator sees no claim content. |
+| BR-11 | Medical documents, medical field values and identity data are visible only to roles working on the claim (Intake Officer who registered it, assigned Reviewer, Senior Approvers). The Administrator sees no claim content; rule-set test runs use synthetic sample claims only. |
 | BR-12 | Every state change, field correction, override, dismissal, decision and access to claim data writes an immutable audit event with actor and time. |
 | BR-13 | Outcome by amount: **Approved** when payable = claimed total; **PartiallyApproved** when 0 < payable < claimed total; **Rejected** when payable = 0 (reason code required). A recommendation type that differs from this requires a reason. |
 
@@ -249,11 +243,11 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 
 ### UC01 Sign in to role workspace
 
-- **Actor:** any Staff (inherited by all six roles). Subfunction level — kept because it routes each role to its queue.
+- **Actor:** any Staff (inherited by all four roles). Subfunction level — kept because it routes each role to its queue.
 - **Goal:** reach the workspace and queue that match the assigned role.
 - **Trigger:** user opens ClaimLens.
 - **Preconditions:** an active staff account with exactly one role.
-- **Main flow:** enter email and password → system verifies credentials and active status → returns access token and role → opens the role's home (Intake: Intake; Reviewer: Review queue; Approver: Approval queue; Policy Admin: Benefit plans; Ops: Operations dashboard — Audit log while US23 is not released; Sys Admin: Staff accounts).
+- **Main flow:** enter email and password → system verifies credentials and active status → returns access token and role → opens the role's home (Intake: Intake; Reviewer: Review queue; Approver: Approval queue; Administrator: Benefit plans).
 - **Exceptions:** invalid credentials or disabled account → same generic error, no account state disclosed. Protected URL without permission → 403 page with a route back to the role home.
 - **Postconditions:** session established; sign-in recorded in the access log.
 - **Rules:** BR-11, BR-12.
@@ -326,7 +320,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Preconditions:** claim in `InReview`; a rule-set version is published for the member's plan.
 - **Main flow:** **AI-02** maps each expense line to a benefit category with confidence → reviewer confirms mappings below 0.85 → **SYS-01** loads the rule-set version effective on the service date and evaluates eligibility, waiting period, exclusions, reimbursement rate and limits per line → system shows, per line: result, covered amount, rule code, clause text and formula; and the claim total with remaining balance before and projected after.
 - **Alternatives:** mapping corrected or data edited → recalculation creates a new revision. AI unavailable → reviewer selects every category manually.
-- **Exceptions:** no rule-set version effective on the service date → adjudication blocked with "No effective rule set"; Policy Administrator named as owner.
+- **Exceptions:** no rule-set version effective on the service date → adjudication blocked with "No effective rule set"; Administrator named as owner.
 - **Example (golden case):** Consultation 200,000, Lab test 500,000, Medication 400,000 Covered; Cosmetic service 300,000 Excluded by EX-04 → claimed 1,400,000, eligible 1,100,000 → × 80% = 880,000 → remaining limit 800,000 → **payable = min(880,000; 800,000) = 800,000 VND**; projected balance after = 0.
 - **Postconditions:** a numbered calculation revision exists.
 - **Rules:** BR-04, BR-05, BR-10.
@@ -388,12 +382,12 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 
 ### UC11 Publish benefit rule-set version
 
-- **Actor:** Policy Administrator
+- **Actor:** Administrator
 - **Goal:** keep coverage logic accurate without rewriting old decisions.
 - **Trigger:** a plan's contract terms change, or a new plan is introduced.
 - **Preconditions:** benefit plan exists.
 - **Main flow:** create a draft version of a benefit plan → configure covered categories, exclusions, waiting periods, reimbursement rate, per-visit and annual limits, each with a rule code and clause text → publish with an effective-from date.
-- **Extension point *Test draft*:** `[test run requested]` → **SYS-01** runs selected sample claims through the draft and shows results next to the current version with differences highlighted.
+- **Extension point *Test draft*:** `[test run requested]` → **SYS-01** runs selected synthetic sample claims through the draft and shows results next to the current version with differences highlighted.
 - **Exceptions:** effective-from date not later than the current version's → publish blocked. Editing a published version → not allowed; create a new version instead.
 - **Postconditions:** published version is immutable; claims with service dates from the effective-from date use it.
 - **Rules:** BR-04, BR-05, BR-12.
@@ -401,11 +395,11 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 
 ### UC12 Monitor operations & AI quality
 
-- **Actor:** Operations Manager
+- **Actor:** Senior Approver
 - **Goal:** balance workload and judge whether AI is helping.
 - **Trigger:** routine monitoring.
 - **Preconditions:** none beyond sign-in.
-- **Main flow:** view claims by status, backlog age, median handling time, outcomes, reviewer workload, AI low-confidence rate, correction rate by field, flag dismissal rate → filter by date range and plan → drill down to claims (masked) → export report.
+- **Main flow:** view claims by status, backlog age, median handling time, outcomes, reviewer workload, AI low-confidence rate, correction rate by field, flag dismissal rate → filter by date range and plan → drill down to claims → export report.
 - **Exceptions:** no data for filters → empty state distinguishes "no claims" from "no results".
 - **Postconditions:** none (read-only).
 - **Rules:** BR-11.
@@ -413,7 +407,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 
 ### UC13 Trace claim decision history
 
-- **Actors:** Senior Approver, Operations Manager (masked), Claims Reviewer (own claims)
+- **Actors:** Senior Approver, Claims Reviewer (own claims)
 - **Goal:** reconstruct how any outcome was reached.
 - **Trigger:** a question about a claim's outcome (complaint, audit, quality check).
 - **Preconditions:** the user may see the claim (BR-11).
@@ -425,12 +419,12 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 
 ### UC14 Manage staff access
 
-- **Actor:** System Administrator
+- **Actor:** Administrator
 - **Goal:** only authorised people handle claims and medical data.
 - **Trigger:** staff joins, leaves or changes job.
 - **Preconditions:** none beyond sign-in.
 - **Main flow:** list staff → create, edit or disable an account → assign exactly one role → view the access log (sign-ins, role changes, claim-open events by claim number only).
-- **Exceptions:** disabling one's own account → blocked.
+- **Exceptions:** disabling one's own account or changing one's own role → blocked.
 - **Postconditions:** change effective at the user's next request; audit event with before/after role.
 - **Rules:** BR-11, BR-12.
 - **Stories:** US02. **Screens:** SCR-60, SCR-52.
