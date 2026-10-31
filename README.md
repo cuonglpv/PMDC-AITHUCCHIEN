@@ -12,7 +12,7 @@ Requirements define what ClaimLens must do, who uses it, where AI is allowed to 
 
 The feature map has three levels: the product, 10 feature areas and the functions in each. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
 
-![ClaimLens feature map](docs/images/feature-map.png)
+![ClaimLens feature map](docs/images/feature-map-v2.png)
 
 ### 1.2 Who decides what
 

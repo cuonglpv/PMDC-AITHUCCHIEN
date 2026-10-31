@@ -259,7 +259,7 @@ File đã cập nhật: README, 03 (actor, diagram, matrix, BR-11, UC01, UC06, U
 
 Feature map cũ (9 nhánh, khoảng 82 mục) được làm từ giai đoạn research, còn khoảng 10 mục nằm ngoài MVP hoặc lệch quy tắc (giao lại claim, sửa priority bằng tay, phát hiện chứng từ bị sửa, thư quyết định, đổi mật khẩu…). Bản mới giữ template XMind 3 tầng: **sản phẩm → nhóm chức năng → chức năng** (11 nhóm, 45 chức năng; sau mục 9 còn 10 nhóm, 38 chức năng), nội dung tiếng Anh, chỉ gồm chức năng thuộc MVP. Điều này cũng đóng phần còn lại của AUD-33.
 
-File: `02_Feature_Map.xmind`. Ảnh `docs/images/feature-map.png` cần export lại từ XMind.
+File: `02_Feature_Map.xmind`; ảnh export từ XMind: `docs/images/feature-map-v2.png`.
 
 ## 9. Thu gọn phạm vi, giữ rõ nghiệp vụ AI (31/10/2026)
 
