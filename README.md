@@ -4,18 +4,6 @@ ClaimLens supports health insurance claim assessment, using AI to automatically 
 
 The whole product follows one rule: **AI reads, the Rule Engine calculates, people decide.**
 
-> **Project status:** design phase. This repository holds requirements, UX and UI design. There is no application code yet; see [Project progress](#project-progress).
-
-### A claim from start to finish
-
-The example below is the "golden case": one claim whose numbers every document, screen and test uses, so they can be checked against each other.
-
-1. An **Intake Officer** registers a claim of **1,400,000 VND** and uploads the documents. AI sorts the pages and warns about blurry or wrong ones.
-2. AI reads the invoice line by line. A **Claims Reviewer** confirms anything AI was unsure about, side by side with the highlighted spot on the scan.
-3. The Rule Engine checks each line. A 300,000 VND cosmetic item is excluded (rule `EX-04`), leaving **1,100,000 VND** of covered expenses. The policy pays 80%, which is 880,000 VND, but only **800,000 VND** of the member's limit is left, so the payable amount is **800,000 VND**. Every line shows its result, the rule it came from and the formula.
-4. The reviewer submits a recommendation of **Partially approved**, because the payable amount is less than the amount claimed.
-5. A **Senior Approver**, who must be a different person, makes the final decision. Every step is recorded on the claim timeline.
-
 ## 1. Requirements: INVEST, use cases and acceptance criteria
 
 This section covers what ClaimLens must do, who uses it, where AI is and is not allowed to help, and how we will know each feature works.
@@ -259,7 +247,7 @@ The reviewer checks AI-extracted values next to the highlighted spot on the invo
 
 #### Claim workspace: Adjudication
 
-Each expense line with its result and rule code, and the payout calculation for the golden case.
+Each expense line with its result and rule code, and the payout calculation.
 
 ![Adjudication](docs/ui/scr-33-adjudication.png)
 
