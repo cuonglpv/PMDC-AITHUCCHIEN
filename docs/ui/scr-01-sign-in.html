@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign in — ClaimLens</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Lexend+Exa:wght@700;800;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#090909',
+            signalRed: '#EB0029',
+            shellPink: '#FF7B91',
+            textLight: '#ECE7E4',
+            textMuted: '#A9A6A1',
+            borderGrey: '#8C8984',
+            hairlineGrid: '#1A1A1A'
+          },
+          fontFamily: {
+            headline: ['"Lexend Exa"', 'sans-serif'],
+            sans: ['"Be Vietnam Pro"', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    /* Faint architectural hairline grid background */
+    .grid-bg {
+      background-color: #090909;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 64px 64px;
+    }
+    input:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px #EB0029;
+      border-color: #EB0029 !important;
+    }
+  </style>
+</head>
+<body class="bg-ink text-textLight font-sans min-h-screen flex flex-col justify-between selection:bg-signalRed selection:text-white grid-bg">
+<!-- Main Container: Full screen split desktop layout (1440px target) -->
+<div class="w-full max-w-[1440px] mx-auto min-h-screen flex flex-col justify-between p-8 md:p-14 lg:p-20 box-border">
+<!-- Top Bar / Wordmark -->
+<header class="w-full flex items-center justify-between">
+<div class="flex items-center space-x-2.5">
+<span class="w-2.5 h-2.5 bg-signalRed rounded-[1px] inline-block"></span>
+<span class="font-sans font-bold text-xl tracking-tight text-textLight">ClaimLens</span>
+</div>
+</header>
+<!-- Main Content: Left Editorial Copy & Right Form Panel -->
+<main class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center my-auto py-12">
+<!-- Left Half: Headline & Mission Statement -->
+<section class="lg:col-span-7 flex flex-col justify-center pr-0 lg:pr-8">
+<!-- Small Kicker -->
+<div class="inline-flex items-center space-x-2 mb-6">
+<span class="font-mono text-xs font-semibold tracking-widest uppercase text-shellPink bg-[#FF7B91]/10 px-2.5 py-1 rounded-[2px] border border-[#FF7B91]/20">
+            STAFF ACCESS
+          </span>
+</div>
+<!-- 3-line Uppercase Headline -->
+<h1 class="font-headline font-extrabold text-3xl sm:text-4xl lg:text-[42px] leading-[1.18] tracking-tight uppercase text-textLight">
+<span>EVIDENCE FIRST.</span><br/>
+<span>EVERY LINE EXPLAINED.</span><br/>
+<span class="text-signalRed">EVERY DECISION OWNED.</span>
+</h1>
+<!-- One Sentence Subtitle -->
+<p class="font-sans text-base sm:text-lg text-textMuted mt-7 max-w-xl leading-relaxed font-normal">
+          AI reads the documents. Rules compute the money. People decide.
+        </p>
+</section>
+<!-- Right Half: Centred White Form Panel (400px) -->
+<section class="lg:col-span-5 flex justify-center lg:justify-end">
+<div class="w-full max-w-[400px] bg-white rounded-none p-8 md:p-10 shadow-2xl border border-white/10 text-[#090909]">
+<h2 class="font-sans text-2xl font-bold tracking-tight text-[#090909] mb-8">
+            Sign in
+          </h2>
+<form action="#" class="space-y-5" method="POST" onsubmit="event.preventDefault();">
+<!-- Work email -->
+<div class="space-y-1.5">
+<label class="block font-sans text-xs font-medium text-[#4A4744]" for="email">
+                Work email
+              </label>
+<input autocomplete="email" class="w-full h-10 px-3.5 bg-white text-[#090909] placeholder-[#A9A6A1] text-sm border border-borderGrey rounded-[2px] transition duration-150" id="email" name="email" placeholder="reviewer@claimlens.internal" required="" type="email"/>
+</div>
+<!-- Password -->
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="block font-sans text-xs font-medium text-[#4A4744]" for="password">
+                  Password
+                </label>
+<a class="font-sans text-xs text-[#090909] hover:text-signalRed underline transition-colors" href="#">
+                  Forgot password?
+                </a>
+</div>
+<div class="relative">
+<input autocomplete="current-password" class="w-full h-10 px-3.5 pr-10 bg-white text-[#090909] placeholder-[#A9A6A1] text-sm border border-borderGrey rounded-[2px] transition duration-150" id="password" name="password" placeholder="••••••••••••" required="" type="password"/>
+<!-- Show/Hide Password Icon -->
+<button aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 pr-3 flex items-center text-[#8C8984] hover:text-[#090909] transition-colors" onclick="const input = document.getElementById('password'); input.type = input.type === 'password' ? 'text' : 'password';" type="button">
+<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.75" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Single Full-Width Red Primary CTA -->
+<div class="pt-2">
+<button class="w-full h-10 bg-signalRed hover:bg-[#c90023] active:bg-[#a6001d] text-white font-sans text-sm font-semibold rounded-[2px] transition duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-signalRed flex items-center justify-center cursor-pointer shadow-sm" type="submit">
+                Sign in
+              </button>
+</div>
+</form>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full pt-8 border-t border-[#1C1C1C] flex items-center justify-between text-xs font-mono text-textMuted">
+<div>
+        ClaimLens · synthetic data only
+      </div>
+</footer>
+</div>
+</body>
+</html>
