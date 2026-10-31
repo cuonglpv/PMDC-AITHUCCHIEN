@@ -254,3 +254,9 @@ Các kết quả xử lý trước bị thay thế:
 - **AUD-31, AUD-32:** "Policy Admin" đổi thành Administrator; Claim workspace không còn quyền "read: Ops, masked".
 
 File đã cập nhật: README, 03 (actor, diagram, matrix, BR-11, UC01, UC06, UC11–UC14), `use-case.puml`, 04 (sitemap, sidebar, screen inventory, API), 08 (US01, US02, US21–US24, ràng buộc chung), stitch-prompts, `scr-50-operations.html` và `.png` (chụp lại từ HTML), `02_Feature_Map.xmind` (nhánh 01, 05, 09 và thumbnail), `docs/images/feature-map.png`. `01_Product_Research.xmind` giữ nguyên 6 nhóm người dùng vì là tài liệu nghiên cứu đầu vào.
+
+## 8. Feature map vẽ lại theo use case (31/10/2026)
+
+Feature map cũ (9 nhánh, khoảng 82 mục) được làm từ giai đoạn research nên không khớp use case và epic, còn khoảng 10 mục nằm ngoài MVP hoặc lệch quy tắc (giao lại claim, sửa priority bằng tay, phát hiện chứng từ bị sửa, thư quyết định, đổi mật khẩu…). Bản mới chia theo **4 nhóm → 14 use case (kèm user story) → 51 chức năng chính**, đánh dấu chức năng có AI, và chỉ giữ chức năng thuộc MVP. Điều này cũng đóng phần còn lại của AUD-33.
+
+File: `02_Feature_Map.xmind` (nội dung và thumbnail), `docs/images/feature-map.png`, nguồn render `docs/diagrams/feature-map.html`.
