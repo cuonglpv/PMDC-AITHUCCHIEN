@@ -10,7 +10,7 @@ Requirements define what ClaimLens must do, who uses it, where AI is allowed to 
 
 ### 1.1 Feature map
 
-The feature map follows the use cases: four sidebar groups, the 14 use cases with their user stories, and the main functions of each; AI-assisted functions are tagged. The editable source is [02_Feature_Map.xmind](02_Feature_Map.xmind), and the image is rendered from [feature-map.html](docs/diagrams/feature-map.html).
+The feature map has three levels: the product, 11 feature areas and the functions in each. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
 
 ![ClaimLens feature map](docs/images/feature-map.png)
 
