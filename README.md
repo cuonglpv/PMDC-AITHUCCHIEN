@@ -1,8 +1,6 @@
 # ClaimLens
 
-When someone files an outpatient health insurance claim, they send a stack of photographed invoices, receipts and prescriptions. Today a claims reviewer retypes those papers, looks up the policy, works out what is covered and calculates the payout by hand. It is slow, and mistakes cost money.
-
-ClaimLens is a workbench for that reviewer. AI reads the documents and pulls out the facts, showing exactly where on the page each value came from. A rule engine checks every expense line against the policy that was in force on the day of the visit and calculates the payout. A reviewer checks the work and recommends a decision, and a second person approves it.
+ClaimLens supports health insurance claim assessment, using AI to automatically classify and extract information from medical documents (images, DOCX, PDF and XLSX files), check that each claim is valid, detect anomalies, and recommend a claim settlement based on the policy's benefits and the insurer's criteria.
 
 The whole product follows one rule: **AI reads, the Rule Engine calculates, people decide.**
 
