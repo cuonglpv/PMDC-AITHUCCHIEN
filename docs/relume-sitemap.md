@@ -24,7 +24,7 @@ Sign in: Sign-in form; Generic error; Role routing.
 
 WORK
 Intake: Tabs drafts/submitted; Claims table; New claim; Empty state.
-- New claim: Member & policy search (name, ID, policy no., status, coverage, balance); Claim details (service date, provider, total, channel, coverage warning); Document upload (PDF/JPG/PNG, limits, progress, remove); AI page check (type, confidence, choose type, low quality hint, replace); AI unavailable banner; Submit.
+- New claim: Member & policy search (name, ID, policy no., status, coverage, balance); Claim details (service date, provider, total, channel, coverage warning); Document upload (JPG/PNG/PDF/DOCX/XLSX, limits, progress, remove); AI page check (type, confidence, choose type, low quality hint, replace); AI unavailable banner; Submit.
 Review queue: Tabs available/assigned/needs verification/returned; Priority table; Filters; Start review (self-assign); Return comment; Empty states.
 Approval queue: Tabs pending/decided by me; Priority table (payable, high value, High flags, age); Recommendation preview; Open claim.
 Claim workspace: Case header with action by status; Tab bar; Document rail (type, quality, AI status); Source viewer; Sticky action bar; Conflict/recalculating states.

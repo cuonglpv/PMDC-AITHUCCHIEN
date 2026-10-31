@@ -397,7 +397,7 @@ New claim, step 3 of 3. One job: the Intake Officer uploads the claim documents 
 **Page Structure:**
 1. Header: title "NEW CLAIM", muted "CLM-2026-000184 · Draft". Stepper below: 1 Member & policy ✓ · 2 Claim details ✓ · 3 Documents (active).
 2. Main column:
-   a. Dropzone (dashed #8C8984 border, white): upload icon, "Drop PDF, JPG or PNG files or browse", one muted line "Up to 20 MB per file · 30 pages".
+   a. Dropzone (dashed #8C8984 border, white): upload icon, "Drop images, PDF, DOCX or XLSX files or browse", one muted line "Up to 20 MB per file · 30 pages".
    b. File list, 4 rows (name · pages · state · remove icon): hoa-don.pdf · 2 pages · ✓ — bien-lai.jpg · 1 page · ✓ — don-thuoc.png · 1 page · uploading 64% (thin bar) — tom-tat-kham.pdf · 1 page · ✓.
    c. "Page check": 5 equal cards in one row, each = thumbnail, type with AI mark, one status line:
       p1 Invoice · Readable — p2 Invoice · Readable — p3 Receipt · amber "Low quality — re-capture" — p4 amber "Choose type" select — p5 Visit summary · Readable.

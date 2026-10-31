@@ -35,7 +35,7 @@ Each story delivers one observable outcome for one role, can be built and demoed
 |---|---|---|---|---|---|---|
 | US01 | As a **staff member**, I want to sign in and land on my role's home so that I start working on what is assigned to me. | Focused start | 3 | Must | Seeded accounts | BR-11, BR-12 |
 | US02 | As an **Intake Officer**, I want to find a member and register a claim against their active policy so that the case starts with the correct coverage context. | Correct linkage | 3 | Must | Seeded members & policies | BR-01, BR-12 |
-| US03 | As an **Intake Officer**, I want to upload PDF/JPG/PNG documents and submit them for processing so that the reviewer receives a complete packet. | Fast intake | 5 | Must | US02 | BR-12 |
+| US03 | As an **Intake Officer**, I want to upload documents as images (JPG/PNG), PDF, DOCX or XLSX files and submit them for processing so that the reviewer receives a complete packet. | Fast intake | 5 | Must | US02 | BR-12 |
 | US04 | 🟣 AI · As an **Intake Officer**, I want each page automatically classified and checked for readability so that wrong or blurry documents are caught before submission. | Fewer re-requests | 5 | Must | US03 | BR-03 |
 | US05 | 🟣 AI · As a **Claims Reviewer**, I want invoice, receipt, prescription and diagnosis fields extracted with their source region so that I don't retype data and can see where each value came from. | Less data entry, traceability | 8 | Must | US04 | BR-02, BR-03 |
 | US06 | 🟣 AI · As a **Claims Reviewer**, I want to verify low-confidence fields side by side with the highlighted source and correct them so that every claim fact is trustworthy. | Reliable facts | 5 | Must | US05, US23 | BR-02, BR-03, BR-12 |
@@ -73,7 +73,8 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** no member matches, **then** "No member found" is shown and no claim can be created.
 
 ### US03 — Upload and submit documents
-- **Given** PDF, JPG or PNG files ≤ 20 MB each and ≤ 30 pages per claim, **when** uploaded, **then** each shows progress and page thumbnails; **given** any other type or size, **then** the file is rejected with the reason.
+- **Given** JPG, PNG, PDF, DOCX or XLSX files ≤ 20 MB each and ≤ 30 pages per claim, **when** uploaded, **then** each shows progress and page thumbnails; **given** any other type or size, **then** the file is rejected with the reason.
+- **Given** a DOCX or XLSX file, **when** it is uploaded, **then** the original is stored and a PDF rendition is created (one page per printed page or worksheet page) so its pages are classified, counted and highlighted like any other page (BR-02); **given** the conversion fails, **then** the file is rejected with the reason.
 - **Given** an upload is running, **then** Submit is disabled; **given** no upload is running, **then** files can be removed before submission.
 - **Given** at least one document, **when** Submit is clicked, **then** the claim moves to `Processing` and extraction (US05) starts.
 
