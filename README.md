@@ -1,68 +1,86 @@
 # ClaimLens
 
-ClaimLens is an evidence-grounded, AI-assisted workbench for adjudicating outpatient health insurance claims. It turns a packet of photographed invoices, receipts and prescriptions into sourced facts, evaluates every expense line against the policy version in force on the service date, and gives a human reviewer and approver everything they need to make an explainable, two-person decision.
+When someone files an outpatient health insurance claim, they send a stack of photographed invoices, receipts and prescriptions. Today a claims reviewer retypes those papers, looks up the policy, works out what is covered and calculates the payout by hand. It is slow, and mistakes cost money.
 
-The product rests on one principle: **AI reads, the Rule Engine calculates, people decide.**
+ClaimLens is a workbench for that reviewer. AI reads the documents and pulls out the facts, showing exactly where on the page each value came from. A rule engine checks every expense line against the policy that was in force on the day of the visit and calculates the payout. A reviewer checks the work and recommends a decision, and a second person approves it.
 
-## 1. Requirements — INVEST, Use Cases, and Acceptance Criteria
+The whole product follows one rule: **AI reads, the Rule Engine calculates, people decide.**
 
-Requirements define what ClaimLens must do, who uses it, where AI is allowed to help, and the observable conditions of success. User stories are reviewed with INVEST and traced to use cases, business rules and screens.
+> **Project status:** design phase. This repository holds requirements, UX and UI design. There is no application code yet; see [Project progress](#project-progress).
+
+### A claim from start to finish
+
+The example below is the "golden case": one claim whose numbers every document, screen and test uses, so they can be checked against each other.
+
+1. An **Intake Officer** registers a claim of **1,400,000 VND** and uploads the documents. AI sorts the pages and warns about blurry or wrong ones.
+2. AI reads the invoice line by line. A **Claims Reviewer** confirms anything AI was unsure about, side by side with the highlighted spot on the scan.
+3. The Rule Engine checks each line. A 300,000 VND cosmetic item is excluded (rule `EX-04`), leaving **1,100,000 VND** of covered expenses. The policy pays 80%, which is 880,000 VND, but only **800,000 VND** of the member's limit is left, so the payable amount is **800,000 VND**. Every line shows its result, the rule it came from and the formula.
+4. The reviewer submits a recommendation of **Partially approved**, because the payable amount is less than the amount claimed.
+5. A **Senior Approver**, who must be a different person, makes the final decision. Every step is recorded on the claim timeline.
+
+## 1. Requirements: INVEST, use cases and acceptance criteria
+
+This section covers what ClaimLens must do, who uses it, where AI is and is not allowed to help, and how we will know each feature works.
 
 ### 1.1 Feature map
 
-The feature map has three levels: the product, 10 feature areas and the functions in each. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
+The product is split into 10 feature areas, each broken down into functions. The image is exported from [02_Feature_Map.xmind](02_Feature_Map.xmind).
 
 ![ClaimLens feature map](docs/images/feature-map-v2.png)
 
 ### 1.2 Who decides what
 
-| Layer | Owns | Never does |
+Each part of the system has a clear job and clear limits:
+
+| Who | Does | Never does |
 |---|---|---|
-| **AI** (Document Intelligence Service) | Perception and language: classify pages, read documents, map free-text services to benefit categories, notice clinical inconsistencies, draft explanations. | Decide coverage, compute money, approve or reject, label a person as fraudulent. |
-| **Rule Engine** (deterministic) | Eligibility, waiting period, exclusions, reimbursement rate, limits and the payable amount, reproducible for a given rule-set version. | Read unstructured documents or guess missing values. |
-| **Human** (Reviewer, Senior Approver) | Verifying evidence, resolving conflicts, overriding with a reason, the final decision. | Approve their own recommendation (maker–checker). |
+| **AI** (Document Intelligence Service) | Sorts pages, reads documents, matches free-text service names to benefit categories, spots medical inconsistencies, drafts explanations. | Decides coverage, calculates money, approves or rejects a claim, or labels anyone as a fraudster. |
+| **Rule Engine** (fixed rules, same answer every time) | Checks eligibility, waiting periods and exclusions, applies the reimbursement rate and limits, and calculates the payable amount. The same rule-set version always gives the same result. | Reads documents or guesses missing values. |
+| **People** (Reviewer, Senior Approver) | Check the evidence, resolve conflicts, override a result with a written reason, and make the final decision. | Approve their own recommendation. A different person must sign off (the "maker–checker" rule). |
 
-Every AI output is a **suggestion with a confidence and a source location**. Values below their threshold are left for a person to verify or enter, never guessed.
+**How sure is AI?** Everything AI produces is a suggestion with a confidence score (0 to 1) and a link to where it found the value. The score decides what happens next:
 
-| AI output | Auto-accepted suggestion | Needs a person | Left empty |
+| AI output | Accepted as a suggestion | A person must check | Left blank for a person to type |
 |---|---|---|---|
-| Page type | ≥ 0.80 | < 0.80 → "Unclassified" | — |
-| Field value (general) | ≥ 0.90 | 0.70–0.90 → "Needs verification" | < 0.70 → "Needs entry" |
-| Field value (money & identity) | ≥ 0.95 | 0.70–0.95 → "Needs verification" | < 0.70 → "Needs entry" |
-| Expense line → benefit category | ≥ 0.85 | < 0.85 → reviewer confirms | — |
+| Page type | 0.80 or higher | below 0.80 → marked "Unclassified" | — |
+| Field value (general) | 0.90 or higher | 0.70–0.90 → "Needs verification" | below 0.70 → "Needs entry" |
+| Field value (money and identity) | 0.95 or higher | 0.70–0.95 → "Needs verification" | below 0.70 → "Needs entry" |
+| Expense line → benefit category | 0.85 or higher | below 0.85 → the reviewer confirms | — |
 
-Before submitting a recommendation, the reviewer attests to every auto-accepted value used in the calculation, so no AI value reaches a decision without a human seeing it.
-
-**Worked example (golden case).** A claim of 1,400,000 VND has 1,100,000 VND of eligible expenses. At an 80% reimbursement rate that is 880,000 VND, capped by a remaining limit of 800,000 VND. The payable amount is **800,000 VND**, and every line shows its result, rule code and formula.
+Even high-confidence values are not used blindly. Before submitting a recommendation, the reviewer confirms every AI value that feeds into the calculation, so no AI output reaches a decision without a person seeing it.
 
 ### 1.3 INVEST requirements
 
-The MVP backlog includes 23 user stories across 9 epics. Before a story is ready for development, it is checked against INVEST.
+The MVP backlog has 23 user stories grouped into 9 epics. Before development starts, each story must pass the INVEST check:
 
-| Criterion | Meaning in ClaimLens |
+| Criterion | What it means here |
 |---|---|
-| **Independent** | Each story delivers one capability and depends on other stories only where the claim workflow requires it. |
-| **Negotiable** | Layout and technical design can change as long as the AI / Rule Engine / Human boundary and the business rules hold. |
-| **Valuable** | Each story saves reviewer time, prevents a wrong payment, or makes a decision explainable or auditable. |
-| **Estimable** | Roles, inputs, thresholds, rule versions and failure outcomes are documented. |
-| **Small** | Each story covers one primary capability and splits into API, rule, AI, persistence, UI and test tasks. |
-| **Testable** | Every story has Given/When/Then acceptance criteria, including permission, threshold and AI-unavailable behaviour. |
+| **Independent** | A story delivers one capability and depends on others only where the claim workflow demands it. |
+| **Negotiable** | Layout and technical design may change; the AI / Rule Engine / People split and the business rules may not. |
+| **Valuable** | A story saves reviewer time, prevents a wrong payment, or makes a decision easier to explain or audit. |
+| **Estimable** | Roles, inputs, confidence thresholds, rule versions and failure cases are written down. |
+| **Small** | A story covers one main capability and can be split into API, rule, AI, database, UI and test tasks. |
+| **Testable** | Every story has Given / When / Then acceptance criteria, including who is allowed to do it, threshold behaviour and what happens when AI is down. |
 
-```text
-US01, US23        E1 Access & routing
-US02–US03         E2 Intake
-US04–US06         E3 Document AI
-US07–US09         E4 Validation
-US10–US13         E5 Adjudication
-US14              E6 Risk
-US15–US18         E7 Decision
-US19–US20         E8 Policy rules
-US21–US22         E9 AI oversight
-```
+| Stories | Epic |
+|---|---|
+| US01, US23 | E1 Access and routing |
+| US02–US03 | E2 Intake |
+| US04–US06 | E3 Document AI |
+| US07–US09 | E4 Validation |
+| US10–US13 | E5 Adjudication (deciding what is covered and how much to pay) |
+| US14 | E6 Risk |
+| US15–US18 | E7 Decision |
+| US19–US20 | E8 Policy rules |
+| US21–US22 | E9 AI oversight |
 
-The MVP release is all **Must** stories (18 stories, 85 points). **Should** stories (5 stories, 17 points) follow in the next increment; each has a manual equivalent, so the product works without them. Eight stories carry AI (US04, US05, US06, US09, US10, US14, US15, US21). The complete backlog, acceptance criteria and per-story INVEST review are maintained in [INVEST Requirements](docs/08-invest-requirements.md).
+The first release contains all **Must** stories (18 stories, 85 points). The 5 **Should** stories (17 points) come in the next increment. Each of them can be done by hand in the meantime, so the product works without them. Eight stories use AI: US04, US05, US06, US09, US10, US14, US15 and US21.
+
+The full backlog, acceptance criteria and the INVEST review of each story are in [INVEST Requirements](docs/08-invest-requirements.md).
 
 ### 1.4 Use cases
+
+ClaimLens has four kinds of users. The diagram shows what each of them can do, and which steps get help from AI.
 
 ```mermaid
 flowchart TB
@@ -106,9 +124,13 @@ flowchart TB
     style system fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
 ```
 
-AI use cases are never started by a person: they are included by a business use case or extend one at a declared extension point, and always lead into a human verification step. AI is deliberately absent from benefit calculation, eligibility, rule authoring, approval and access control. Staff accounts, members and policies are seeded in the MVP.
+How to read it:
 
-For the full UML diagram with `«include»` / `«extend»` relationships, actor specifications and the reasoning behind each AI placement, see [Actors, roles, and use cases](docs/03-use-cases.md). A strict PlantUML version is in [use-case.puml](docs/diagrams/use-case.puml).
+- **Nobody starts an AI step directly.** AI runs as part of a person's task (for example, extraction runs when a claim is submitted), and its output always goes to a person to check.
+- **AI is kept out of** calculating benefits, checking eligibility, writing rules, approving claims and controlling access.
+- Staff accounts, members and policies are pre-loaded test data in the MVP, so there are no screens to manage them.
+
+The full UML diagram (with `«include»` / `«extend»` relationships), a description of each actor and the reasoning behind every place AI is used are in [Actors, roles, and use cases](docs/03-use-cases.md). A strict PlantUML version is in [use-case.puml](docs/diagrams/use-case.puml).
 
 ### 1.5 Roles and permissions
 
@@ -125,9 +147,11 @@ For the full UML diagram with `«include»` / `«extend»` relationships, actor 
 | AI quality dashboard | No | No | Yes | No |
 | Claim timeline | No | Own claims | Yes | No |
 
-The backend must enforce RBAC, maker–checker and data visibility (BR-11); hiding frontend controls serves UI/UX only. All business rules (BR-01 to BR-13) are listed in [Actors, roles, and use cases](docs/03-use-cases.md#business-rules-referenced-by-use-cases).
+These permissions must be enforced by the backend, not just by hiding buttons in the UI. That covers role-based access, the maker–checker rule and who can see medical data (business rule BR-11). All 13 business rules (BR-01 to BR-13) are listed in [Actors, roles, and use cases](docs/03-use-cases.md#business-rules-referenced-by-use-cases).
 
 ### 1.6 Claim lifecycle
+
+A claim moves through these statuses. It only goes to "Needs verification" when AI was unsure about something or AI was unavailable. Otherwise it goes straight to the review queue.
 
 ```mermaid
 stateDiagram-v2
@@ -147,11 +171,11 @@ stateDiagram-v2
     Rejected --> [*]
 ```
 
-The requirements were audited end to end; all 38 findings, how each was resolved and the later scope changes (four roles, 11 use cases) are recorded in the [Audit report](docs/09-audit-report.md).
+The requirements were audited from end to end. All 38 findings, how each was fixed and the later scope changes (down to four roles and 11 use cases) are in the [Audit report](docs/09-audit-report.md).
 
-## 2. Information Architecture, Screen Hierarchy, and UI/UX
+## 2. Information architecture, screen hierarchy and UI/UX
 
-The information architecture organizes the authenticated workspace around the claim. Each role lands on its own home, sidebar items are rendered per role (never shown disabled), and loading, empty, AI-processing, AI-unavailable, error and success states are defined consistently.
+The app is organised around the claim. Each role lands on its own home page and only sees the menu items it can use (nothing is shown greyed out). Every screen handles the same set of states the same way: loading, empty, AI processing, AI unavailable, error and success.
 
 ### 2.1 Information architecture
 
@@ -173,25 +197,47 @@ Authenticated
 └── 403 / 404
 ```
 
-The sitemap below shows every page with its sections and the tasks done there (19 pages; AI-assisted sections in violet). Its source is [ia-sitemap.html](docs/diagrams/ia-sitemap.html), and the page and task list is in [Relume sitemap input](docs/relume-sitemap.md).
+The sitemap below shows all 19 pages, their sections and the tasks done on each. Sections that use AI are shown in violet. Its source is [ia-sitemap.html](docs/diagrams/ia-sitemap.html), and the list of pages and tasks is in [Relume sitemap input](docs/relume-sitemap.md).
 
 ![ClaimLens sitemap](docs/images/ia-sitemap-relume.png)
 
 ### 2.2 Screen hierarchy
 
-Sign in leads to the authenticated shell: a left sidebar, a top bar with a claim-number lookup, and the content area. The core screen is the **Claim workspace**, a three-zone layout: a document rail on the left, the working panel in the middle, and a context rail on the right that highlights the source region of the selected value. Overrides use a drawer; flag actions and decisions use modals.
+After signing in, every page shares the same frame: a sidebar on the left, a top bar with a claim-number search, and the content area.
 
-AI output follows shared interaction patterns: an AI suggestion marker, a confidence level (High / Check / Missing), a source pin, "signal, not finding" wording for risk flags, citation chips in drafted summaries, and a fallback banner when AI is unavailable.
+The main screen is the **Claim workspace**, split into three columns:
 
-Detailed routes, the screen inventory (SCR-01 to SCR-90), task flows, the UI state contract, accessibility rules and screen-to-API mapping are maintained in [Information Architecture](docs/04-information-architecture.md).
+- **Left:** the claim's documents.
+- **Middle:** the current task (evidence, adjudication, decision and so on).
+- **Right:** context. Select a value in the middle and the right column jumps to the spot on the scan where it came from.
+
+Overrides open in a side drawer; risk-flag actions and decisions open in a dialog.
+
+AI output looks the same everywhere, so reviewers always know what came from AI:
+
+- an **✦ AI** marker on every AI-produced value;
+- a confidence level: **High**, **Check** or **Missing**;
+- a **source pin** linking the value to its place on the document;
+- risk flags worded as a **"signal, not a finding"**, never an accusation;
+- **citation chips** after each sentence of an AI-drafted summary;
+- a **fallback banner** when AI is down, so the work can continue by hand.
+
+Routes, the screen inventory (SCR-01 to SCR-90), task flows, the UI state rules, accessibility rules and which API each screen calls are in [Information Architecture](docs/04-information-architecture.md).
 
 ### 2.3 Design system
 
-The UI is generated with [Google Stitch](https://stitch.withgoogle.com) from a design system written to the Stitch `DESIGN.md` specification: an ink-and-paper palette with a single Signal Red accent for primary actions, Insight Violet reserved for AI, Lexend Exa / Be Vietnam Pro / IBM Plex Mono typography, near-square shapes, flat surfaces with 1 px hairlines, compact density and WCAG AA contrast.
+The screens are generated with [Google Stitch](https://stitch.withgoogle.com) from a design system written in Stitch's `DESIGN.md` format.
+
+The look is "ink on paper": black text on a warm off-white background, flat panels separated by thin 1 px lines, nearly square corners and a compact layout for people who spend all day in the tool. Colour is used sparingly, so it means something:
+
+- **Signal Red** marks the one main action on a screen;
+- **Insight Violet** is used only for AI.
+
+Fonts are Lexend Exa for short uppercase headings and KPI numbers, Be Vietnam Pro for body text (it renders Vietnamese names correctly) and IBM Plex Mono for amounts and codes. All text meets WCAG AA contrast.
 
 - [UI brief and locked decisions](docs/05-ui-brief-stitch.md)
 - [DESIGN.md](docs/DESIGN.md)
-- [Stitch prompts](docs/stitch-prompts.md)
+- [Stitch prompts and review rounds](docs/stitch-prompts.md)
 
 ### 2.4 Current UI prototype
 
@@ -199,7 +245,7 @@ The UI is generated with [Google Stitch](https://stitch.withgoogle.com) from a d
 
 ![Sign in](docs/ui/scr-01-sign-in.png)
 
-#### Upload documents with AI page check
+#### Upload documents, with AI checking each page
 
 ![Upload documents](docs/ui/scr-13-upload.png)
 
@@ -207,15 +253,27 @@ The UI is generated with [Google Stitch](https://stitch.withgoogle.com) from a d
 
 ![Review queue](docs/ui/scr-20-review-queue.png)
 
+#### Claim workspace: Evidence
+
+The reviewer checks AI-extracted values next to the highlighted spot on the invoice.
+
+![Evidence](docs/ui/scr-31-evidence.png)
+
+#### Claim workspace: Adjudication
+
+Each expense line with its result and rule code, and the payout calculation for the golden case.
+
+![Adjudication](docs/ui/scr-33-adjudication.png)
+
 #### AI quality dashboard
 
 ![AI quality dashboard](docs/ui/scr-50-ai-quality.png)
 
-The Claim workspace screens (Evidence, Adjudication, Decision) are still being iterated in Stitch.
+The Decision screen (SCR-35) is still being polished in Stitch. For SCR-13, 20, 33 and 50, the `.html` files in [docs/ui](docs/ui/) are the up-to-date version: the fonts were corrected there after the `.png` screenshots were taken.
 
-## 3. Architecture and Technology Direction
+## 3. Architecture and technology direction
 
-The C4 model, database design and API contract have not been designed yet. The planned direction from product research is:
+The C4 model, database design and API contract are not designed yet. Product research points to this direction:
 
 ```text
 Frontend          Next.js (React) staff web app
@@ -228,23 +286,23 @@ Background jobs   Document processing, re-runs and information-request deadlines
 
 ## Documentation
 
-- Research: [Product research](01_Product_Research.xmind), [Feature map](02_Feature_Map.xmind).
-- Requirements: [Actors, roles, use cases and business rules](docs/03-use-cases.md), [INVEST backlog and acceptance criteria](docs/08-invest-requirements.md), [Audit report](docs/09-audit-report.md).
-- Diagrams: [Use case diagram (PlantUML)](docs/diagrams/use-case.puml).
-- UI/UX: [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
+- **Research:** [Product research](01_Product_Research.xmind), [Feature map](02_Feature_Map.xmind).
+- **Requirements:** [Actors, roles, use cases and business rules](docs/03-use-cases.md), [INVEST backlog and acceptance criteria](docs/08-invest-requirements.md), [Audit report](docs/09-audit-report.md).
+- **Diagrams:** [Use case diagram (PlantUML)](docs/diagrams/use-case.puml).
+- **UI/UX:** [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
 
-## Project Progress
+## Project progress
 
 - [x] Research the product, workflow and AI opportunities (mind maps)
 - [x] Define scope, actors and user roles
-- [x] Define the AI / Rule Engine / Human boundary and confidence thresholds
+- [x] Define the AI / Rule Engine / People boundary and confidence thresholds
 - [x] Write use cases and the use case diagram (Mermaid and PlantUML)
 - [x] Write user stories following INVEST with Given/When/Then acceptance criteria
 - [x] Write business rules and the claim lifecycle
 - [x] Audit requirements and trace use cases, stories, rules and screens
 - [x] Design the information architecture, screen inventory, task flows and UI states
 - [x] Write the design system (DESIGN.md) and Stitch prompts
-- [ ] Generate the UI prototype in Stitch (4 of 7 priority screens approved)
+- [ ] Generate the UI prototype in Stitch (6 of 7 priority screens done; Decision still in progress)
 - [ ] Render-check the PlantUML use case diagram
 - [ ] Write non-functional requirements
 - [ ] Design the C4 System Context, Container and Component views
