@@ -1,0 +1,935 @@
+// ClaimLens: PostgreSQL data model (TARGET MVP, 20 tables)
+// Explained in docs/06-data-model.md. Paste into https://dbdiagram.io to draw it,
+// or export DDL with: npx @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres
+
+Project ClaimLens {
+  database_type: 'PostgreSQL'
+  Note: '''
+  Evidence-grounded, AI-assisted outpatient claim adjudication.
+  AI reads, the Rule Engine calculates, people decide.
+
+  Conventions
+  - Record tables use uuid keys; benefit_category uses a readable code.
+  - Money is bigint VND. Rates are integer basis points (8000 = insurer pays 80%).
+  - Confidence is numeric(4,3) in [0, 1]. Bounding boxes are jsonb {x, y, w, h}, normalised to the page (0..1).
+  - Every time is timestamptz. Every change people make writes an audit_event (BR-12).
+  - The latest AI output sits in ai_* columns next to the value in use; it is never copied over it.
+  - Seed settings without a UI (BR-03 thresholds, BR-09 high-value threshold, file limits) live in application config.
+  '''
+}
+
+//// ------------------------------------------------------------------
+//// Enums
+//// ------------------------------------------------------------------
+
+Enum staff_role {
+  INTAKE_OFFICER
+  CLAIMS_REVIEWER
+  SENIOR_APPROVER
+  ADMINISTRATOR
+}
+
+Enum account_status {
+  ACTIVE
+  DISABLED
+}
+
+Enum policy_status {
+  ACTIVE
+  LAPSED
+  TERMINATED
+}
+
+Enum rule_set_status {
+  DRAFT
+  PUBLISHED [note: 'Immutable; a later version supersedes it']
+  DISCARDED
+}
+
+Enum rule_type {
+  ELIGIBILITY [note: 'Policy in force on the service date']
+  COVERAGE
+  EXCLUSION
+  WAITING_PERIOD
+  COINSURANCE
+  LIMIT
+}
+
+Enum limit_scope {
+  PER_VISIT
+  ANNUAL
+}
+
+Enum claim_status {
+  DRAFT
+  PROCESSING
+  NEEDS_VERIFICATION
+  READY_FOR_REVIEW
+  IN_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+}
+
+Enum intake_channel {
+  COUNTER
+  POST
+  EMAIL
+  PARTNER
+}
+
+Enum file_format {
+  JPG
+  PNG
+  PDF
+  DOCX
+  XLSX
+}
+
+Enum document_status {
+  UPLOADING
+  CONVERTING [note: 'DOCX / XLSX to PDF, then page split']
+  READY
+  REJECTED [note: 'Wrong type, too large or conversion failed']
+  REMOVED [note: 'Removed by the officer before submission']
+}
+
+Enum page_type {
+  INVOICE
+  RECEIPT
+  PRESCRIPTION
+  VISIT_SUMMARY
+  LAB_RESULT
+  OTHER
+  UNCLASSIFIED
+}
+
+Enum page_quality {
+  NOT_CHECKED
+  READABLE
+  LOW_QUALITY
+}
+
+Enum page_ai_status {
+  QUEUED
+  READING
+  DONE
+  FAILED [note: 'Manual mode for this page']
+}
+
+Enum value_source {
+  AI
+  USER
+}
+
+Enum ai_task {
+  PAGE_CHECK [note: 'AI-01 on upload: page type and readability']
+  FIELD_EXTRACTION [note: 'AI-01 after submit']
+  PAGE_REREAD [note: 'AI-01 on one page (UC03 extension point)']
+  BENEFIT_MAPPING [note: 'AI-02']
+  CLINICAL_CHECK [note: 'AI-03']
+  SUMMARY_DRAFT [note: 'AI-04']
+}
+
+Enum ai_run_status {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+Enum confidence_level {
+  HIGH [note: 'At or above the threshold: auto-accepted suggestion']
+  CHECK [note: 'Needs a person']
+  MISSING [note: 'Fields only: below 0.70, left empty']
+}
+
+Enum field_key {
+  insured_name [note: 'Money and identity group (0.95)']
+  national_id [note: 'Money and identity group (0.95)']
+  policy_number [note: 'Money and identity group (0.95)']
+  provider_name
+  service_date
+  invoice_number
+  invoice_total [note: 'Money and identity group (0.95)']
+  line_description
+  line_quantity
+  line_unit_price
+  line_amount [note: 'Money and identity group (0.95)']
+  diagnosis
+  medication
+}
+
+Enum field_status {
+  NEEDS_VERIFICATION
+  NEEDS_ENTRY
+  AUTO_ACCEPTED [note: 'Accepted by threshold; keeps the AI marker and must be attested']
+  CONFIRMED [note: 'A person accepted the AI value unchanged']
+  CORRECTED [note: 'A person changed the AI value']
+  ENTERED [note: 'A person typed a value AI did not give']
+  NOT_PRESENT
+}
+
+Enum line_origin {
+  AI_EXTRACTED
+  MANUAL
+}
+
+Enum mapping_status {
+  PENDING [note: 'Mapping not run yet']
+  AUTO_ACCEPTED [note: 'Confidence >= 0.85; attested at submission']
+  NEEDS_CONFIRMATION
+  CONFIRMED
+  CHANGED
+  MANUAL [note: 'AI unavailable; chosen by the reviewer']
+}
+
+Enum alert_check {
+  REQUIRED_DOCUMENTS
+  INSURED_IDENTITY
+  POLICY_MATCH
+  DATE_CONSISTENCY
+  INVOICE_ARITHMETIC
+  DUPLICATE_INVOICE
+}
+
+Enum alert_severity {
+  BLOCKING
+  WARNING
+}
+
+Enum alert_status {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+Enum flag_type {
+  MEDICATION_DIAGNOSIS
+  SERVICE_DIAGNOSIS
+  LAB_DIAGNOSIS
+  QUANTITY
+}
+
+Enum flag_severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+Enum flag_status {
+  OPEN
+  DISMISSED
+  KEPT [note: 'Kept for the approver']
+  SUPERSEDED [note: 'Replaced by a later clinical check run']
+}
+
+Enum eval_label {
+  TRUE_POSITIVE
+  FALSE_POSITIVE
+}
+
+Enum reason_code {
+  DISMISS_VALUE_VERIFIED [note: 'Alert or flag: checked against the original']
+  DISMISS_CLINICALLY_PLAUSIBLE [note: 'Flag: the line fits the diagnosis']
+  DISMISS_KNOWN_EXCEPTION
+  KEEP_NEEDS_APPROVER [note: 'Flag kept for the approver']
+  KEEP_EVIDENCE_MISSING
+  OVERRIDE_MEDICAL_NECESSITY [note: 'Medical necessity requirement']
+  OVERRIDE_CONTRACT_EXCEPTION
+  OVERRIDE_DATA_ERROR
+  MISMATCH_EXCLUSION_AND_LIMIT [note: 'Exclusion + limit applied']
+  MISMATCH_EVIDENCE_MISSING
+  REJECT_GENERAL_EXCLUSION [note: 'General policy exclusion']
+  REJECT_ANNUAL_MAXIMUM [note: 'Exceeded annual maximum']
+  REJECT_OUTSIDE_COVERAGE
+  REJECT_EVIDENCE_MISSING
+}
+
+Enum line_result {
+  COVERED
+  PARTIALLY_COVERED
+  EXCLUDED
+}
+
+Enum revision_trigger {
+  INITIAL
+  DATA_CHANGE
+  MAPPING_CHANGE
+  OVERRIDE
+  BALANCE_RECHECK
+}
+
+Enum claim_outcome {
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+}
+
+Enum recommendation_status {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  DECIDED
+}
+
+Enum decision_action {
+  APPROVE
+  PARTIALLY_APPROVE
+  REJECT
+  RETURN
+}
+
+Enum actor_type {
+  USER
+  SYSTEM
+  AI
+}
+
+Enum golden_scenario {
+  CLEAN
+  BLURRY
+  MISSING_DOCUMENT
+  DUPLICATE
+  CONFLICTING
+  EXCLUDED_LINE
+  LIMIT_CAPPED
+}
+
+//// ------------------------------------------------------------------
+//// 1. Access, members and policies
+//// ------------------------------------------------------------------
+
+Table staff_account [headercolor: #3C4043] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(254) [not null]
+  password_hash varchar(255) [not null]
+  full_name varchar(120) [not null]
+  initials varchar(4) [not null, note: 'Replaces the AI marker once this person accepts or edits a value']
+  role staff_role [not null, note: 'Exactly one role per account (US01)']
+  status account_status [not null, default: 'ACTIVE']
+  last_sign_in_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    `lower(email)` [unique, name: 'ux_staff_account_email']
+    (id, role) [unique, name: 'ux_staff_account_id_role', note: 'Target of the role-checked foreign key on recommendation']
+  }
+  Note: 'Seeded in the MVP; there is no account administration screen.'
+}
+
+Table member [headercolor: #3C4043] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  member_code varchar(20) [not null, unique, note: 'e.g. MB-0007731']
+  full_name varchar(120) [not null, note: 'Identity data (BR-11)']
+  national_id varchar(20) [not null, unique, note: 'Citizen ID (CCCD). Identity data (BR-11)']
+  date_of_birth date [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    full_name [name: 'ix_member_full_name', note: 'In SQL, use a pg_trgm GIN index on unaccent(full_name) for Vietnamese name search']
+  }
+  Note: 'The insured person. Seeded; searched in step 1 of New claim (US02).'
+}
+
+Table benefit_plan [headercolor: #3C4043] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(20) [not null, unique, note: 'e.g. GOLD-OP']
+  name varchar(80) [not null, note: 'e.g. Gold Outpatient']
+  description text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table policy [headercolor: #3C4043] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  policy_number varchar(20) [not null, unique, note: 'e.g. PL-2026-00731']
+  member_id uuid [not null, ref: > member.id]
+  plan_id uuid [not null, ref: > benefit_plan.id]
+  status policy_status [not null]
+  coverage_start date [not null, note: 'One policy covers one policy year']
+  coverage_end date [not null]
+  first_enrolled_on date [not null, note: 'Start of waiting periods; earlier than coverage_start after a renewal']
+  opening_consumed bigint [not null, default: 0, note: 'Annual usage before ClaimLens (seed), VND']
+  consumed_amount bigint [not null, default: 0, note: 'opening_consumed + final payable of every approved claim (BR-10)']
+  balance_version integer [not null, default: 0, note: 'Raised by every approval; each calculation revision records the value it read']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    member_id [name: 'ix_policy_member']
+    (id, member_id) [unique, name: 'ux_policy_id_member', note: 'Lets claim prove its policy belongs to its member']
+  }
+  checks {
+    `coverage_end > coverage_start` [name: 'ck_policy_period']
+    `first_enrolled_on <= coverage_start` [name: 'ck_policy_enrolment']
+    `opening_consumed >= 0 and consumed_amount >= opening_consumed` [name: 'ck_policy_consumed']
+  }
+  Note: '''
+  One insured person and one policy year per policy, so the annual outpatient balance lives here.
+  Remaining = annual LIMIT rule - consumed_amount. Approval locks this row (SELECT ... FOR UPDATE),
+  compares balance_version with the calculation revision and blocks if it changed (BR-10).
+  '''
+}
+
+//// ------------------------------------------------------------------
+//// 2. Benefit rule sets (Administrator)
+//// ------------------------------------------------------------------
+
+Table rule_set_version [headercolor: #0F766E] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  plan_id uuid [not null, ref: > benefit_plan.id]
+  version_no integer [not null, note: 'Shown as v3']
+  status rule_set_status [not null, default: 'DRAFT']
+  effective_from date [note: 'Required to publish; later than the current published version (US19)']
+  based_on_version_id uuid [ref: > rule_set_version.id, note: 'Version the draft was copied from']
+  change_note text
+  created_by uuid [not null, ref: > staff_account.id]
+  created_at timestamptz [not null, default: `now()`]
+  published_by uuid [ref: > staff_account.id]
+  published_at timestamptz
+
+  indexes {
+    (plan_id, version_no) [unique, name: 'ux_rule_set_version_no']
+    (plan_id, status, effective_from) [name: 'ix_rule_set_version_effective']
+  }
+  checks {
+    `status <> 'PUBLISHED' or (effective_from is not null and published_by is not null and published_at is not null)` [name: 'ck_rule_set_published']
+  }
+  Note: '''
+  Adjudication uses the PUBLISHED version of the member plan with the greatest effective_from on or before
+  the service date (BR-04). A published version and its rules cannot be changed (trigger); a new version supersedes it.
+  '''
+}
+
+Table benefit_category [headercolor: #0F766E] {
+  code varchar(40) [pk, note: 'e.g. CONSULTATION, LAB_TEST, PRESCRIPTION_DRUG, DIAGNOSTIC_IMAGING, PROCEDURE, COSMETIC']
+  name varchar(80) [not null, note: 'e.g. Consultation']
+  description text
+  is_active boolean [not null, default: true]
+  Note: 'Stable taxonomy that AI-02 maps lines to and the dashboard groups by. Whether a category is covered is versioned in benefit_rule.'
+}
+
+Table benefit_rule [headercolor: #0F766E] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  rule_set_version_id uuid [not null, ref: > rule_set_version.id]
+  rule_code varchar(20) [not null, note: 'Cited on lines, formulas and summaries: COV-01, EX-04, COINS-80, LIM-ANNUAL']
+  rule_type rule_type [not null]
+  category_code varchar(40) [ref: > benefit_category.code, note: 'Required for COVERAGE and EXCLUSION; empty means every category']
+  clause_text text [not null, note: 'Contract clause shown next to the line result']
+  clause_ref varchar(40) [note: 'Clause number in the contract']
+  apply_order smallint [not null, note: 'Order of application inside the version (BR-05)']
+  rate_bp integer [note: 'COINSURANCE: share the insurer pays, 8000 = 80%']
+  limit_amount bigint [note: 'LIMIT: VND']
+  limit_scope limit_scope [note: 'LIMIT: per visit or annual']
+  waiting_days integer [note: 'WAITING_PERIOD: days from policy.first_enrolled_on']
+
+  indexes {
+    (rule_set_version_id, rule_code) [unique, name: 'ux_benefit_rule_code']
+    (rule_set_version_id, rule_type, apply_order) [name: 'ix_benefit_rule_order']
+  }
+  checks {
+    `rule_type not in ('COVERAGE', 'EXCLUSION') or category_code is not null` [name: 'ck_rule_category']
+    `rule_type <> 'COINSURANCE' or rate_bp between 0 and 10000` [name: 'ck_rule_rate']
+    `rule_type <> 'LIMIT' or (limit_amount > 0 and limit_scope is not null)` [name: 'ck_rule_limit']
+    `rule_type <> 'WAITING_PERIOD' or waiting_days >= 0` [name: 'ck_rule_waiting']
+  }
+  Note: 'One table for the five rule kinds in the editor tabs plus eligibility. Publishing checks that every active category has one COVERAGE or one EXCLUSION rule.'
+}
+
+Table sample_claim [headercolor: #0F766E] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(30) [not null, unique, note: 'e.g. SMP-GOLDEN-01']
+  name varchar(120) [not null]
+  plan_id uuid [not null, ref: > benefit_plan.id]
+  service_date date [not null]
+  first_enrolled_on date [not null]
+  consumed_before bigint [not null, default: 0, note: 'Annual usage before this claim, VND']
+  lines jsonb [not null, note: '[{line_no, description, category_code, claimed_amount}]']
+  created_by uuid [not null, ref: > staff_account.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  checks {
+    `jsonb_array_length(lines) > 0` [name: 'ck_sample_claim_lines']
+  }
+  Note: '''
+  Synthetic claim for rule-set test runs (US20), kept apart from claim so the Administrator never reads claim content (BR-11).
+  A test run is computed on request and not stored; it writes nothing to claims or balances.
+  '''
+}
+
+//// ------------------------------------------------------------------
+//// 3. Intake, Document AI and evidence
+//// ------------------------------------------------------------------
+
+Table claim [headercolor: #1A56DB] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_number varchar(20) [not null, unique, note: 'CLM-YYYY-NNNNNN']
+  member_id uuid [not null, ref: > member.id]
+  policy_id uuid [not null]
+  provider_name varchar(200) [not null, note: 'e.g. Phòng khám Đa khoa Hồng Ngọc']
+  provider_tax_code varchar(20) [note: 'Seller tax code; with the invoice number it is the duplicate key (US08)']
+  service_date date [not null, note: 'Selects the rule-set version (BR-04)']
+  claimed_total bigint [not null, note: 'VND, entered at intake']
+  channel intake_channel [not null]
+  status claim_status [not null, default: 'DRAFT']
+  status_changed_at timestamptz [not null, default: `now()`, note: 'Queue age']
+  registered_by uuid [not null, ref: > staff_account.id, note: 'Intake Officer; may see this claim (BR-11)']
+  assignee_id uuid [ref: > staff_account.id, note: 'One reviewer per claim; an attribute, not a state (US23)']
+  assigned_at timestamptz
+  submitted_at timestamptz
+  golden_scenario golden_scenario [note: 'Set only on golden-set claims (Definition of Done, US21)']
+  row_version integer [not null, default: 0, note: 'Optimistic lock behind the Conflict UI state']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (status, assignee_id) [name: 'ix_claim_queue']
+    registered_by [name: 'ix_claim_registered_by']
+    (policy_id, service_date) [name: 'ix_claim_policy']
+  }
+  checks {
+    `claimed_total > 0` [name: 'ck_claim_total']
+    `assignee_id is not null or status in ('DRAFT', 'PROCESSING', 'NEEDS_VERIFICATION', 'READY_FOR_REVIEW')` [name: 'ck_claim_assignee_required']
+    `(assignee_id is null) = (assigned_at is null)` [name: 'ck_claim_assigned_at']
+  }
+  Note: '''
+  Status moves only along the lifecycle in docs/03-use-cases.md (trigger). Returned = IN_REVIEW whose latest
+  recommendation is RETURNED. Queue priority (BR-09) is computed: payable >= high-value threshold, open HIGH flags, age.
+  '''
+}
+
+Table document [headercolor: #1A56DB] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  original_filename varchar(255) [not null]
+  file_format file_format [not null]
+  size_bytes bigint [not null]
+  sha256 char(64) [not null]
+  original_key varchar(500) [not null, note: 'Object-storage key of the original file']
+  rendition_key varchar(500) [note: 'PDF rendition of a DOCX or XLSX file (US03)']
+  page_count smallint
+  status document_status [not null, default: 'UPLOADING']
+  rejection_reason varchar(200)
+  uploaded_by uuid [not null, ref: > staff_account.id]
+  uploaded_at timestamptz [not null, default: `now()`]
+  removed_by uuid [ref: > staff_account.id]
+  removed_at timestamptz
+
+  indexes {
+    claim_id [name: 'ix_document_claim']
+    (id, claim_id) [unique, name: 'ux_document_id_claim']
+  }
+  checks {
+    `size_bytes between 1 and 20971520` [name: 'ck_document_size_20mb']
+    `file_format not in ('DOCX', 'XLSX') or status <> 'READY' or rendition_key is not null` [name: 'ck_document_rendition']
+    `status <> 'REJECTED' or rejection_reason is not null` [name: 'ck_document_rejection_reason']
+    `(status = 'REMOVED') = (removed_at is not null)` [name: 'ck_document_removed']
+  }
+  Note: 'An uploaded file. Removing it before submission keeps this row and deletes its pages.'
+}
+
+Table document_page [headercolor: #1A56DB] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  document_id uuid [not null]
+  claim_id uuid [not null]
+  page_no smallint [not null, note: 'Page inside the file']
+  claim_page_no smallint [not null, note: 'p1..p30 across the claim']
+  image_key varchar(500) [not null, note: 'Rendered page image for the viewer and AI']
+  width_px integer [not null]
+  height_px integer [not null]
+  page_type page_type [not null, default: 'UNCLASSIFIED', note: 'Type in use']
+  page_type_source value_source
+  page_type_set_by uuid [ref: > staff_account.id]
+  quality page_quality [not null, default: 'NOT_CHECKED']
+  ai_status page_ai_status [not null, default: 'QUEUED', note: 'Document rail status']
+  ai_run_id uuid [ref: > ai_run.id, note: 'Latest page check or re-read']
+  ai_page_type page_type [note: 'AI suggestion; Unclassified in use when below 0.80']
+  ai_type_confidence numeric(4,3)
+  ai_type_level confidence_level
+  ai_quality_score numeric(4,3)
+
+  indexes {
+    (document_id, page_no) [unique, name: 'ux_document_page_no']
+    (claim_id, claim_page_no) [unique, name: 'ux_document_page_claim_no']
+  }
+  checks {
+    `claim_page_no between 1 and 30` [name: 'ck_page_limit_30']
+    `page_type_source is distinct from 'USER' or page_type_set_by is not null` [name: 'ck_page_type_set_by']
+    `ai_type_confidence is null or ai_type_confidence between 0 and 1` [name: 'ck_page_ai_confidence']
+  }
+  Note: 'Page classification macro-F1 compares ai_page_type with page_type.'
+}
+
+Table ai_run [headercolor: #7C3AED] {
+  id uuid [pk, default: `gen_random_uuid()`, note: 'The run ID shown on the timeline (US05)']
+  claim_id uuid [not null, ref: > claim.id]
+  task ai_task [not null]
+  scope_document_id uuid [ref: > document.id, note: 'PAGE_CHECK: the uploaded file']
+  scope_page_id uuid [ref: > document_page.id, note: 'PAGE_REREAD: the only page read again']
+  model_name varchar(80) [not null]
+  model_version varchar(40) [not null, note: 'Dashboard filter, e.g. v2.4']
+  status ai_run_status [not null, default: 'QUEUED']
+  error_code varchar(60)
+  triggered_by uuid [ref: > staff_account.id, note: 'Empty when the system started it as part of a task']
+  requested_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  finished_at timestamptz
+  raw_output_key varchar(500) [note: 'Object-storage key of the full AI response, kept for every run']
+
+  indexes {
+    (claim_id, task, requested_at) [name: 'ix_ai_run_claim']
+    (model_version, requested_at) [name: 'ix_ai_run_model']
+  }
+  checks {
+    `task <> 'PAGE_REREAD' or scope_page_id is not null` [name: 'ck_ai_run_reread_scope']
+    `status <> 'FAILED' or error_code is not null` [name: 'ck_ai_run_error']
+  }
+  Note: 'A failed run is the fallback trigger: pages Unclassified, fields empty, Clinical check not run.'
+}
+
+Table claim_field [headercolor: #1A56DB] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  document_id uuid [not null, ref: > document.id, note: 'Evidence tab groups fields by document']
+  field_key field_key [not null]
+  item_no smallint [not null, default: 0, note: '0 = document header; n = expense line or prescription item n']
+  expense_line_id uuid [ref: > expense_line.id, note: 'Line fields only']
+  status field_status [not null]
+  value_text text [note: 'Value in use, as text']
+  value_amount bigint [note: 'Money fields, VND']
+  value_date date [note: 'Date fields']
+  source_page_id uuid [ref: > document_page.id]
+  source_bbox jsonb [note: '{x, y, w, h}; drawn by the reviewer when AI gave none']
+  ai_run_id uuid [ref: > ai_run.id, note: 'Latest extraction or re-read that filled the ai_* columns']
+  ai_value text [note: 'Raw AI value; kept even below 0.70 but never shown (US05)']
+  ai_confidence numeric(4,3) [note: 'The Evidence tab sorts lowest first']
+  ai_level confidence_level
+  ai_page_id uuid [ref: > document_page.id]
+  ai_bbox jsonb
+  resolved_by uuid [ref: > staff_account.id]
+  resolved_at timestamptz
+  row_version integer [not null, default: 0]
+
+  indexes {
+    (claim_id, document_id, field_key, item_no) [unique, name: 'ux_claim_field_slot']
+    (claim_id, status) [name: 'ix_claim_field_status']
+    (field_key, value_text) [name: 'ix_claim_field_value', note: 'Duplicate lookup: invoice_number across claims (US08)']
+  }
+  checks {
+    `status not in ('AUTO_ACCEPTED', 'CONFIRMED', 'CORRECTED', 'ENTERED') or (value_text is not null and source_page_id is not null and source_bbox is not null)` [name: 'ck_claim_field_source_required']
+    `(status in ('CONFIRMED', 'CORRECTED', 'ENTERED', 'NOT_PRESENT')) = (resolved_by is not null)` [name: 'ck_claim_field_resolved_by']
+    `status <> 'AUTO_ACCEPTED' or (ai_run_id is not null and ai_level = 'HIGH')` [name: 'ck_claim_field_auto_from_ai']
+    `ai_confidence is null or ai_confidence between 0 and 1` [name: 'ck_claim_field_ai_confidence']
+  }
+  Note: '''
+  One slot per field per document (and per line for line fields). The value in use and the AI suggestion sit side by side;
+  ck_claim_field_source_required enforces BR-02. Every change writes audit_event with old and new value (US06).
+  Field rules (threshold group, required, sensitive) are in application code, keyed by field_key.
+  '''
+}
+
+Table expense_line [headercolor: #1A56DB] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  document_id uuid [not null, note: 'The invoice the line was read from']
+  line_no smallint [not null]
+  description text [note: 'As printed, e.g. Kem dưỡng phục hồi da Obagi']
+  quantity numeric(10,2)
+  unit_price bigint
+  amount bigint [note: 'Claimed line amount, VND; required before adjudication']
+  origin line_origin [not null, default: 'AI_EXTRACTED']
+  mapping_run_id uuid [ref: > ai_run.id, note: 'AI-02 run that filled ai_category_code']
+  ai_category_code varchar(40) [ref: > benefit_category.code]
+  ai_confidence numeric(4,3)
+  ai_level confidence_level [note: 'HIGH at 0.85 or more: auto-accepted']
+  category_code varchar(40) [ref: > benefit_category.code, note: 'Benefit category in use']
+  mapping_status mapping_status [not null, default: 'PENDING']
+  mapping_resolved_by uuid [ref: > staff_account.id]
+  mapping_resolved_at timestamptz
+  override_result line_result [note: 'Active reviewer override (US16)']
+  override_amount bigint
+  override_reason reason_code
+  override_note text
+  override_by uuid [ref: > staff_account.id]
+  override_at timestamptz
+
+  indexes {
+    (document_id, line_no) [unique, name: 'ux_expense_line_no']
+    claim_id [name: 'ix_expense_line_claim']
+  }
+  checks {
+    `amount is null or amount >= 0` [name: 'ck_expense_line_amount']
+    `mapping_status in ('PENDING', 'NEEDS_CONFIRMATION') or category_code is not null` [name: 'ck_expense_line_category']
+    `(mapping_status in ('CONFIRMED', 'CHANGED', 'MANUAL')) = (mapping_resolved_by is not null)` [name: 'ck_expense_line_mapping_by']
+    `mapping_status <> 'AUTO_ACCEPTED' or (mapping_run_id is not null and ai_level = 'HIGH')` [name: 'ck_expense_line_auto_from_ai']
+    `(override_result is null and override_amount is null and override_reason is null and override_note is null and override_by is null and override_at is null) or (override_result is not null and override_amount is not null and override_reason is not null and override_note is not null and override_by is not null and override_at is not null)` [name: 'ck_override_complete']
+    `override_amount is null or override_amount between 0 and amount` [name: 'ck_override_cap']
+    `(override_result <> 'COVERED' or override_amount = amount) and (override_result <> 'EXCLUDED' or override_amount = 0) and (override_result <> 'PARTIALLY_COVERED' or override_amount between 1 and amount - 1)` [name: 'ck_override_result']
+    `override_reason is null or override_reason::text like 'OVERRIDE_%'` [name: 'ck_override_reason_kind']
+  }
+  Note: '''
+  Accepted line values (projection of the line fields, written in the same transaction), the AI-02 suggestion,
+  the category in use and the active override. Every later revision applies the override; the payable stays capped
+  by the remaining limit (BR-07). Removing an override clears the columns and is audited.
+  '''
+}
+
+Ref expense_line_document_claim: expense_line.(document_id, claim_id) > document.(id, claim_id)
+
+//// ------------------------------------------------------------------
+//// 4. Validation alerts, risk flags and adjudication
+//// ------------------------------------------------------------------
+
+Table alert [headercolor: #A40022] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  check_code alert_check [not null]
+  severity alert_severity [not null]
+  fingerprint varchar(200) [not null, note: 'Same problem across re-validations, e.g. DATE_CONSISTENCY:prescription']
+  message text [not null, note: 'e.g. Prescription date 13/10/2026 differs from invoice date 12/10/2026']
+  details jsonb [note: 'Conflicting values with their claim_field ids']
+  duplicate_of_claim_id uuid [ref: > claim.id, note: 'US08: the other claim']
+  status alert_status [not null, default: 'OPEN']
+  raised_at timestamptz [not null, default: `now()`]
+  last_checked_at timestamptz [not null, default: `now()`]
+  resolved_by uuid [ref: > staff_account.id, note: 'Empty when the system closed it after a data fix']
+  resolved_at timestamptz
+  reason_code reason_code
+  note text
+
+  indexes {
+    (claim_id, fingerprint) [unique, name: 'ux_alert_fingerprint']
+    (claim_id, status, severity) [name: 'ix_alert_open']
+  }
+  checks {
+    `status <> 'DISMISSED' or (reason_code is not null and note is not null and resolved_by is not null)` [name: 'ck_alert_dismiss_reason']
+    `reason_code is null or reason_code::text like 'DISMISS_%'` [name: 'ck_alert_reason_kind']
+    `check_code <> 'DUPLICATE_INVOICE' or duplicate_of_claim_id is not null` [name: 'ck_alert_duplicate_link']
+    `duplicate_of_claim_id is null or duplicate_of_claim_id <> claim_id` [name: 'ck_alert_not_self']
+  }
+  Note: 'Deterministic problems, including exact duplicates (BR-08). An open BLOCKING alert blocks adjudication.'
+}
+
+Table risk_flag [headercolor: #A40022] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  ai_run_id uuid [not null, ref: > ai_run.id, note: 'The CLINICAL_CHECK run']
+  expense_line_id uuid [not null, ref: > expense_line.id, note: 'The line the signal is about']
+  diagnosis_field_id uuid [ref: > claim_field.id, note: 'The diagnosis it was compared with']
+  flag_type flag_type [not null]
+  severity flag_severity [not null]
+  relevance_score numeric(4,3) [not null, note: 'AI relevance of the line to the diagnosis']
+  ai_reason text [not null, note: 'One sentence, shown as Signal - not a finding']
+  status flag_status [not null, default: 'OPEN']
+  reviewed_by uuid [ref: > staff_account.id]
+  reviewed_at timestamptz
+  reason_code reason_code
+  note text
+  eval_label eval_label [note: 'Golden-set claims only; gives the false-positive rate (US09, US21)']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (claim_id, status) [name: 'ix_risk_flag_claim']
+  }
+  checks {
+    `status not in ('DISMISSED', 'KEPT') or (reviewed_by is not null and reason_code is not null and note is not null)` [name: 'ck_risk_flag_reason']
+    `(status <> 'DISMISSED' or reason_code::text like 'DISMISS_%') and (status <> 'KEPT' or reason_code::text like 'KEEP_%')` [name: 'ck_risk_flag_reason_kind']
+  }
+  Note: 'AI-03 clinical signal (BR-08). Never changes amounts or line results.'
+}
+
+Table calculation_revision [headercolor: #0F766E] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  revision_no integer [not null, note: 'Shown as Revision #2; the highest number is current']
+  rule_set_version_id uuid [not null, ref: > rule_set_version.id, note: 'Effective on the service date (BR-04)']
+  trigger_type revision_trigger [not null]
+  triggered_by uuid [ref: > staff_account.id]
+  engine_version varchar(20) [not null]
+  input_hash char(64) [not null, note: 'SHA-256 of the inputs; same inputs and version give the same result (US11)']
+  claimed_total bigint [not null]
+  eligible_total bigint [not null, note: 'Sum of final covered amounts']
+  after_rate_amount bigint [not null, note: 'Eligible total after the reimbursement rate']
+  per_visit_limit bigint
+  annual_limit bigint
+  consumed_before bigint [not null]
+  balance_version integer [not null, note: 'policy.balance_version read; compared at approval (BR-10)']
+  remaining_limit bigint [not null, note: 'min(per-visit limit, annual limit - consumed) (BR-05)']
+  payable_amount bigint [not null, note: 'min(after_rate_amount, remaining_limit)']
+  projected_remaining_after bigint [not null]
+  formula jsonb [not null, note: 'Formula rows shown on screen: [{label, rule_code, delta, total}]']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (claim_id, revision_no) [unique, name: 'ux_calculation_revision_no']
+  }
+  checks {
+    `eligible_total between 0 and claimed_total` [name: 'ck_revision_eligible']
+    `after_rate_amount between 0 and eligible_total` [name: 'ck_revision_after_rate']
+    `payable_amount = least(after_rate_amount, greatest(remaining_limit, 0))` [name: 'ck_revision_payable_formula']
+  }
+  Note: 'Immutable snapshot. Any change to fields, mappings, documents or overrides creates a new revision; old ones stay readable (US13).'
+}
+
+Table calculation_line [headercolor: #0F766E] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  revision_id uuid [not null, ref: > calculation_revision.id]
+  expense_line_id uuid [not null, ref: > expense_line.id]
+  line_no smallint [not null]
+  category_code varchar(40) [not null, ref: > benefit_category.code, note: 'Mapping used']
+  claimed_amount bigint [not null]
+  engine_result line_result [not null]
+  engine_covered_amount bigint [not null]
+  engine_rule_id uuid [not null, ref: > benefit_rule.id, note: 'Rule that decided the line, e.g. EX-04']
+  is_overridden boolean [not null, default: false]
+  final_result line_result [not null]
+  final_covered_amount bigint [not null]
+  changed_since_previous boolean [not null, default: false, note: 'Highlighted after a re-run (US13)']
+
+  indexes {
+    (revision_id, expense_line_id) [unique, name: 'ux_calculation_line']
+  }
+  checks {
+    `engine_covered_amount between 0 and claimed_amount` [name: 'ck_calc_line_engine_amount']
+    `final_covered_amount between 0 and claimed_amount` [name: 'ck_calc_line_final_amount']
+    `is_overridden or (final_result = engine_result and final_covered_amount = engine_covered_amount)` [name: 'ck_calc_line_override']
+    `(engine_result <> 'COVERED' or engine_covered_amount = claimed_amount) and (engine_result <> 'EXCLUDED' or engine_covered_amount = 0) and (engine_result <> 'PARTIALLY_COVERED' or engine_covered_amount between 1 and claimed_amount - 1)` [name: 'ck_calc_line_engine_result']
+    `(final_result <> 'COVERED' or final_covered_amount = claimed_amount) and (final_result <> 'EXCLUDED' or final_covered_amount = 0) and (final_result <> 'PARTIALLY_COVERED' or final_covered_amount between 1 and claimed_amount - 1)` [name: 'ck_calc_line_final_result']
+  }
+  Note: 'The engine result stays next to the final result, so an override never hides what the rules said (US16).'
+}
+
+//// ------------------------------------------------------------------
+//// 5. Recommendation, decision and audit
+//// ------------------------------------------------------------------
+
+Table recommendation [headercolor: #E5484D] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  claim_id uuid [not null, ref: > claim.id]
+  calculation_revision_id uuid [not null, ref: > calculation_revision.id, note: 'Revision the reviewer recommended on']
+  status recommendation_status [not null, default: 'DRAFT']
+  proposed_outcome claim_outcome [not null, note: 'From the payable (BR-13)']
+  recommended_outcome claim_outcome
+  outcome_reason reason_code [note: 'Required when the reviewer differs from the proposal']
+  outcome_note text
+  recommended_payable bigint
+  claimed_total bigint [note: 'Snapshot at submission, used by the BR-13 checks']
+  summary jsonb [note: 'Sentences with citation chips: [{text, origin, citations: [{label, kind, id}]}]']
+  summary_ai_run_id uuid [ref: > ai_run.id, note: 'AI-04 draft run; empty when AI was unavailable']
+  summary_ai_draft text [note: 'Raw AI draft, kept to measure the edit rate']
+  summary_edited boolean [not null, default: false, note: 'US15']
+  attested_values jsonb [note: 'Auto-accepted AI values used in the calculation: [{kind, id, value, confidence}]']
+  attested_at timestamptz [note: 'Reviewer confirmed the attestation (US17)']
+  open_high_flags smallint [not null, default: 0, note: 'Open HIGH flags at submission; shown as a warning']
+  submitted_by uuid [ref: > staff_account.id]
+  submitted_at timestamptz
+  decision_action decision_action [note: 'Senior Approver action (UC08)']
+  decided_by uuid
+  decider_role staff_role [not null, default: 'SENIOR_APPROVER']
+  decided_at timestamptz
+  decision_revision_id uuid [ref: > calculation_revision.id, note: 'Revision the decision rests on; newer after a BALANCE_RECHECK']
+  final_payable bigint [note: 'Empty for RETURN']
+  decision_reason reason_code [note: 'Required for REJECT']
+  decision_comment text [note: 'Required for RETURN']
+  balance_version_checked integer [note: 'policy.balance_version seen at approval (BR-10)']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (claim_id, created_at) [name: 'ix_recommendation_claim', note: 'In SQL, add a unique index on claim_id WHERE status IN (DRAFT, SUBMITTED)']
+    (status, submitted_at) [name: 'ix_recommendation_approval_queue']
+    (decided_by, decided_at) [name: 'ix_recommendation_decided_by', note: 'Approval queue tab Decided by me']
+  }
+  checks {
+    `status = 'DRAFT' or (recommended_outcome is not null and recommended_payable is not null and claimed_total is not null and submitted_by is not null and submitted_at is not null and attested_at is not null)` [name: 'ck_recommendation_submitted']
+    `recommended_outcome is null or recommended_outcome = proposed_outcome or (outcome_reason is not null and outcome_note is not null)` [name: 'ck_recommendation_mismatch_reason']
+    `outcome_reason is null or outcome_reason::text like 'MISMATCH_%'` [name: 'ck_recommendation_reason_kind']
+    `(status in ('RETURNED', 'DECIDED')) = (decision_action is not null)` [name: 'ck_decision_present']
+    `decision_action is null or (decided_by is not null and decided_at is not null and decision_revision_id is not null)` [name: 'ck_decision_complete']
+    `(decision_action = 'RETURN') = (status = 'RETURNED')` [name: 'ck_decision_return_status']
+    `decided_by is null or decided_by <> submitted_by` [name: 'ck_decision_maker_checker']
+    `decider_role = 'SENIOR_APPROVER'` [name: 'ck_decision_role']
+    `decision_action is distinct from 'APPROVE' or final_payable = claimed_total` [name: 'ck_decision_br13_approved']
+    `decision_action is distinct from 'PARTIALLY_APPROVE' or (final_payable > 0 and final_payable < claimed_total)` [name: 'ck_decision_br13_partial']
+    `decision_action is distinct from 'REJECT' or (final_payable = 0 and decision_reason is not null)` [name: 'ck_decision_br13_rejected']
+    `decision_reason is null or decision_reason::text like 'REJECT_%'` [name: 'ck_decision_reason_kind']
+    `decision_action is distinct from 'RETURN' or (final_payable is null and decision_comment is not null)` [name: 'ck_decision_return']
+    `decision_action is null or decision_action = 'RETURN' or balance_version_checked is not null` [name: 'ck_decision_balance_checked']
+  }
+  Note: '''
+  One row per submission, with the approver decision on the same row (1 to 0..1).
+  A RETURNED row stays; the reviewer starts a new one. This is the only way a claim reaches
+  Approved, PartiallyApproved or Rejected (BR-01); an approval adds final_payable to policy.consumed_amount.
+  '''
+}
+
+Ref recommendation_decider_role: recommendation.(decided_by, decider_role) > staff_account.(id, role)
+Ref claim_policy_member: claim.(policy_id, member_id) > policy.(id, member_id)
+Ref page_document_claim: document_page.(document_id, claim_id) > document.(id, claim_id)
+
+Table audit_event [headercolor: #3C4043] {
+  id bigint [pk, increment]
+  occurred_at timestamptz [not null, default: `now()`]
+  actor_type actor_type [not null]
+  actor_id uuid [ref: > staff_account.id]
+  claim_id uuid [ref: > claim.id, note: 'Empty for sign-in and rule-set events']
+  event_type varchar(60) [not null, note: 'e.g. CLAIM_STATUS_CHANGED, FIELD_CORRECTED, AI_RUN_FINISHED, LINE_OVERRIDDEN, DECISION_RECORDED, CLAIM_VIEWED, SIGNED_IN']
+  entity_type varchar(40) [not null]
+  entity_id varchar(64) [not null]
+  before_value jsonb
+  after_value jsonb
+  ai_run_id uuid [ref: > ai_run.id]
+  request_id varchar(64)
+  ip_address inet
+
+  indexes {
+    (claim_id, occurred_at) [name: 'ix_audit_claim_timeline']
+    (actor_id, occurred_at) [name: 'ix_audit_actor']
+    (event_type, occurred_at) [name: 'ix_audit_type']
+  }
+  checks {
+    `actor_type <> 'USER' or actor_id is not null` [name: 'ck_audit_user_actor']
+  }
+  Note: '''
+  BR-12. Insert-only: UPDATE and DELETE are revoked from the application role. Feeds the claim Timeline (US22).
+  It also keeps what the tables overwrite: earlier AI suggestions, earlier overrides and rule-set test runs.
+  '''
+}
+
+//// ------------------------------------------------------------------
+//// Groups (dbdiagram.io)
+//// ------------------------------------------------------------------
+
+TableGroup access_and_policy [color: #3C4043] {
+  staff_account
+  member
+  benefit_plan
+  policy
+}
+
+TableGroup rule_sets [color: #0F766E] {
+  rule_set_version
+  benefit_category
+  benefit_rule
+  sample_claim
+}
+
+TableGroup intake_and_evidence [color: #1A56DB] {
+  claim
+  document
+  document_page
+  ai_run
+  claim_field
+  expense_line
+}
+
+TableGroup checks_and_adjudication [color: #A40022] {
+  alert
+  risk_flag
+  calculation_revision
+  calculation_line
+}
+
+TableGroup decision_and_audit [color: #E5484D] {
+  recommendation
+  audit_event
+}

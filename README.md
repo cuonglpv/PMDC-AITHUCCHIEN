@@ -259,7 +259,7 @@ The Decision screen (SCR-35) is still being polished in Stitch. For SCR-13, 20, 
 
 ## 3. Architecture and technology direction
 
-The C4 model, database design and API contract are not designed yet. Product research points to this direction:
+The C4 model and API contract are not designed yet. Product research points to this direction:
 
 ```text
 Frontend          Next.js (React) staff web app
@@ -270,11 +270,18 @@ Document AI       Python service for OCR, page classification, extraction and ma
 Background jobs   Document processing, re-runs and information-request deadlines
 ```
 
+### 3.1 Data model
+
+The database has 20 PostgreSQL tables and covers all 11 use cases. Each AI value is stored next to the value people use, so what AI suggested and what a person changed are both kept. Every calculation is a numbered snapshot. The key business rules are database constraints: a value needs a source, the approver must be a different person from the reviewer, the outcome must match the amount, and an override cannot exceed the line amount.
+
+The design, the ER diagrams (Mermaid) and the reasons behind each table are in [Data model](docs/06-data-model.md). The schema itself is [claimlens.dbml](docs/diagrams/claimlens.dbml); paste it into [dbdiagram.io](https://dbdiagram.io) to see the diagram or export SQL.
+
 ## Documentation
 
 - **Research:** [Product research](01_Product_Research.xmind), [Feature map](02_Feature_Map.xmind).
 - **Requirements:** [Actors, roles, use cases and business rules](docs/03-use-cases.md), [INVEST backlog and acceptance criteria](docs/08-invest-requirements.md), [Audit report](docs/09-audit-report.md).
 - **Diagrams:** [Use case diagram (PlantUML)](docs/diagrams/use-case.puml).
+- **Data:** [Data model and ER diagrams](docs/06-data-model.md), [DBML schema](docs/diagrams/claimlens.dbml).
 - **UI/UX:** [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
 
 ## Project progress
@@ -292,7 +299,7 @@ Background jobs   Document processing, re-runs and information-request deadlines
 - [ ] Render-check the PlantUML use case diagram
 - [ ] Write non-functional requirements
 - [ ] Design the C4 System Context, Container and Component views
-- [ ] Design the PostgreSQL schema and ER diagram
+- [x] Design the PostgreSQL schema and ER diagram
 - [ ] Write the API contract in OpenAPI 3.0
 - [ ] Design the frontend and backend folder structures
 - [ ] Design class diagrams and sequence diagrams
