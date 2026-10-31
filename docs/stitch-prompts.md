@@ -540,6 +540,48 @@ Stitch đã nhận DESIGN.md của mình. Stitch chuyển phần token sang bộ
 - **G3: "New Claim – Step 3 Documents" bản `_2`** `On page card p4, make the "Choose type" select span the full card width so its label is not cut off.`
 - **SCR-33:** tạo màn mới bằng khối `text` dưới tiêu đề "## SCR-33 — Claim workspace · Adjudication".
 
+## Review đợt 4 (export `stitch_claimlens_workbench.zip`, lần 3)
+
+| Màn | Bản trong Stitch | Kết quả | Việc còn lại |
+|---|---|---|---|
+| SCR-01, 20, 50 | (không đổi) | ✅ Đã chốt | — |
+| SCR-13 Upload | `new_claim_step_3_documents_2` | ✅ **Chốt** (ô "Choose type" đủ chữ) | — |
+| SCR-33 Adjudication | `claim_workspace_adjudication_tab_2` | ✅ Gần xong. Sinh lại thành công: bảng 4 cột hiện rõ "✕ Excluded · EX-04", bảng tính toàn màu đen (có dòng −80,000), header không có nút, chỉ 1 nút đỏ | Shell chưa áp (logo "CL", top bar còn "T. Harrison"); số tiền trong bảng và chip EX-04 bị xuống dòng |
+| SCR-35 Decision | `claim_workspace_decision_tab_3` | ⚠ Recommendation đã sửa xong (danh sách dọc, Reason đủ chữ) | **Lỗi mới:** chip trích dẫn bị bẻ dòng ("Visit / summary", "EX- / 04"), chip "No source" đè lên chữ |
+| SCR-31 Evidence | — | ❌ Bạn sửa nhầm bản lỗi (vẫn mất ảnh hoá đơn) | Bản tốt (có ảnh hoá đơn) vẫn còn trong Stitch, là bản giống [ui/scr-31-evidence.png](ui/scr-31-evidence.png). Xoá bản lỗi, sửa bản tốt bằng G1a, G1b |
+
+`docs/ui/` đã cập nhật: `scr-13-upload`, `scr-33-adjudication` (mới), `scr-35-decision`.
+
+### Prompt đợt 4 (mỗi lần một prompt, một màn)
+
+- **H1: SCR-33** `Make the shell match the design system: wordmark = small red square + "ClaimLens"; top bar = search, bell and one ink avatar circle "TH" only (remove "T. Harrison" and the role); collapsed sidebar icons for Review queue, Search claims, Benefit plans. Do not change the content area.`
+- **H2: SCR-33, sau H1** `In the expense table, show amounts without the ₫ sign and add "(₫)" to the Claimed and Covered column headers so every amount stays on one line; the "EX-04" chip must never wrap; truncate long line names with an ellipsis.`
+- **H3: SCR-35** `Citation chips must never wrap: each chip stays on one line ("Visit summary", "Invoice p2", "EX-04", "COINS-80", "LIM-ANNUAL") and sits inline after its sentence. Put the "No source" note on its own line below the last sentence without overlapping the text.`
+- **SCR-31:** dùng lại **G1a** rồi **G1b** (mục Review đợt 3) trên **bản có ảnh hoá đơn**.
+
+## SCR-31: sửa trực tiếp trên HTML (ngoài Stitch)
+
+Stitch đã 2 lần làm mất ảnh hoá đơn khi sửa SCR-31, nên bản chốt được sửa tay trên [ui/scr-31-evidence.html](ui/scr-31-evidence.html) (dựa trên bản tốt của Stitch). Ảnh chụp lại: [ui/scr-31-evidence.png](ui/scr-31-evidence.png) (chụp từ trình duyệt, độ phân giải 800 px).
+
+Đã sửa:
+- **Shell:** logo ô đỏ + "ClaimLens"; sidebar của reviewer (Review queue, Search claims, Benefit plans); top bar chỉ còn avatar "TH".
+- **Badge trạng thái:** ngắn, có icon, không xuống dòng: High / Check / Missing. Cột rộng lại nên Accept + Edit không còn đè lên badge.
+- **Trường đã duyệt:** "Verified + ổ khoá" thay bằng chữ viết tắt "TH" của người duyệt.
+- **Dấu AI:** thêm chip ✦ AI cạnh 3 giá trị đang ở mức Check.
+- **Màu:** "3 fields to verify" chữ đen, chấm tiến độ màu hổ phách; tổng tiền trên hoá đơn không còn màu đỏ.
+- **Hoá đơn trong khung xem:** đổi về 5 dòng của golden case; tag `line_4.description · 0.78` không còn đè lên dòng 3.
+- **Font:** về đúng DESIGN.md (IBM Plex Mono + Be Vietnam Pro) thay cho Courier Prime + Space Grotesk của Stitch.
+- Bỏ đoạn script phím tắt bị lỗi (selector `:contains` không hợp lệ).
+
+**Font các màn khác (đã sửa):** Khi chuyển DESIGN.md sang hệ token riêng, Stitch tự đổi font thành Courier Prime + Space Grotesk; Courier Prime **không có dấu tiếng Việt**. Trong `docs/ui/`, file HTML của SCR-13, 20, 33, 50 đã đổi về đúng DESIGN.md:
+- Courier Prime → IBM Plex Mono.
+- Tiêu đề panel → Be Vietnam Pro.
+- Số KPI và tiêu đề IN HOA → Lexend Exa.
+
+Đã mở lại cả 4 màn trong trình duyệt để kiểm tra: bố cục không vỡ. Ở SCR-33, số tiền trong bảng giờ nằm gọn một dòng.
+
+Các file `.png` của 4 màn này vẫn là ảnh chụp gốc của Stitch (font cũ), nên **file HTML là bản đúng**. SCR-33: shell cũng đã được sửa trên HTML (logo ô đỏ + "ClaimLens", sidebar reviewer, top bar chỉ còn avatar "TH") và đã kiểm tra trong trình duyệt; không cần chạy H1 trong Stitch nữa, trừ khi muốn bản trong Stitch khớp.
+
 ## Checklist review (mình dùng khi bạn gửi ảnh chụp)
 
 | # | Kiểm tra | Nguồn |
