@@ -279,7 +279,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Goal:** know the packet is complete, consistent and not a duplicate before money is computed.
 - **Trigger:** required fields accepted, or any field changed in `InReview`.
 - **Preconditions:** claim in `InReview`, assigned to the reviewer.
-- **Main flow:** system runs deterministic checks — required documents present, insured name and policy match, dates consistent across documents, invoice total equals sum of lines, invoice number + provider not used in another claim — and raises **Alerts** (Blocking / Warning) with evidence → system runs **AI-03** for clinical consistency (diagnosis vs. medication and services); its output becomes **Risk flags** handled in UC06 → reviewer resolves each alert (fix data) or dismisses it with reason.
+- **Main flow:** system runs deterministic checks — required documents present, insured name and policy match, dates consistent across documents, invoice total equals sum of lines, invoice number + provider tax code (provider name when the document has none) not used in another claim — and raises **Alerts** (Blocking / Warning) with evidence → system runs **AI-03** for clinical consistency (diagnosis vs. medication and services); its output becomes **Risk flags** handled in UC06 → reviewer resolves each alert (fix data) or dismisses it with reason.
 - **Alternatives:** evidence missing → reviewer dismisses the alert with reason, records the gap in the summary and recommends accordingly (UC07).
 - **Exceptions:** AI service unavailable → no clinical flags; claim shows "Clinical check not run"; validation continues.
 - **Postconditions:** no open Blocking alert → adjudication can run.

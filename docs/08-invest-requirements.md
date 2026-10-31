@@ -85,7 +85,7 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** the AI service fails, **then** pages are listed as "Unclassified", the fallback banner is shown and submission continues.
 
 ### US05 — 🟣 Extract fields with source
-- **Given** a submitted claim, **when** extraction runs, **then** fields follow the catalogue (insured name, ID number, policy no., provider, service date, invoice no., line description, quantity, unit price, line amount, total, diagnosis, medications) and each value stores document, page and bounding box; clicking it highlights the region.
+- **Given** a submitted claim, **when** extraction runs, **then** fields follow the catalogue (insured name, ID number, policy no., provider, provider tax code, service date, invoice no., line description, quantity, unit price, line amount, total, diagnosis, medications) and each value stores document, page and bounding box; clicking it highlights the region.
 - **Given** confidence ≥ 0.90 (≥ 0.95 for money and identity fields), **then** the value is an auto-accepted suggestion: it keeps the AI marker and the audit records `acceptedBy = threshold`.
 - **Given** 0.70 ≤ confidence < 0.90 (< 0.95 for money and identity fields), **then** the field is marked "Needs verification".
 - **Given** confidence < 0.70, **then** the field is left empty and marked "Needs entry" — no guessed value is shown.
@@ -104,7 +104,7 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** an open Blocking alert, **when** adjudication is requested, **then** it is blocked until the alert is resolved or dismissed with a reason code and note.
 
 ### US08 — Duplicate detection
-- **Given** an invoice number + provider already used in another claim, **when** validation runs, **then** a Blocking duplicate Alert links to that claim.
+- **Given** an invoice number + provider already used in another claim, **when** validation runs, **then** a Blocking duplicate Alert links to that claim. The provider is matched by the seller tax code on the invoice, or by the normalised provider name when the document has no tax code.
 - **Given** the same invoice number from a different provider, **then** no Alert is raised.
 
 ### US09 — 🟣 Clinical consistency flags
@@ -203,12 +203,12 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 | US05 | ✓ | ✓ | ✓ | ⚠ | ⚠ | ✓ | 8 pts across four document types; split candidate (invoice/receipt vs. prescription/diagnosis) if velocity data shows overrun. |
 | US06 | ⚠ | ✓ | ✓ | ✓ | ✓ | ✓ | Needs an assigned claim (US23); demoable with seeded extraction results. |
 | US07 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Deterministic; zero tolerance stated. |
-| US08 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Match key stated: invoice no. + provider. |
+| US08 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Match key stated: invoice no. + provider tax code (name as fallback). |
 | US09 | ✓ | ✓ | ✓ | ⚠ | ✓ | ✓ | Clinical threshold tuned on the golden set; flag-only, cannot change money. |
 | US10 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Threshold 0.85 negotiable; auto-accepted mappings attested in US17. |
 | US11 | ✓ | ✓ | ✓ | ✓ | ⚠ | ✓ | 8 pts; reproducibility is testable. |
 | US12 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Golden case defined per line. |
-| US13 | ⚠ | ✓ | ✓ | ✓ | ✓ | ✓ | Spans UC04 and UC05; revision model needed in ERD. |
+| US13 | ⚠ | ✓ | ✓ | ✓ | ✓ | ✓ | Spans UC04 and UC05; revisions are `calculation_revision` in the [data model](06-data-model.md). |
 | US14 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Reviewer only; the approver reads kept flags in US18. |
 | US15 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Citation requirement makes it testable. |
 | US16 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Reason code catalogue seeded; bounds stated. |

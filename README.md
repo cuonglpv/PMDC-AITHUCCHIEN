@@ -267,7 +267,7 @@ Backend           .NET or Spring Boot API with a deterministic Rule Engine
 Database          PostgreSQL (claims, versioned rule sets, calculation revisions, audit events)
 File storage      Object storage for claim documents
 Document AI       Python service for OCR, page classification, extraction and mapping
-Background jobs   Document processing, re-runs and information-request deadlines
+Background jobs   Document processing and re-runs
 ```
 
 ### 3.1 Data model

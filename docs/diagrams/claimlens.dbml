@@ -150,6 +150,7 @@ Enum field_key {
   national_id [note: 'Money and identity group (0.95)']
   policy_number [note: 'Money and identity group (0.95)']
   provider_name
+  provider_tax_code [note: 'Seller tax code on the invoice; with invoice_number it is the duplicate key (US08)']
   service_date
   invoice_number
   invoice_total [note: 'Money and identity group (0.95)']
@@ -236,15 +237,15 @@ Enum reason_code {
   DISMISS_KNOWN_EXCEPTION
   KEEP_NEEDS_APPROVER [note: 'Flag kept for the approver']
   KEEP_EVIDENCE_MISSING
-  OVERRIDE_MEDICAL_NECESSITY [note: 'Medical necessity requirement']
+  OVERRIDE_MEDICAL_NECESSITY [note: 'Line is medically necessary for the diagnosis']
   OVERRIDE_CONTRACT_EXCEPTION
   OVERRIDE_DATA_ERROR
-  MISMATCH_EXCLUSION_AND_LIMIT [note: 'Exclusion + limit applied']
-  MISMATCH_EVIDENCE_MISSING
-  REJECT_GENERAL_EXCLUSION [note: 'General policy exclusion']
-  REJECT_ANNUAL_MAXIMUM [note: 'Exceeded annual maximum']
-  REJECT_OUTSIDE_COVERAGE
-  REJECT_EVIDENCE_MISSING
+  OUTCOME_EXCLUSION_AND_LIMIT [note: 'Exclusion + limit applied (SCR-35 Reason list)']
+  OUTCOME_MEDICAL_NECESSITY [note: 'Medical necessity requirement']
+  OUTCOME_GENERAL_EXCLUSION [note: 'General policy exclusion']
+  OUTCOME_ANNUAL_MAXIMUM [note: 'Exceeded annual maximum']
+  OUTCOME_OUTSIDE_COVERAGE
+  OUTCOME_EVIDENCE_MISSING
 }
 
 Enum line_result {
@@ -466,8 +467,7 @@ Table claim [headercolor: #1A56DB] {
   claim_number varchar(20) [not null, unique, note: 'CLM-YYYY-NNNNNN']
   member_id uuid [not null, ref: > member.id]
   policy_id uuid [not null]
-  provider_name varchar(200) [not null, note: 'e.g. Phòng khám Đa khoa Hồng Ngọc']
-  provider_tax_code varchar(20) [note: 'Seller tax code; with the invoice number it is the duplicate key (US08)']
+  provider_name varchar(200) [not null, note: 'As entered at intake, e.g. Phòng khám Đa khoa Hồng Ngọc']
   service_date date [not null, note: 'Selects the rule-set version (BR-04)']
   claimed_total bigint [not null, note: 'VND, entered at intake']
   channel intake_channel [not null]
@@ -613,7 +613,7 @@ Table claim_field [headercolor: #1A56DB] {
   indexes {
     (claim_id, document_id, field_key, item_no) [unique, name: 'ux_claim_field_slot']
     (claim_id, status) [name: 'ix_claim_field_status']
-    (field_key, value_text) [name: 'ix_claim_field_value', note: 'Duplicate lookup: invoice_number across claims (US08)']
+    (field_key, value_text) [name: 'ix_claim_field_value', note: 'Duplicate lookup (US08): invoice_number and provider_tax_code slots of one document, else provider_name']
   }
   checks {
     `status not in ('AUTO_ACCEPTED', 'CONFIRMED', 'CORRECTED', 'ENTERED') or (value_text is not null and source_page_id is not null and source_bbox is not null)` [name: 'ck_claim_field_source_required']
@@ -810,7 +810,7 @@ Table recommendation [headercolor: #E5484D] {
   status recommendation_status [not null, default: 'DRAFT']
   proposed_outcome claim_outcome [not null, note: 'From the payable (BR-13)']
   recommended_outcome claim_outcome
-  outcome_reason reason_code [note: 'Required when the reviewer differs from the proposal']
+  outcome_reason reason_code [note: 'OUTCOME_ reason; required when the reviewer differs from the proposal (BR-13)']
   outcome_note text
   recommended_payable bigint
   claimed_total bigint [note: 'Snapshot at submission, used by the BR-13 checks']
@@ -829,7 +829,7 @@ Table recommendation [headercolor: #E5484D] {
   decided_at timestamptz
   decision_revision_id uuid [ref: > calculation_revision.id, note: 'Revision the decision rests on; newer after a BALANCE_RECHECK']
   final_payable bigint [note: 'Empty for RETURN']
-  decision_reason reason_code [note: 'Required for REJECT']
+  decision_reason reason_code [note: 'OUTCOME_ reason; required for REJECT']
   decision_comment text [note: 'Required for RETURN']
   balance_version_checked integer [note: 'policy.balance_version seen at approval (BR-10)']
   created_at timestamptz [not null, default: `now()`]
@@ -842,7 +842,7 @@ Table recommendation [headercolor: #E5484D] {
   checks {
     `status = 'DRAFT' or (recommended_outcome is not null and recommended_payable is not null and claimed_total is not null and submitted_by is not null and submitted_at is not null and attested_at is not null)` [name: 'ck_recommendation_submitted']
     `recommended_outcome is null or recommended_outcome = proposed_outcome or (outcome_reason is not null and outcome_note is not null)` [name: 'ck_recommendation_mismatch_reason']
-    `outcome_reason is null or outcome_reason::text like 'MISMATCH_%'` [name: 'ck_recommendation_reason_kind']
+    `outcome_reason is null or outcome_reason::text like 'OUTCOME_%'` [name: 'ck_recommendation_reason_kind']
     `(status in ('RETURNED', 'DECIDED')) = (decision_action is not null)` [name: 'ck_decision_present']
     `decision_action is null or (decided_by is not null and decided_at is not null and decision_revision_id is not null)` [name: 'ck_decision_complete']
     `(decision_action = 'RETURN') = (status = 'RETURNED')` [name: 'ck_decision_return_status']
@@ -851,7 +851,7 @@ Table recommendation [headercolor: #E5484D] {
     `decision_action is distinct from 'APPROVE' or final_payable = claimed_total` [name: 'ck_decision_br13_approved']
     `decision_action is distinct from 'PARTIALLY_APPROVE' or (final_payable > 0 and final_payable < claimed_total)` [name: 'ck_decision_br13_partial']
     `decision_action is distinct from 'REJECT' or (final_payable = 0 and decision_reason is not null)` [name: 'ck_decision_br13_rejected']
-    `decision_reason is null or decision_reason::text like 'REJECT_%'` [name: 'ck_decision_reason_kind']
+    `decision_reason is null or decision_reason::text like 'OUTCOME_%'` [name: 'ck_decision_reason_kind']
     `decision_action is distinct from 'RETURN' or (final_payable is null and decision_comment is not null)` [name: 'ck_decision_return']
     `decision_action is null or decision_action = 'RETURN' or balance_version_checked is not null` [name: 'ck_decision_balance_checked']
   }

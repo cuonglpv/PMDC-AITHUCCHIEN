@@ -12,13 +12,13 @@ The schema is built so that the database itself, not only the application, can c
 |---|---|---|---|
 | D1 | AI output sits beside the value in use, never over it | `document_page`, `claim_field` and `expense_line` each carry `ai_*` columns (suggestion, confidence, level, run) next to the value people work with. The AI value is not overwritten when a person edits. | Cross-cutting constraint in [08](08-invest-requirements.md#cross-cutting-acceptance-constraints): accepted values stored separately from raw AI output |
 | D2 | No source, no accepted value | `claim_field` cannot reach an accepted status without `source_page_id` and `source_bbox` (`ck_claim_field_source_required`). | BR-02 |
-| D3 | The status says who decided | `field_status` separates `AUTO_ACCEPTED` (threshold, AI marker kept) from `CONFIRMED`, `CORRECTED`, `ENTERED` and `NOT_PRESENT` (a person). `AUTO_ACCEPTED` is only allowed when the AI level is `HIGH`. The AI quality metrics are counts over these columns. | BR-03, US06, US21 |
+| D3 | The status says who decided | `field_status` separates `AUTO_ACCEPTED` (threshold, AI marker kept) from `CONFIRMED`, `CORRECTED`, `ENTERED` and `NOT_PRESENT` (a person). `AUTO_ACCEPTED` is only allowed when the AI level is `HIGH`. The requirement's `acceptedBy = threshold` is `AUTO_ACCEPTED`, `acceptedBy = user` is a filled `resolved_by`; the audit event records the same value. The AI quality metrics are counts over these columns. | BR-03, US05, US06, US21 |
 | D4 | Versioned, immutable rule sets | `rule_set_version` plus one `benefit_rule` table for all rule kinds, each with `rule_code`, `clause_text` and `apply_order`. Categories are a stable taxonomy (`benefit_category`) so AI-02 and the dashboard do not depend on a version. | BR-04, BR-05, US19 |
 | D5 | Every calculation is a numbered snapshot | `calculation_revision` stores the rule-set version, limits, the balance it read, the payable, an `input_hash` and the formula rows. `calculation_line` keeps the engine result next to the final result. | US11, US12, US13 |
 | D6 | The override lives on the line | The active override is a set of `override_*` columns on `expense_line`, all-or-nothing, capped by the line amount and tied to an `OVERRIDE_*` reason. Every later revision applies it; the engine result stays visible in `calculation_line`. | BR-07, US16 |
 | D7 | The balance lives on the policy | One policy is one insured person and one policy year, so `policy` holds `consumed_amount` and `balance_version`. Each revision records the version it read; approval locks the row, checks the version and adds the payable. | BR-10, US18 |
 | D8 | Recommendation and decision share one row | A recommendation gets at most one decision, so the approver's columns sit on the same row. Maker–checker becomes `decided_by <> submitted_by`; the role is checked through `(decided_by, decider_role) → staff_account(id, role)`; BR-13 is checked against the `claimed_total` snapshot. | BR-01, BR-06, BR-13 |
-| D9 | Reason codes are typed by use | `reason_code` is an enum whose prefix says where it may be used (`DISMISS_`, `KEEP_`, `OVERRIDE_`, `MISMATCH_`, `REJECT_`); each table checks the prefix. | BR-07, US16 |
+| D9 | Reason codes are typed by use | `reason_code` is an enum whose prefix says where it may be used: `DISMISS_` (alerts, flags), `KEEP_` (flags), `OVERRIDE_` (lines) and `OUTCOME_`, the Reason list on the Decision tab that the reviewer's recommendation and the approver's rejection share. Each table checks the prefix. | BR-07, BR-13, US16, US17 |
 | D10 | Synthetic test claims live apart | Rule-set test runs read `sample_claim`, never `claim`, so the Administrator needs no access to claim tables. Test results are computed on request and not stored. | BR-11, US20 |
 | D11 | One insert-only audit trail | `audit_event` records every state change, correction, override, dismissal, decision and claim access with before and after values. It also keeps what the tables overwrite: earlier AI suggestions and earlier overrides. | BR-12, US22 |
 
@@ -213,8 +213,7 @@ erDiagram
         varchar claim_number UK "CLM-YYYY-NNNNNN"
         uuid member_id FK "-> policy"
         uuid policy_id FK "-> policy"
-        varchar provider_name "e.g. Phòng khám Đa khoa Hồng Ngọc"
-        varchar provider_tax_code
+        varchar provider_name "As entered at intake, e.g. Phòng khám Đa khoa Hồng Ngọc"
         date service_date "Selects the rule-set version (BR-04)"
         bigint claimed_total "VND, entered at intake"
         intake_channel channel
@@ -438,7 +437,7 @@ erDiagram
         recommendation_status status
         claim_outcome proposed_outcome "From the payable (BR-13)"
         claim_outcome recommended_outcome
-        reason_code outcome_reason "Required when the reviewer differs from the proposal"
+        reason_code outcome_reason
         text outcome_note
         bigint recommended_payable
         bigint claimed_total "Snapshot at submission, used by the BR-13 checks"
@@ -457,7 +456,7 @@ erDiagram
         timestamptz decided_at
         uuid decision_revision_id FK "-> calculation_revision"
         bigint final_payable "Empty for RETURN"
-        reason_code decision_reason "Required for REJECT"
+        reason_code decision_reason "OUTCOME_ reason; required for REJECT"
         text decision_comment "Required for RETURN"
         integer balance_version_checked "policy.balance_version seen at approval (BR-10)"
         timestamptz created_at
@@ -519,7 +518,7 @@ Some data that could have had its own table is folded into a column, a `jsonb` v
 | Attested AI values | `recommendation.attested_values` (`jsonb`) | Snapshot, not foreign keys; that is what an attestation should be. |
 | Alert evidence | `alert.details` (`jsonb`) with the `claim_field` ids | No foreign keys from evidence to fields. |
 | Risk flag evidence | `risk_flag.expense_line_id` and `diagnosis_field_id` | One line per flag; every AI-03 flag type is about one line against the diagnosis. |
-| Invoice header and provider | `claim_field` slots (`invoice_number`, `invoice_total`, …) and `claim.provider_name`, `provider_tax_code` | Duplicate lookup reads `claim_field` by `(field_key, value_text)` and the claim's provider, not a separate invoice table. |
+| Invoice header and provider | `claim_field` slots of the invoice document (`invoice_number`, `provider_tax_code`, `invoice_total`, …) and `claim.provider_name` from intake | The duplicate lookup joins two `claim_field` slots through `ix_claim_field_value` instead of reading one invoice row. |
 | Field catalogue, reason codes, thresholds | Enums and application config | Adding a field or reason code is a migration (`alter type … add value`). |
 | Rule-set test results | Computed on request; the run is an `audit_event` | Earlier test runs cannot be reopened. |
 | Golden-set labels | `claim.golden_scenario`, `risk_flag.eval_label`; expected amounts in the test fixtures | Expected results are not in the database. |
@@ -551,7 +550,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | BR-05 Line results and payable | `benefit_rule` kinds and `apply_order`; result checks on `calculation_line` and `expense_line` overrides; `ck_revision_payable_formula`. |
 | BR-06 Maker–checker | `ck_decision_maker_checker` (`decided_by <> submitted_by` on the same row). |
 | BR-07 Reasons and override caps | `ck_alert_dismiss_reason`, `ck_risk_flag_reason`, `ck_override_complete`, `ck_override_cap`, and the reason-prefix checks. |
-| BR-08 Alert versus risk flag | Deterministic checks → `alert` (including `DUPLICATE_INVOICE`); AI signals → `risk_flag`, which no calculation table references. |
+| BR-08 Alert versus risk flag | Deterministic checks → `alert` (including `DUPLICATE_INVOICE`: same `invoice_number` and `provider_tax_code` in another claim, or the normalised `provider_name` when the document has no tax code); AI signals → `risk_flag`, which no calculation table references. |
 | BR-09 Approval queue priority | Sort by the latest revision's payable against the configured high-value threshold, open `HIGH` flags, then `submitted_at`. |
 | BR-10 Balance consumed on approval, re-checked | `policy.balance_version`; `calculation_revision.balance_version`; `recommendation.balance_version_checked`; `ck_policy_consumed`. |
 | BR-11 Who sees claim data | `claim.registered_by`, `claim.assignee_id` and the staff role drive row-level security; synthetic `sample_claim` for the Administrator. |
@@ -567,7 +566,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | `policy` | `PL-2026-00731` on `GOLD-OP`; `opening_consumed` and `consumed_amount` 4,200,000; `balance_version` 1. |
 | `rule_set_version`, `benefit_rule` | v3, effective 01/01/2026: `COV-01`, `COV-03`, `COV-04`, `COV-05`, `EX-04`, `COINS-80` (`rate_bp` 8000), `LIM-ANNUAL` (5,000,000), `LIM-VISIT` (2,000,000, assumed). |
 | `document`, `document_page` | 4 files, 5 pages (invoice p1–p2, receipt, prescription, visit summary). |
-| `claim_field` | Invoice `HN-0045821`, insured name, line fields, diagnosis `J02.9` (AI below 0.70, entered by the reviewer). |
+| `claim_field` | Invoice `HN-0045821`, seller tax code `0101234567`, insured name, line fields, diagnosis `J02.9` (AI below 0.70, entered by the reviewer). |
 | `expense_line` | Lines 300,000 · 250,000 · 150,000 · 300,000 · 400,000; line 4 mapped to `COSMETIC` at 0.81 and confirmed by the reviewer. |
 | `calculation_revision` #2 | Eligible 1,100,000; after rate 880,000; remaining = min(2,000,000; 5,000,000 − 4,200,000) = 800,000; payable 800,000; projected after 0. Formula: 1,400,000 → `EX-04` −300,000 → `COINS-80` −220,000 → `LIM-ANNUAL` −80,000 → 800,000. |
 | `calculation_line` | Lines 1, 2, 3, 5 `COVERED` by `COV-01`, `COV-03`, `COV-05`, `COV-04`; line 4 `EXCLUDED` by `EX-04`. |
@@ -608,7 +607,7 @@ npx @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres -o claimlens.sql
 | Q5 | BR-10: when the balance changed during `PENDING_APPROVAL`, who re-runs adjudication, and what if the payable changes? | The system creates a `BALANCE_RECHECK` revision. Same payable: the approver decides on it (`decision_revision_id`). Different payable: the claim is returned to the reviewer. |
 | Q6 | Waiting periods count from which date? | `policy.first_enrolled_on`, so renewals do not restart them. |
 | Q7 | A category that is neither covered nor excluded in a version. | Not allowed: publishing requires every active category to be covered or excluded. |
-| Q8 | Receipts may carry no seller tax code. | The duplicate check falls back to a normalised `provider_name`; the reviewer confirms. |
+| Q8 | Receipts may carry no seller tax code, and invoice numbers may restart each year under a new invoice series (e.g. `1C26THN`). | The duplicate key is `invoice_number` + `provider_tax_code`, falling back to the normalised `provider_name`. The invoice series is not stored; a repeat number from another year raises a Blocking alert that the reviewer dismisses with a reason. Add an `invoice_series` field if that happens often. |
 | Q9 | Who labels golden-set risk flags as true or false positives? | A Senior Approver during golden-set runs, stored in `risk_flag.eval_label`. |
 | Q10 | How long are documents and audit events kept? | Not modelled; documents follow the storage lifecycle, `audit_event` can be partitioned by month. |
 
