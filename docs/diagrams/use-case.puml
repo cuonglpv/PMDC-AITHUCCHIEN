@@ -1,0 +1,117 @@
+@startuml use-case
+' Strict UML use case diagram — render with PlantUML (VS Code extension or plantuml.jar)
+' Must stay consistent with the Mermaid diagram in docs/03-use-cases.md
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #EEF2FF
+  BorderColor #1A56DB
+  BackgroundColor<<AI>> #F5F3FF
+  BorderColor<<AI>> #7C3AED
+  BackgroundColor<<System>> #F0FDFA
+  BorderColor<<System>> #0F766E
+}
+
+' Primary actors (left)
+actor "Staff" as Staff <<abstract>>
+actor "Intake Officer" as Intake
+actor "Claims Reviewer" as Reviewer
+actor "Senior Approver" as Approver
+actor "Policy Administrator" as PolicyAdmin
+actor "Operations Manager" as Ops
+actor "System Administrator" as SysAdmin
+
+Intake --|> Staff
+Reviewer --|> Staff
+Approver --|> Staff
+PolicyAdmin --|> Staff
+Ops --|> Staff
+SysAdmin --|> Staff
+
+rectangle "ClaimLens" {
+  usecase "UC01 Sign in to role workspace" as UC01
+  usecase "UC02 Register claim" as UC02
+  usecase "UC03 Upload claim documents" as UC03
+  usecase UC04 as "UC04 Verify extracted evidence
+--
+extension points
+Page re-read"
+  usecase "UC05 Resolve validation alerts" as UC05
+  usecase "UC06 Review benefit adjudication" as UC06
+  usecase "UC07 Review risk flags" as UC07
+  usecase UC08 as "UC08 Submit recommendation
+--
+extension points
+Evidence missing"
+  usecase "UC09 Request additional information" as UC09
+  usecase "UC10 Approve, reject or return claim" as UC10
+  usecase UC11 as "UC11 Publish benefit rule-set version
+--
+extension points
+Test draft"
+  usecase "UC12 Monitor operations & AI quality" as UC12
+  usecase "UC13 Trace claim decision history" as UC13
+  usecase "UC14 Manage staff access" as UC14
+
+  usecase "AI-01 Classify & extract documents" as AI01 <<AI>>
+  usecase "AI-02 Map expense lines to benefits" as AI02 <<AI>>
+  usecase "AI-03 Detect clinical inconsistencies" as AI03 <<AI>>
+  usecase "AI-04 Draft evidence-backed summary" as AI04 <<AI>>
+
+  usecase "SYS-01 Evaluate policy rules" as SYS01 <<System>>
+}
+
+' Secondary actor (right)
+actor "AI Document\nIntelligence Service" as AISvc <<system>>
+
+Staff -- UC01
+Intake -- UC02
+Intake -- UC03
+Reviewer -- UC04
+Reviewer -- UC05
+Reviewer -- UC06
+Reviewer -- UC07
+Reviewer -- UC08
+Reviewer -- UC09
+Reviewer -- UC13
+Approver -- UC07
+Approver -- UC10
+Approver -- UC13
+PolicyAdmin -- UC11
+Ops -- UC12
+Ops -- UC13
+SysAdmin -- UC14
+
+UC03 ..> AI01 : <<include>>
+AI01 ..> UC04 : <<extend>>\n[page misread]
+UC05 ..> AI03 : <<include>>
+UC06 ..> AI02 : <<include>>
+UC06 ..> SYS01 : <<include>>
+UC08 ..> AI04 : <<include>>
+UC09 ..> UC08 : <<extend>>\n[evidence missing]
+SYS01 ..> UC11 : <<extend>>\n[test run requested]
+
+AI01 -- AISvc
+AI02 -- AISvc
+AI03 -- AISvc
+AI04 -- AISvc
+
+note right of AI01
+  AI outputs are suggestions with
+  confidence + source region.
+  Below threshold → empty or
+  "Needs verification" (UC04).
+end note
+
+note bottom of UC10
+  Maker–checker: the submitter of
+  UC08 cannot perform UC10 (BR-06).
+end note
+
+note bottom of UC13
+  Ops Manager: medical and identity
+  data masked. Reviewer: own claims.
+  Sys Admin: access log only (UC14).
+end note
+@enduml
