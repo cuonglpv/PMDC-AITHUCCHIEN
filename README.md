@@ -259,16 +259,19 @@ The Decision screen (SCR-35) is still being polished in Stitch. For SCR-13, 20, 
 
 ## 3. Architecture and technology direction
 
-The C4 model and API contract are not designed yet. Product research points to this direction:
+ClaimLens is made of five containers. The browser talks only to the Claims API, and only the Claims API writes to the database, so AI can suggest values but never accept its own output.
 
 ```text
-Frontend          Next.js (React) staff web app
-Backend           .NET or Spring Boot API with a deterministic Rule Engine
-Database          PostgreSQL (claims, versioned rule sets, calculation revisions, audit events)
-File storage      Object storage for claim documents
-Document AI       Python service for OCR, page classification, extraction and mapping
-Background jobs   Document processing and re-runs
+Staff Web App         Next.js (React)
+Claims API            ASP.NET Core, with the Rule Engine and the AI job runner inside it
+Document AI Service   Python (FastAPI), stateless: OCR, page classification, extraction, mapping, drafts
+Database              PostgreSQL (claims, versioned rule sets, calculation revisions, audit events)
+Object Storage        S3-compatible (original files, renditions, page images, raw AI responses)
 ```
+
+OCR and language models come from an external AI Model Provider, still to be chosen. The API contract is not designed yet.
+
+The [C4 model](docs/architecture/c4/README.md) has the [System Context](docs/architecture/c4/01-system-context.md), the [Container](docs/architecture/c4/02-container.md) view, and Component views of the [Claims API](docs/architecture/c4/03-component-claims-api.md) and the [Document AI Service](docs/architecture/c4/03-component-document-ai.md).
 
 ### 3.1 Data model
 
@@ -281,6 +284,7 @@ The design, the ER diagrams (Mermaid) and the reasons behind each table are in [
 - **Research:** [Product research](01_Product_Research.xmind), [Feature map](02_Feature_Map.xmind).
 - **Requirements:** [Actors, roles, use cases and business rules](docs/03-use-cases.md), [INVEST backlog and acceptance criteria](docs/08-invest-requirements.md), [Audit report](docs/09-audit-report.md).
 - **Diagrams:** [Use case diagram (PlantUML)](docs/diagrams/use-case.puml).
+- **Architecture:** [C4 model](docs/architecture/c4/README.md).
 - **Data:** [Data model and ER diagrams](docs/06-data-model.md), [DBML schema](docs/diagrams/claimlens.dbml).
 - **UI/UX:** [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
 
@@ -298,7 +302,7 @@ The design, the ER diagrams (Mermaid) and the reasons behind each table are in [
 - [ ] Generate the UI prototype in Stitch (6 of 7 priority screens done; Decision still in progress)
 - [ ] Render-check the PlantUML use case diagram
 - [ ] Write non-functional requirements
-- [ ] Design the C4 System Context, Container and Component views
+- [x] Design the C4 System Context, Container and Component views
 - [x] Design the PostgreSQL schema and ER diagram
 - [ ] Write the API contract in OpenAPI 3.0
 - [ ] Design the frontend and backend folder structures
