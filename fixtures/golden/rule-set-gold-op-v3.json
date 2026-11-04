@@ -1,0 +1,18 @@
+{
+  "plan": "GOLD-OP",
+  "versionNo": 3,
+  "effectiveFrom": "2026-01-01",
+  "rules": [
+    { "ruleCode": "ELIG-01", "type": "Eligibility", "applyOrder": 10 },
+    { "ruleCode": "WAIT-30", "type": "WaitingPeriod", "applyOrder": 20, "waitingDays": 30 },
+    { "ruleCode": "EX-04", "type": "Exclusion", "applyOrder": 30, "categoryCode": "COSMETIC" },
+    { "ruleCode": "COV-01", "type": "Coverage", "applyOrder": 40, "categoryCode": "CONSULTATION" },
+    { "ruleCode": "COV-02", "type": "Coverage", "applyOrder": 41, "categoryCode": "PROCEDURE" },
+    { "ruleCode": "COV-03", "type": "Coverage", "applyOrder": 42, "categoryCode": "LAB_TEST" },
+    { "ruleCode": "COV-04", "type": "Coverage", "applyOrder": 43, "categoryCode": "DIAGNOSTIC_IMAGING" },
+    { "ruleCode": "COV-05", "type": "Coverage", "applyOrder": 44, "categoryCode": "PRESCRIPTION_DRUG" },
+    { "ruleCode": "COINS-80", "type": "Coinsurance", "applyOrder": 50, "rateBp": 8000 },
+    { "ruleCode": "LIM-VISIT", "type": "Limit", "applyOrder": 60, "limitAmount": 2000000, "limitScope": "PerVisit" },
+    { "ruleCode": "LIM-ANNUAL", "type": "Limit", "applyOrder": 61, "limitAmount": 5000000, "limitScope": "Annual" }
+  ]
+}

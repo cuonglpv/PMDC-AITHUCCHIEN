@@ -1,0 +1,42 @@
+{
+  "scenario": "EXCLUDED_LINE",
+  "note": "The same five lines with a full balance: the exclusion matters, no limit caps the payable.",
+  "engine": {
+    "input": {
+      "serviceDate": "2026-10-12",
+      "firstEnrolledOn": "2024-01-01",
+      "coverageStart": "2026-01-01",
+      "coverageEnd": "2026-12-31",
+      "consumedBefore": 0,
+      "lines": [
+        { "lineNo": 1, "categoryCode": "CONSULTATION", "claimedAmount": 300000 },
+        { "lineNo": 2, "categoryCode": "LAB_TEST", "claimedAmount": 250000 },
+        { "lineNo": 3, "categoryCode": "PRESCRIPTION_DRUG", "claimedAmount": 150000 },
+        { "lineNo": 4, "categoryCode": "COSMETIC", "claimedAmount": 300000 },
+        { "lineNo": 5, "categoryCode": "DIAGNOSTIC_IMAGING", "claimedAmount": 400000 }
+      ]
+    },
+    "expected": {
+      "claimedTotal": 1400000,
+      "eligibleTotal": 1100000,
+      "afterRateAmount": 880000,
+      "perVisitLimit": 2000000,
+      "annualLimit": 5000000,
+      "remainingLimit": 2000000,
+      "payableAmount": 880000,
+      "projectedRemainingAfter": 4120000,
+      "lines": [
+        { "lineNo": 1, "result": "Covered", "covered": 300000, "ruleCode": "COV-01" },
+        { "lineNo": 2, "result": "Covered", "covered": 250000, "ruleCode": "COV-03" },
+        { "lineNo": 3, "result": "Covered", "covered": 150000, "ruleCode": "COV-05" },
+        { "lineNo": 4, "result": "Excluded", "covered": 0, "ruleCode": "EX-04" },
+        { "lineNo": 5, "result": "Covered", "covered": 400000, "ruleCode": "COV-04" }
+      ],
+      "formula": [
+        { "label": "Claimed", "ruleCode": null, "delta": null, "total": 1400000 },
+        { "label": "Excluded", "ruleCode": "EX-04", "delta": -300000, "total": 1100000 },
+        { "label": "Coinsurance 80%", "ruleCode": "COINS-80", "delta": -220000, "total": 880000 }
+      ]
+    }
+  }
+}
