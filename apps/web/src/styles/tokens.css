@@ -1,0 +1,54 @@
+/* The tokens of docs/DESIGN.md. tokens.test.ts fails if a colour here differs from that file. */
+@theme {
+  --color-primary: #eb0029;
+  --color-on-primary: #ffffff;
+  --color-primary-hover: #c8001f;
+  --color-primary-text: #c8001f;
+  --color-ink: #090909;
+  --color-background: #f4f3ef;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #e9e7e2;
+  --color-row-selected: #eceae4;
+  --color-on-surface: #090909;
+  --color-on-surface-muted: #5c5a57;
+  --color-line: #d8d6d1;
+  --color-control-border: #8c8984;
+  --color-focus-ring: #eb0029;
+  --color-shell: #090909;
+  --color-shell-raised: #1d1c1c;
+  --color-on-shell: #ece7e4;
+  --color-on-shell-muted: #a9a6a1;
+  --color-shell-accent: #ff7b91;
+  --color-success: #11703c;
+  --color-success-container: #e7f4ec;
+  --color-warning: #8a4b00;
+  --color-warning-container: #fdf3de;
+  --color-danger: #a40022;
+  --color-danger-container: #fbeaec;
+  --color-info: #1e4fb5;
+  --color-info-container: #e9effb;
+  --color-ai: #6d28d9;
+  --color-ai-strong: #5b21b6;
+  --color-ai-container: #f3eefd;
+  --color-ai-line: #c9b8f5;
+  --color-source-highlight: #6d28d9;
+  --color-source-highlight-fill: #6d28d91f;
+  --color-risk: #9a3412;
+  --color-risk-container: #fdede4;
+  --color-confidence-high: #11703c;
+  --color-confidence-check: #8a4b00;
+  --color-confidence-missing: #a40022;
+  --color-scrim: #09090999;
+
+  --font-display: var(--font-lexend-exa), sans-serif;
+  --font-sans: var(--font-be-vietnam-pro), sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), monospace;
+
+  --radius-sm: 2px;
+  --radius-DEFAULT: 2px;
+
+  --spacing-sidebar: 240px;
+  --spacing-top-bar: 56px;
+
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+}
