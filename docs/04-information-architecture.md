@@ -23,7 +23,7 @@ ClaimLens
     │   │   ├── New claim (stepper)               /intake/new
     │   │   │   ├── 1 Member & policy
     │   │   │   ├── 2 Claim details
-    │   │   │   └── 3 Documents & submit
+    │   │   │   └── 3 Documents & submit          /intake/:claimId
     │   │   └── My submissions                    /intake?tab=submitted
     │   │
     │   ├── Review queue                          /queue                     Claims Reviewer
@@ -47,11 +47,11 @@ ClaimLens
     │
     ├── Policy
     │   └── Benefit plans                         /plans                     Administrator (Reviewer, Approver read)
-    │       └── Plan                              /plans/:id
+    │       └── Plan                              /plans/:id (opens Versions)
     │           ├── Versions                      /plans/:id/versions
-    │           ├── Rule set editor (draft)       /plans/:id/versions/:v
+    │           ├── Rule set editor (draft)       /plans/:id/versions/:versionId
     │           │   └── tabs: Categories · Exclusions · Waiting periods · Coinsurance · Limits
-    │           └── Test run                      /plans/:id/versions/:v/test
+    │           └── Test run                      /plans/:id/versions/:versionId/test
     │
     ├── Insights
     │   └── AI quality dashboard                  /insights/ai-quality       Senior Approver
@@ -61,6 +61,8 @@ ClaimLens
 ```
 
 Staff accounts, members and policies are seeded in the MVP, so there are no administration or member pages. Member search lives in step 1 of the New claim stepper.
+
+The claim is created at the end of step 2, so step 3 has its own route, `/intake/:claimId`. That is also where a draft reopens from the Drafts tab, and where My submissions opens a submitted claim: read-only, with the claim header and documents but no extracted fields (BR-11). `:versionId` is the UUID the API uses; the screen shows it as `v3`. How these routes map to folders is in [Code structure](10-code-structure.md#routes).
 
 ## Navigation model
 
@@ -126,7 +128,7 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | `SCR-10` | Intake home (drafts, submitted) | Page | Intake | US02, US03 |
 | `SCR-11` | New claim stepper — member & policy | Step page | Intake | US02 |
 | `SCR-12` | New claim stepper — claim details | Step page | Intake | US02 |
-| `SCR-13` | Documents & submit (upload, AI page check) | Step page | Intake | US03, US04 |
+| `SCR-13` | Documents & submit (upload, AI page check); read-only after submission | Step page | Intake | US03, US04 |
 | `SCR-20` | Review queue | Page | Reviewer | US01, US23 |
 | `SCR-21` | Approval queue | Page | Approver | US17, US18 |
 | `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver | US17, US18 |

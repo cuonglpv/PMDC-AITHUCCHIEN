@@ -331,6 +331,7 @@ components:
         h: {type: number, minimum: 0, maximum: 1}
     ModelRef:
       type: object
+      description: A pipeline, such as field-extractor v2.4. The service's registry resolves it to provider models and a prompt version.
       required: [name, version]
       properties:
         name: {type: string, maxLength: 80}

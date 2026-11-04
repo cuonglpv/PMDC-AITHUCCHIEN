@@ -25,7 +25,7 @@ flowchart LR
 | Level | Document | Scope |
 |---|---|---|
 | C1 | [System Context](01-system-context.md) | The four staff roles, ClaimLens and the AI Model Provider |
-| C2 | [Container](02-container.md) | Staff Web App, Claims API, Document AI Service, PostgreSQL, Object Storage |
+| C2 | [Container](02-container.md) | Staff Web App, Claims API, Document AI Service, Document Converter, PostgreSQL, Object Storage |
 | C3 | [Component: Claims API](03-component-claims-api.md) | Workflow components, Rule Engine, AI Job Runner, audit |
 | C3 | [Component: Document AI Service](03-component-document-ai.md) | The six AI tasks and the Model Gateway |
 
@@ -56,11 +56,13 @@ Each arrow points from the caller to what it calls and says why. Arrows between 
 | Background jobs | A job runner inside the Claims API, reading `ai_run` | The schema already has a queue state (`QUEUED`), so the MVP needs no message broker. |
 | Who writes the database | Only the Claims API | The Document AI Service returns suggestions and has no database access, so AI cannot accept its own output. |
 | Keeping a user signed in | Access token and rotating refresh token | The access token lives 15 minutes in the page's memory; the refresh token sits in an HttpOnly cookie. See the [API contract](../../07-api-contract.md#sign-in-and-tokens). |
+| Converting DOCX and XLSX files | LibreOffice in its own container, Gotenberg | Works the same on every machine, keeps the API image small, and the process that parses uploaded files holds no credentials. See [Code structure](../../10-code-structure.md#2-decisions). |
+| Reaching the two web-facing parts | One origin behind a reverse proxy | Removes CORS and meets the `SameSite=Strict` cookie. |
 
 ## Still open
 
 - Which AI Model Provider to use, and the model versions for each task.
-- Hosting and the Object Storage product. The design only needs the S3 API, and the Staff Web App and Claims API on the same site, because the refresh token cookie is `SameSite=Strict`.
+- Hosting and the Object Storage product for production. The design only needs the S3 API. Local work and tests use SeaweedFS.
 
 ## Terms
 
@@ -73,4 +75,4 @@ Each arrow points from the caller to what it calls and says why. Arrows between 
 | RBAC | Role-based access control |
 | Rendition | The PDF made from an uploaded DOCX or XLSX file, so its pages work like any other page |
 
-**Related:** [Use cases](../../03-use-cases.md) · [Data model](../../06-data-model.md) · [Information architecture](../../04-information-architecture.md) · [API contract](../../07-api-contract.md)
+**Related:** [Use cases](../../03-use-cases.md) · [Data model](../../06-data-model.md) · [Information architecture](../../04-information-architecture.md) · [API contract](../../07-api-contract.md) · [Code structure](../../10-code-structure.md)

@@ -6,7 +6,7 @@
 
 ## How the contracts are used
 
-The two files are written by hand and the code follows them, so the web app, the Claims API and the Python service can be built at the same time. Each boundary has its own file because the two sides of it use different languages and it is the easiest place for them to drift apart.
+The two files are written by hand and the code follows them, so the web app, the Claims API and the Python service can be built at the same time. Each boundary has its own file because the two sides of it use different languages and it is the easiest place for them to drift apart. What is generated from them, and how the rest is tested against them, is in [Code structure](10-code-structure.md#9-generated-code).
 
 Check both files after any change:
 
@@ -66,7 +66,7 @@ Sign-in uses a short access token and a rotating refresh token.
 4. `logout` revokes them too. A disabled account loses access at its next refresh, so within 15 minutes.
 5. `/auth/refresh` and `/auth/logout` reject a request whose `Origin` is not the web app. Other endpoints do not use cookies, so they need no CSRF protection.
 
-This has two consequences for the build. The web app and the API must be on the same site, such as `app.example.com` and `api.example.com`, or the `SameSite=Strict` cookie is not sent. Because an `<img>` tag cannot send a Bearer token, the web app fetches page images with `getPage` and shows them through blob URLs.
+This has two consequences for the build. The web app and the API must be on the same site, or the `SameSite=Strict` cookie is not sent. The MVP serves both from one origin: a reverse proxy sends `/api/*` to the Claims API and everything else to the web app, so no CORS is needed. Because an `<img>` tag cannot send a Bearer token, the web app fetches page images with `getPage` and shows them through blob URLs.
 
 ## Synchronous and asynchronous work
 
@@ -171,7 +171,7 @@ The database repeats the critical rules, so the Claims API checks first and maps
 
 ## Roles and operations
 
-Generated from `x-claimlens`. Scope: `any` is not tied to a claim, `own` is claims the person registered, `assigned` is the assigned reviewer, `all` is every claim. A blank means 403. *Should* marks the 9 operations of the next increment. On the operations marked `assigned`, a reviewer who has not taken the claim gets 403; `startReview` and the `AVAILABLE` view are how a claim is reached before that.
+Generated from `x-claimlens`. Scope: `any` is not tied to a claim, `own` is claims the person registered (`registered` in the YAML), `assigned` is the assigned reviewer, `all` is every claim. A blank means 403. *Should* marks the 9 operations of the next increment. On the operations marked `assigned`, a reviewer who has not taken the claim gets 403; `startReview` and the `AVAILABLE` view are how a claim is reached before that.
 
 <!-- role-matrix:start -->
 
@@ -297,7 +297,7 @@ Generated from `x-claimlens`. Scope: `any` is not tied to a claim, `own` is clai
 |---|---|---|
 | 1 | Two files | The boundaries have different callers and languages. |
 | 2 | All 23 stories, Should operations marked | The contract does not change when they arrive. |
-| 3 | OpenAPI 3.1, written by hand | Nullable values are simpler than in 3.0, and ASP.NET Core 10 generates 3.1 by default for comparing the code with the contract. |
+| 3 | OpenAPI 3.1, written by hand | Nullable values are simpler than in 3.0, and ASP.NET Core 10 generates 3.1 by default, which helps when reading a difference. The code is checked by testing real responses against the YAML. |
 | 4 | Access token and rotating refresh token | Chosen by the team. Keeping the refresh token in an HttpOnly cookie and the access token in memory limits what a script injected into the page can steal. |
 | 5 | Rules in the request, AI through the queue | The Rule Engine makes no outside call. AI can be slow or down. |
 | 6 | Reviewers take claims themselves; Available shows no member name | Keeps BR-11 while still letting a reviewer choose. |
@@ -308,14 +308,15 @@ Generated from `x-claimlens`. Scope: `any` is not tied to a claim, `own` is clai
 | 11 | `getPage` serves thumbnails too, and `getClaimStatus` carries AI run status | One endpoint per job. Separate ones would add operations without adding capability. |
 | 12 | `rowVersion` in the body, not `ETag` | Fields arrive in a list with a version each, and every conflict then takes the same 409 path. |
 | 13 | Notifications, member search in the top bar and Save draft on Evidence left out | No requirement or table is behind them. |
+| 14 | One origin for the web app and the API | A reverse proxy is needed for TLS anyway. One origin removes CORS, and with it a preflight for every page image. |
 
 ## Still open
 
 | Item | Needed for | Assumption until then |
 |---|---|---|
 | Clinical relevance threshold, severity bands and the page quality threshold | US04, US09 | Placeholders in config; to be tuned on the golden set |
-| AI Model Provider and model versions | All AI tasks | `model` is a request field, so this does not change the contract |
-| Hosting | The cookie | Web app and API on the same site |
+| AI Model Provider and pipelines | All AI tasks | `model` is a request field that names a pipeline, so this does not change the contract |
+| Hosting | The first deployment | Web app and API on one origin behind a reverse proxy |
 
 ## UI changes this contract requires
 
