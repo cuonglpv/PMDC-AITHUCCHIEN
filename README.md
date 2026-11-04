@@ -106,8 +106,8 @@ flowchart TB
     class intakeCases,reviewerCases,approverCases,governCases primary
     class aiCases ai
     class sysCases sys
-    style roles fill:#fff,stroke:#bbb,stroke-dasharray:5 5
-    style system fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
+    style roles fill:transparent,stroke:#888,stroke-dasharray:5 5
+    style system fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
 ```
 
 How to read it:

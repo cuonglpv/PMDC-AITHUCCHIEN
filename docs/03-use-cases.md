@@ -135,9 +135,9 @@ flowchart LR
     class sys01 sys
     style left fill:none,stroke:none
     style right fill:none,stroke:none
-    style system fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
-    style g5 fill:#f5f3ff,stroke:#7c3aed
-    style g6 fill:#f0fdfa,stroke:#0f766e
+    style system fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
+    style g5 fill:transparent,stroke:#7c3aed
+    style g6 fill:transparent,stroke:#0f766e
 ```
 
 Notation: plain lines are actor–use case associations; the solid arrow labelled *is a* is generalization (child → parent); dotted arrows are `«include»` (base → included) and `«extend»` (extension → base, with the condition in brackets). Every role inherits UC01 from **Staff**. Audit logging is not a use case — it is the cross-cutting rule BR-12. A strict UML version is in [diagrams/use-case.puml](diagrams/use-case.puml).
