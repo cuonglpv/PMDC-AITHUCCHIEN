@@ -65,7 +65,7 @@ The roles are one box here because they all reach ClaimLens the same way. What e
 | Staff Web App | Screens, navigation by role, UI states, the AI markers and fallback banner | Business rules, permissions (hiding a button is only UX), direct access to any data store |
 | Claims API | Access control, claim lifecycle, confidence thresholds, validation, Rule Engine, decisions, audit trail, file conversion, AI job queue | Reading documents, calling the AI Model Provider |
 | Document AI Service | Turning pages and text into suggestions with confidence and source | Thresholds, coverage, money, any database or stored state |
-| Database | All 20 tables and the constraints in the [data model](../../06-data-model.md) | File contents (it stores object keys only) |
+| Database | All 21 tables and the constraints in the [data model](../../06-data-model.md) | File contents (it stores object keys only) |
 | Object Storage | Files, addressed by generated keys | Access rules (only the two services hold credentials) |
 
 The Rule Engine is not a container. It runs inside the Claims API, so there is no network call between a calculation and the data it uses ([C3](03-component-claims-api.md)).
@@ -85,7 +85,7 @@ The Rule Engine is not a container. It runs inside the Claims API, so there is n
 
 1. The Intake Officer uploads a file. The Claims API checks type and size, stores the original, converts DOCX or XLSX to a PDF rendition, renders page images and queues a `PAGE_CHECK` run in `ai_run`.
 2. The job runner in the Claims API picks up the run and calls the Document AI Service with the page references. That service reads the images from Object Storage and calls the AI Model Provider.
-3. The Claims API stores the full response in Object Storage, applies the BR-03 thresholds and writes the suggestions beside the values in use. The Staff Web App polls for page status, so no push connection is needed.
+3. The Claims API stores the full response in Object Storage, applies the BR-03 thresholds and writes the suggestions beside the values in use. The Staff Web App polls for page status, so no push connection is needed. That one endpoint carries no claim content, so polling is not audited.
 4. On submit, the same path runs `FIELD_EXTRACTION`, and the claim moves to `NeedsVerification` or `ReadyForReview`.
 5. Validation and the Rule Engine then run inside the Claims API on accepted values. AI only adds suggestions along the way: `BENEFIT_MAPPING` before adjudication, and `CLINICAL_CHECK`, which can raise flags but never changes an amount.
 
@@ -101,4 +101,4 @@ The step-by-step sequence diagrams belong to the separate sequence diagram task.
 
 **Previous:** [C1: System Context](01-system-context.md) · **Next:** [C3: Claims API](03-component-claims-api.md), [C3: Document AI Service](03-component-document-ai.md) · **Up:** [C4 overview](README.md)
 
-**Sources of truth:** [INVEST requirements](../../08-invest-requirements.md), [Data model](../../06-data-model.md), [claimlens.dbml](../../diagrams/claimlens.dbml).
+**Sources of truth:** [INVEST requirements](../../08-invest-requirements.md), [Data model](../../06-data-model.md), [claimlens.dbml](../../diagrams/claimlens.dbml), [API contract](../../07-api-contract.md).

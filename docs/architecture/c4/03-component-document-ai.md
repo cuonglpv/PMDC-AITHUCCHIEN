@@ -22,7 +22,7 @@ flowchart TB
         check["Page Check<br/><i>[Component: Python]</i><br/>Page type and quality score"]
         extract["Field Extraction<br/><i>[Component: Python]</i><br/>Field values with page,<br/>bounding box and confidence"]
         mapping["Benefit Mapping<br/><i>[Component: Python]</i><br/>Expense line text to<br/>benefit category"]
-        clinical["Clinical Signals<br/><i>[Component: Python]</i><br/>Relevance score and<br/>one-sentence reason"]
+        clinical["Clinical Signals<br/><i>[Component: Python]</i><br/>Signal type, relevance score<br/>and one-sentence reason"]
         summary["Summary Draft<br/><i>[Component: Python]</i><br/>Editable text with<br/>a citation per sentence"]
         pages["Page Reader<br/><i>[Component: boto3]</i><br/>Loads page images by key"]
         gateway["Model Gateway<br/><i>[Component: Python HTTP client]</i><br/>The only caller of the provider;<br/>timeouts and response checks"]
@@ -74,7 +74,7 @@ flowchart TB
 | Page Check | AI-01, `PAGE_CHECK` | Page type, type confidence, quality score | Mark a page Unclassified or Low quality; the Claims API does, from the score | US04 |
 | Field Extraction | AI-01, `FIELD_EXTRACTION`, `PAGE_REREAD` | For each field in the catalogue: value, page, bounding box (0 to 1), confidence | Guess a value it cannot find; it returns none | US05, US06 |
 | Benefit Mapping | AI-02, `BENEFIT_MAPPING` | Benefit category and confidence per line, from the list it was given | Decide coverage or amounts | US10 |
-| Clinical Signals | AI-03, `CLINICAL_CHECK` | Relevance score and reason per line | Raise a flag or call anything fraud; the Claims API creates the flag from the score | US09 (Should) |
+| Clinical Signals | AI-03, `CLINICAL_CHECK` | Signal type, relevance score and reason per line | Raise a flag, set its severity or call anything fraud; the Claims API creates the flag and sets the severity from the score | US09 (Should) |
 | Summary Draft | AI-04, `SUMMARY_DRAFT` | Sentences with citations to the items it was given | Use facts beyond those items, or submit anything | US15 (Should) |
 | Page Reader | AI-01 tasks | Page images | Write to storage | US04, US05 |
 | Model Gateway | All | Checked model output | Choose the model; the request names it | All |
@@ -85,9 +85,9 @@ flowchart TB
 2. **It reports, it does not decide.** Every result is a raw score or a suggestion. All thresholds (BR-03, quality and clinical) are applied by the [AI Job Runner](03-component-claims-api.md#how-ai-jobs-run).
 3. **Input is limited to what the task needs.** Only Page Check and Field Extraction can read images. Benefit Mapping gets line text and the category list. Summary Draft gets only accepted facts, rule codes, overrides and kept flags, which is what makes its citations checkable (US15).
 4. **Every value has a source.** A field without a page and bounding box cannot be accepted (BR-02), so Field Extraction returns the source with each value.
-5. **Bad model output is a failed call.** Model Gateway checks each response against the expected shape. Failures reach the Claims API as an error, and the claim follows the normal [fallback](02-container.md#when-a-container-is-down).
+5. **Bad model output is a failed call.** Model Gateway checks each response against the expected shape. Failures reach the Claims API as an error, and the claim follows the normal [fallback](02-container.md#when-a-container-is-down). A single page that cannot be read is reported in the response, and only that page falls back.
 6. **One way out to the provider.** Keeping the provider behind Model Gateway limits a change of provider to one component, and gives one place to control what data leaves ClaimLens.
 
 **Previous:** [C2: Container](02-container.md) · **See also:** [C3: Claims API](03-component-claims-api.md) · **Up:** [C4 overview](README.md)
 
-**Sources of truth:** [AI placement matrix](../../03-use-cases.md#ai-placement-matrix), [INVEST requirements](../../08-invest-requirements.md), [claimlens.dbml](../../diagrams/claimlens.dbml).
+**Sources of truth:** [AI placement matrix](../../03-use-cases.md#ai-placement-matrix), [INVEST requirements](../../08-invest-requirements.md), [claimlens.dbml](../../diagrams/claimlens.dbml), [document-ai.yaml](../../api/document-ai.yaml).

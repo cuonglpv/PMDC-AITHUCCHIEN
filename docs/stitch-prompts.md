@@ -608,3 +608,16 @@ Sau khi gỡ các chức năng không liên quan AI (yêu cầu bổ sung thông
 - SCR-20: bỏ tab "Needs information".
 - SCR-35: bỏ nút "Escalate" ở thẻ tín hiệu và nút "Request information" ở thanh dưới.
 - SCR-50: đổi thành **AI quality dashboard** ([html](ui/scr-50-ai-quality.html) · [png](ui/scr-50-ai-quality.png)); prompt ở mục SCR-50 phía trên đã viết lại theo màn mới.
+
+## Thay đổi từ API contract
+
+Các quyết định khi viết [API contract](07-api-contract.md#ui-changes-this-contract-requires) kéo theo vài thay đổi trên prototype. **Các file trong `docs/ui/` đã được sửa tay và chụp lại bằng Chrome headless; bản trong Stitch chưa đổi.** Nếu muốn Stitch khớp, dùng các prompt dưới đây (mỗi lần một prompt, một màn).
+
+- **API1: mọi màn** `Remove the notification bell from the top bar. Keep only the "Go to claim no." field and the avatar. Do not change the content area.`
+- **API2: SCR-20** `Add a first tab "Available 4" before "Assigned to me". On that tab, remove the Member column and show only Priority, Claim no., Plan, Service date, Claimed, Status and Age, with a secondary "Start review" button on each row. On every tab, Priority shows only "High" or "Normal". The table filter placeholder reads "Filter by claim no.".`
+- **API3: SCR-31** `Remove the "Save draft" button. Add a secondary "Add expense line" button below the field list.`
+- **API4: SCR-33** `Next to "Revision #2", show the state where data changed but the result was not recalculated: a small amber "Stale" tag with a warning icon, and the note "Clear the blocking alert to recalculate".`
+- **API5: SCR-35** `"Approve full" is disabled, with the note "Payable is below the claimed total". When "Reject" is selected, the amount shows 0 ₫ (read-only), and the Reason select and a required note field appear.`
+- **API6: SCR-50** `Add one KPI tile "Mappings corrected" with a percentage and its change, next to "Mappings auto-accepted". Keep the row on one line.`
+
+Panel quyết định của Senior Approver ở SCR-35 không sinh trong Stitch mà dựng tay ở [ui/scr-35-decision-approver.html](ui/scr-35-decision-approver.html), gồm các modal và trạng thái số dư đã đổi. Mở trạng thái khác bằng hash trên URL, xem bảng trong [API contract](07-api-contract.md#ui-changes-this-contract-requires).

@@ -483,7 +483,7 @@ Formatting rules: money is an integer VND with comma thousand separators and a t
 
 **Application shell.**
 - **Left sidebar**, 240 px wide (collapses to 64 px), ink black. It holds the ClaimLens wordmark at the top (identical on every screen: a small Signal Red square followed by "ClaimLens" in Be Vietnam Pro 600, sentence case), then groups (`WORK`, `POLICY`, `INSIGHTS`) as Shell Pink mono kickers. The sidebar is always expanded (240 px) on list and dashboard pages and collapsed (64 px, icons only) inside the Claim workspace. Items per role: Intake Officer: Intake. Claims Reviewer: Review queue, Benefit plans. Senior Approver: Approval queue, Benefit plans, AI quality dashboard. Administrator: Benefit plans. The bottom user block shows name + role. Items have a line icon and a label; the active item gets the Shell Raised background and a 2 px Signal Red bar on the left. Items are rendered per role and never shown disabled.
-- **Top bar**, 56 px, white with a hairline bottom border. It holds a claim lookup ("Go to claim no."), notifications and the profile avatar. The avatar shows only the signed-in user's initials in an ink circle. No name, role, environment, version or status chips.
+- **Top bar**, 56 px, white with a hairline bottom border. It holds a claim lookup ("Go to claim no.") and the profile avatar. The avatar shows only the signed-in user's initials in an ink circle. No name, role, environment, version or status chips.
 - **Content area** on Warm Paper.
 
 **Claim workspace (core screen), three zones under a persistent case header:**

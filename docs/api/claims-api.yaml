@@ -1,0 +1,3762 @@
+openapi: 3.1.0
+info:
+  title: ClaimLens Claims API
+  version: 1.0.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  summary: Contract between the Staff Web App and the Claims API (TARGET MVP).
+  description: |
+    AI reads, the Rule Engine calculates, people decide. Conventions, the token flow, error codes and the
+    role matrix are explained in [07-api-contract.md](../07-api-contract.md). Business rules (BR-xx) are in
+    [03-use-cases.md](../03-use-cases.md) and user stories (USxx) in [08-invest-requirements.md](../08-invest-requirements.md).
+
+    Each operation carries an `x-claimlens` object:
+
+    - `roles`: who may call it and the claim scope for that role (`any`, `registered`, `assigned`, `all`).
+      The API enforces this; a role that is not listed gets 403.
+    - `states`: claim statuses in which it is allowed. Any other status gets 409 `CLAIM_STATE_CONFLICT`.
+    - `release`: `must` is in the first release, `should` follows in the next increment.
+    - `stories`, `rules`: where the behaviour is specified.
+    - `audit`: `write` records the change, `read` records the access (BR-12), `none` writes nothing.
+servers:
+  - url: /api/v1
+    description: Served from the same site as the Staff Web App, because the refresh token cookie is SameSite=Strict.
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Sign-in, token refresh and the signed-in user (UC01).
+  - name: Intake
+    description: Member search, claim registration, upload and submission (UC02).
+  - name: Claims
+    description: Queues, claim lookup, status polling and self-assignment (US23).
+  - name: Evidence
+    description: Documents, pages and extracted fields (UC03).
+  - name: Validation
+    description: Deterministic alerts (UC04).
+  - name: Adjudication
+    description: Expense lines, benefit mappings, overrides and calculation revisions (UC05).
+  - name: Risk
+    description: AI clinical signals, dismissed or kept by the reviewer (UC06).
+  - name: Decision
+    description: Recommendation, attestation and the approver decision (UC07, UC08).
+  - name: Timeline
+    description: Claim history (UC11).
+  - name: Policy
+    description: Benefit plans, versioned rule sets and test runs (UC09).
+  - name: AI quality
+    description: AI quality dashboard (UC10).
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Sign in
+      description: >-
+        Returns a 15-minute access token in the body and sets the refresh token cookie.
+        Wrong credentials and a disabled account give the same 401, so no account state is disclosed.
+      security: []
+      x-claimlens: {roles: {}, release: must, stories: [US01], rules: [BR-11, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+              example:
+                accessToken: eyJhbGciOiJFUzI1NiJ9.example.signature
+                tokenType: Bearer
+                expiresIn: 900
+                user:
+                  id: 7d0c2f54-3a41-4b7e-9c55-0d1f6a2e8b11
+                  email: tran.thu.ha@claimlens.test
+                  fullName: Trần Thu Hà
+                  initials: TH
+                  role: CLAIMS_REVIEWER
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Code: INVALID_CREDENTIALS. Same answer for a wrong password, an unknown email and a disabled account.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [Auth]
+      summary: Get a new access token
+      description: >-
+        Reads the refresh token cookie, rotates it and returns a new access token. A rotated token stays valid for
+        10 seconds so two tabs can refresh together; reuse after that revokes the whole sign-in family.
+        Rotation never extends the 8-hour limit set at sign-in. A disabled account gets 401 here.
+      security:
+        - refreshCookie: []
+      x-claimlens: {roles: {}, release: must, stories: [US01], rules: [BR-12], audit: none}
+      responses:
+        '200':
+          description: New access token and rotated cookie.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: 'Code: REFRESH_TOKEN_INVALID. The app returns to Sign in.'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Code: ORIGIN_NOT_ALLOWED. The Origin header is not the Staff Web App.'
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: Sign out
+      description: Revokes the sign-in family and clears the cookie. Safe to repeat.
+      security:
+        - refreshCookie: []
+      x-claimlens: {roles: {}, release: must, stories: [US01], rules: [BR-12], audit: write}
+      responses:
+        '204':
+          description: Signed out.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshTokenCookie'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Code: ORIGIN_NOT_ALLOWED. The Origin header is not the Staff Web App.'
+  /me:
+    get:
+      operationId: getMe
+      tags: [Auth]
+      summary: Get the signed-in user
+      x-claimlens: {roles: {INTAKE_OFFICER: any, CLAIMS_REVIEWER: any, SENIOR_APPROVER: any, ADMINISTRATOR: any}, release: must, stories: [US01], rules: [BR-11], audit: none}
+      responses:
+        '200':
+          description: The signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /members/search:
+    post:
+      operationId: searchMembers
+      tags: [Intake]
+      summary: Search members
+      description: >-
+        Searches by member name, national ID or policy number and returns one row per member and policy.
+        This is a POST so that a citizen ID never reaches a URL or an access log. No match is an empty list.
+      x-claimlens: {roles: {INTAKE_OFFICER: any}, release: must, stories: [US02], rules: [BR-11, BR-12], audit: read}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberSearchRequest'
+      responses:
+        '200':
+          description: Matches, at most 20.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberSearchResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /policies/{policyId}/summary:
+    get:
+      operationId: getPolicySummary
+      tags: [Intake]
+      summary: Get a policy with its remaining balance
+      description: >-
+        The annual limit comes from the rule-set version effective on `serviceDate`, or today when it is left out.
+        `annualLimit` and `remainingBalance` are null when no version is effective on that date.
+      x-claimlens: {roles: {INTAKE_OFFICER: any}, release: must, stories: [US02], rules: [BR-04, BR-10], audit: read}
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+        - name: serviceDate
+          in: query
+          description: Date that selects the rule-set version.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The policy summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicySummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims:
+    get:
+      operationId: listClaims
+      tags: [Claims]
+      summary: List a queue
+      description: >-
+        `view` selects the queue tab and must belong to the caller's role. Review and approval views sort by BR-09;
+        `MY_DRAFTS`, `MY_SUBMISSIONS` and `DECIDED_BY_ME` sort newest first. In `AVAILABLE` the member name is null
+        and only a claim number can be filtered on (BR-11). `counts` gives the badge of every tab of the role.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US01, US18, US23], rules: [BR-09, BR-11], audit: read}
+      parameters:
+        - name: view
+          in: query
+          required: true
+          description: Queue tab.
+          schema:
+            $ref: '#/components/schemas/QueueView'
+        - name: priority
+          in: query
+          description: Only claims with this priority label.
+          schema:
+            $ref: '#/components/schemas/Priority'
+        - name: planCode
+          in: query
+          description: Only claims on this benefit plan.
+          schema:
+            type: string
+            maxLength: 20
+        - name: serviceDateFrom
+          in: query
+          description: Earliest service date, inclusive.
+          schema:
+            type: string
+            format: date
+        - name: serviceDateTo
+          in: query
+          description: Latest service date, inclusive.
+          schema:
+            type: string
+            format: date
+        - name: claimNumber
+          in: query
+          description: Part of a claim number. Member names are not searchable here, to keep them out of URLs.
+          schema:
+            type: string
+            maxLength: 20
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of the queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimQueuePage'
+              example:
+                items:
+                  - id: 3f6a1c7e-52d8-4e0b-a1c9-7b2e94d0c184
+                    claimNumber: CLM-2026-000199
+                    status: READY_FOR_REVIEW
+                    isReturned: false
+                    memberName: null
+                    planCode: SILVER-OP
+                    serviceDate: '2026-10-16'
+                    claimedTotal: 350000
+                    priority: NORMAL
+                    statusChangedAt: '2026-10-17T02:15:00Z'
+                    assigneeInitials: null
+                    fieldsToVerify: 0
+                    blockingAlerts: 0
+                    warningAlerts: 0
+                    openFlags: 0
+                    payableAmount: null
+                    recommendedOutcome: null
+                    decisionAction: null
+                    decidedAt: null
+                page: 1
+                pageSize: 25
+                total: 1
+                counts:
+                  AVAILABLE: 1
+                  ASSIGNED_TO_ME: 12
+                  NEEDS_VERIFICATION: 5
+                  RETURNED: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Code: FORBIDDEN_ROLE. The view does not belong to this role, or the caller is an Administrator.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    post:
+      operationId: createClaim
+      tags: [Intake]
+      summary: Register a claim
+      description: >-
+        Creates the claim in `DRAFT` with a unique claim number. A service date outside the coverage period or a policy
+        that is not active does not stop registration; it comes back in `warnings`.
+      x-claimlens: {roles: {INTAKE_OFFICER: any}, release: must, stories: [US02], rules: [BR-01, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClaimRequest'
+      responses:
+        '201':
+          description: Claim created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimSaved'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, POLICY_MEMBER_MISMATCH.'
+  /claim-numbers/{claimNumber}:
+    get:
+      operationId: getClaimByNumber
+      tags: [Claims]
+      summary: Go to a claim by its number
+      description: Top-bar lookup. A claim outside the caller's scope answers 404, so a number reveals nothing about other claims.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US23], rules: [BR-11, BR-12], audit: read}
+      parameters:
+        - name: claimNumber
+          in: path
+          required: true
+          description: Claim number, for example CLM-2026-000184.
+          schema:
+            type: string
+            pattern: '^CLM-\d{4}-\d{6}$'
+      responses:
+        '200':
+          description: The claim.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Code: FORBIDDEN_ROLE. The caller is an Administrator.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: getClaim
+      tags: [Claims]
+      summary: Get a claim
+      description: >-
+        Everything the case header and Overview need, with `allowedActions` and `blockers` for this caller, so the
+        primary action comes from the server. An Intake Officer gets the same shape with `currentRevision`, `balance`
+        and `counts` set to null.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US17, US18, US23], rules: [BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: The claim.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimDetail'
+              example:
+                id: 3f6a1c7e-52d8-4e0b-a1c9-7b2e94d0c184
+                claimNumber: CLM-2026-000184
+                status: IN_REVIEW
+                isReturned: false
+                returnComment: null
+                member:
+                  id: 91b7d3a2-6c0e-4f18-8a4d-2e5c7f01a9d3
+                  memberCode: MB-0007731
+                  fullName: Nguyễn Văn An
+                  dateOfBirth: '1988-03-14'
+                  nationalIdMasked: '********4821'
+                policy:
+                  id: c4e82b19-07fa-4d36-b5a1-6f3d9e7c2041
+                  policyNumber: PL-2026-00731
+                  status: ACTIVE
+                  coverageStart: '2026-01-01'
+                  coverageEnd: '2026-12-31'
+                  planCode: GOLD-OP
+                  planName: Gold Outpatient
+                providerName: Phòng khám Đa khoa Hồng Ngọc
+                serviceDate: '2026-10-12'
+                claimedTotal: 1400000
+                channel: COUNTER
+                priority: NORMAL
+                registeredBy:
+                  id: 2a9f6e10-c3d7-48b2-91e5-a7d04c6b3f28
+                  fullName: Phạm Gia Bảo
+                  initials: PB
+                assignee:
+                  id: 7d0c2f54-3a41-4b7e-9c55-0d1f6a2e8b11
+                  fullName: Trần Thu Hà
+                  initials: TH
+                assignedAt: '2026-10-14T01:20:00Z'
+                submittedAt: '2026-10-13T09:05:00Z'
+                statusChangedAt: '2026-10-14T01:40:00Z'
+                createdAt: '2026-10-13T08:50:00Z'
+                updatedAt: '2026-10-14T03:12:00Z'
+                rowVersion: 14
+                ruleSetVersion:
+                  id: 5be1d0c7-93a4-4c62-8f17-1e6a2d9b7c30
+                  versionNo: 3
+                  effectiveFrom: '2026-01-01'
+                currentRevision:
+                  revisionNo: 2
+                  payableAmount: 800000
+                  isStale: false
+                  createdAt: '2026-10-14T03:12:00Z'
+                balance:
+                  annualLimit: 5000000
+                  consumedAmount: 4200000
+                  remainingBalance: 800000
+                  projectedAfter: 0
+                counts:
+                  fieldsToVerify: 0
+                  blockingAlerts: 0
+                  warningAlerts: 1
+                  mappingsToConfirm: 0
+                  openFlags: 1
+                  keptFlags: 0
+                ai:
+                  fallbackActive: false
+                  clinicalCheck: DONE
+                allowedActions: [EDIT_FIELDS, RUN_ADJUDICATION, OVERRIDE_LINE, REVIEW_FLAGS, SUBMIT_RECOMMENDATION]
+                blockers: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateClaim
+      tags: [Intake]
+      summary: Edit a draft claim
+      description: Used when the officer goes back in the New claim stepper. The same warnings as `createClaim` can come back.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered}, states: [DRAFT], release: must, stories: [US02], rules: [BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClaimRequest'
+      responses:
+        '200':
+          description: Claim saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimSaved'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, VERSION_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, POLICY_MEMBER_MISMATCH.'
+  /claims/{claimId}/status:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: getClaimStatus
+      tags: [Claims]
+      summary: Poll claim status
+      description: >-
+        The one endpoint the web app polls, every 3 seconds while something is running: upload conversion, page check,
+        extraction, re-read, mapping, clinical check or summary draft. It carries no medical or identity data and no file
+        names, so it is not audited (BR-12). Answers with `Cache-Control: no-store`.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US04, US05, US13], rules: [BR-12], audit: none}
+      responses:
+        '200':
+          description: Current processing state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimStatusSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/facts:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    patch:
+      operationId: updateClaimFacts
+      tags: [Evidence]
+      summary: Correct what intake typed
+      description: >-
+        Lets the assigned reviewer correct the claimed total, service date or provider name from intake. The change is
+        audited and re-runs validation and adjudication. The service date selects the rule-set version (BR-04), and the
+        claimed total feeds BR-13 and the `CLAIMED_TOTAL_MISMATCH` check.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US07, US13], rules: [BR-04, BR-12, BR-13], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClaimFactsRequest'
+      responses:
+        '200':
+          description: Corrected and re-checked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimProgress'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, VERSION_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: submitClaim
+      tags: [Intake]
+      summary: Submit a claim for processing
+      description: Moves the claim to `PROCESSING` and queues `FIELD_EXTRACTION`. A page check still running does not block submission.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered}, states: [DRAFT], release: must, stories: [US03, US05], rules: [BR-12], audit: write}
+      responses:
+        '202':
+          description: Submitted; poll `getClaimStatus`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimStatusSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, UPLOAD_IN_PROGRESS, NO_READY_DOCUMENT.'
+  /claims/{claimId}/start-review:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: startReview
+      tags: [Claims]
+      summary: Take a claim (self-assign)
+      description: >-
+        Assigns an unassigned claim to the caller. A `READY_FOR_REVIEW` claim moves to `IN_REVIEW`, a `NEEDS_VERIFICATION`
+        claim stays there. Repeating the call as the same reviewer succeeds. "Open next claim" is `listClaims` with
+        `pageSize=1` followed by this operation; on 409 the app takes the next one.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: any}, states: [NEEDS_VERIFICATION, READY_FOR_REVIEW, IN_REVIEW], release: must, stories: [US23], rules: [BR-11, BR-12], audit: write}
+      responses:
+        '200':
+          description: The claim, now visible in full.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_ALREADY_ASSIGNED, CLAIM_STATE_CONFLICT.'
+  /claims/{claimId}/documents:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listDocuments
+      tags: [Evidence]
+      summary: List documents and their pages
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US03, US04, US06], rules: [BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: Documents, without removed ones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: uploadDocument
+      tags: [Intake]
+      summary: Upload one file
+      description: >-
+        One file per request. Type and size are checked at once (415, 413). The answer has status `CONVERTING`; conversion,
+        page split and the 30-page limit finish in the background, and `getClaimStatus` then shows `READY` or `REJECTED`
+        with a reason. `READY` queues a `PAGE_CHECK` run.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered}, states: [DRAFT], release: must, stories: [US03, US04], rules: [BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadDocumentRequest'
+            encoding:
+              file:
+                contentType: image/jpeg, image/png, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        '201':
+          description: File stored; processing continues.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+  /claims/{claimId}/documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/DocumentId'
+    delete:
+      operationId: deleteDocument
+      tags: [Intake]
+      summary: Remove a file before submission
+      description: The document row stays as `REMOVED` and its pages are deleted. To replace a low-quality page, remove its file and upload again.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered}, states: [DRAFT], release: must, stories: [US03], rules: [BR-12], audit: write}
+      responses:
+        '204':
+          description: Removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+  /claims/{claimId}/pages/{pageId}/image:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/PageId'
+    get:
+      operationId: getPage
+      tags: [Evidence]
+      summary: Get a page image
+      description: >-
+        Page images always pass through the API, so each read is checked and audited. Bearer tokens cannot be attached to an
+        `<img>` tag, so the web app fetches the image and shows it through a blob URL. Answers with `Cache-Control: private`.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US03, US05, US06], rules: [BR-02, BR-11, BR-12], audit: read}
+      parameters:
+        - name: variant
+          in: query
+          description: Full page for the viewer, or a small image for the document rail.
+          schema:
+            type: string
+            enum: [full, thumbnail]
+            default: full
+      responses:
+        '200':
+          description: The image.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/pages/{pageId}/type:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/PageId'
+    put:
+      operationId: reclassifyPage
+      tags: [Evidence]
+      summary: Set a page type
+      description: >-
+        The officer may choose a type before submission, and the reviewer must choose one for every Unclassified page.
+        When a page gets a type after a failed extraction, the system creates the empty header field slots for that type.
+      x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned}, states: [DRAFT, NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US04, US06], rules: [BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReclassifyPageRequest'
+      responses:
+        '200':
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/pages/{pageId}/rerun-extraction:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/PageId'
+    post:
+      operationId: rerunExtraction
+      tags: [Evidence]
+      summary: Re-read one page with AI
+      description: >-
+        Queues a `PAGE_REREAD` run for this page only; AI never re-runs silently on the whole claim. The `ai_*` values always
+        update. Fields a person has resolved keep their values, and unresolved fields on this page take the new AI values.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US06], rules: [BR-03, BR-12], audit: write}
+      responses:
+        '202':
+          description: Queued; poll `getClaimStatus`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRunRef'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+  /claims/{claimId}/fields:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listFields
+      tags: [Evidence]
+      summary: List extracted fields
+      description: >-
+        Lowest confidence first; the web app groups them by document. `ai.value` is null when the AI level is `MISSING`:
+        a value below 0.70 is kept in the database but never shown (US05).
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US05, US06], rules: [BR-02, BR-03, BR-11, BR-12], audit: read}
+      parameters:
+        - name: documentId
+          in: query
+          description: Only fields of this document.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          description: Only fields with these statuses.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/FieldStatus'
+      responses:
+        '200':
+          description: The fields and how many are left to verify.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/fields/{fieldId}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/FieldId'
+    patch:
+      operationId: updateField
+      tags: [Evidence]
+      summary: Correct, enter or mark a field not present
+      description: >-
+        The server sets the status: `CORRECTED` when an AI value was changed, `ENTERED` when AI gave none, `NOT_PRESENT` for that
+        action. A value needs a source (BR-02): send `sourcePageId` and `sourceBbox`, or the AI source is kept if there is one.
+        In `IN_REVIEW` the change re-runs validation and adjudication within this request; `progress` shows the result (US13).
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US06, US13], rules: [BR-02, BR-07, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFieldRequest'
+      responses:
+        '200':
+          description: Field saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, VERSION_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, SOURCE_REQUIRED.'
+  /claims/{claimId}/fields/{fieldId}/accept:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/FieldId'
+    post:
+      operationId: acceptField
+      tags: [Evidence]
+      summary: Accept an AI value unchanged
+      description: >-
+        Sets the status to `CONFIRMED`; the reviewer's initials replace the AI marker. When the last required field is accepted, the
+        claim moves to `READY_FOR_REVIEW` and, being assigned, on to `IN_REVIEW`; `progress` shows the new status.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US06, US13], rules: [BR-02, BR-03, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptFieldRequest'
+      responses:
+        '200':
+          description: Field accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, VERSION_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: SOURCE_REQUIRED, FIELD_HAS_NO_AI_VALUE.'
+  /claims/{claimId}/alerts:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listAlerts
+      tags: [Validation]
+      summary: List validation alerts
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US07, US08], rules: [BR-08, BR-11, BR-12], audit: read}
+      parameters:
+        - name: status
+          in: query
+          description: Only alerts with these statuses.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/AlertStatus'
+      responses:
+        '200':
+          description: Alerts, Blocking first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/alerts/{alertId}/dismiss:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/AlertId'
+    post:
+      operationId: dismissAlert
+      tags: [Validation]
+      summary: Dismiss an alert with a reason
+      description: >-
+        There is no "resolve" operation: an alert closes by itself when the data is fixed and validation re-runs. A
+        `CLAIMED_TOTAL_MISMATCH` alert cannot be dismissed, because the calculation needs the two totals to agree.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US07, US08], rules: [BR-07, BR-08, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DismissAlertRequest'
+      responses:
+        '200':
+          description: Alert dismissed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, ALERT_NOT_OPEN.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, ALERT_NOT_DISMISSIBLE.'
+  /claims/{claimId}/revalidate:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: revalidateClaim
+      tags: [Validation]
+      summary: Run validation again
+      description: >-
+        Validation re-runs by itself after every data change. This is the explicit "Re-validate" action, needed because a duplicate
+        can appear when another claim changes. Runs within the request.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US07, US08, US13], rules: [BR-08, BR-12], audit: write}
+      responses:
+        '200':
+          description: Current alerts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+  /claims/{claimId}/expense-lines:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listExpenseLines
+      tags: [Adjudication]
+      summary: List expense lines with mappings
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US10, US16], rules: [BR-03, BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: Lines in order, without removed ones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseLineList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: addExpenseLine
+      tags: [Adjudication]
+      summary: Add an expense line by hand
+      description: >-
+        For a failed extraction or a line AI missed. Creates the line with origin `MANUAL` and its empty field slots; the reviewer
+        then enters each field with a drawn source region through `updateField`.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US06, US13], rules: [BR-02, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddExpenseLineRequest'
+      responses:
+        '201':
+          description: Line added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/expense-lines/{lineId}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/LineId'
+    delete:
+      operationId: removeExpenseLine
+      tags: [Adjudication]
+      summary: Remove an expense line
+      description: For a line AI invented. The row stays so earlier revisions remain readable; later revisions leave it out.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [NEEDS_VERIFICATION, IN_REVIEW], release: must, stories: [US06, US13], rules: [BR-12], audit: write}
+      responses:
+        '200':
+          description: Line removed and the claim re-checked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimProgress'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+  /claims/{claimId}/expense-lines/{lineId}/mapping:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/LineId'
+    put:
+      operationId: confirmMapping
+      tags: [Adjudication]
+      summary: Confirm or change a benefit category
+      description: >-
+        The server sets the status: `CONFIRMED` when it matches the AI category, `CHANGED` when it differs, `MANUAL` when AI gave none.
+        An existing revision is recalculated within this request.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US10, US13], rules: [BR-03, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmMappingRequest'
+      responses:
+        '200':
+          description: Mapping saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, UNKNOWN_CATEGORY.'
+  /claims/{claimId}/expense-lines/{lineId}/override:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/LineId'
+    put:
+      operationId: overrideLine
+      tags: [Adjudication]
+      summary: Override a line result
+      description: >-
+        Needs a reason code and note. `amount` is required only for `PARTIALLY_COVERED`; `COVERED` means the full line amount and `EXCLUDED`
+        means 0. Creates a new revision with trigger `OVERRIDE`; the engine result stays visible and the payable stays capped by the remaining limit.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US16], rules: [BR-05, BR-07, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideLineRequest'
+      responses:
+        '200':
+          description: Override applied; `progress` names the new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, NO_CALCULATION_REVISION.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, OVERRIDE_EXCEEDS_LINE, OVERRIDE_AMOUNT_MISMATCH.'
+    delete:
+      operationId: removeOverride
+      tags: [Adjudication]
+      summary: Remove an override
+      description: Clears the override and creates a new revision. The earlier override stays in the audit trail.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US16], rules: [BR-07, BR-12], audit: write}
+      responses:
+        '200':
+          description: Override removed; `progress` names the new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineChangeResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, NO_ACTIVE_OVERRIDE.'
+  /claims/{claimId}/calculation-revisions:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listCalculationRevisions
+      tags: [Adjudication]
+      summary: List calculation revisions
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US13], rules: [BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: Revisions, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationRevisionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: runAdjudication
+      tags: [Adjudication]
+      summary: Run adjudication
+      description: >-
+        Runs the Rule Engine within this request. It uses the rule-set version effective on the service date, reads only accepted values and never
+        calls AI. The first run is explicit; later runs happen by themselves after a data change, except after the balance changed, when the
+        revision is marked stale and the reviewer runs it again.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US11, US12, US13], rules: [BR-04, BR-05, BR-10], audit: write}
+      responses:
+        '201':
+          description: New revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationRevision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, BLOCKING_ALERT_OPEN, MAPPING_UNCONFIRMED, LINE_AMOUNT_MISSING, NO_EFFECTIVE_RULE_SET.'
+  /claims/{claimId}/calculation-revisions/{revisionNo}:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - name: revisionNo
+        in: path
+        required: true
+        description: Revision number, shown as Revision #2.
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: getCalculationRevision
+      tags: [Adjudication]
+      summary: Get one calculation revision
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US11, US12, US13], rules: [BR-05, BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: The revision with its lines and formula.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationRevision'
+              example:
+                id: e2a7c915-4b3d-46f0-8d21-9c5f0a7b1e64
+                revisionNo: 2
+                ruleSetVersion:
+                  id: 5be1d0c7-93a4-4c62-8f17-1e6a2d9b7c30
+                  versionNo: 3
+                  effectiveFrom: '2026-01-01'
+                triggerType: MAPPING_CHANGE
+                triggeredBy:
+                  id: 7d0c2f54-3a41-4b7e-9c55-0d1f6a2e8b11
+                  fullName: Trần Thu Hà
+                  initials: TH
+                engineVersion: 1.0.0
+                claimedTotal: 1400000
+                eligibleTotal: 1100000
+                afterRateAmount: 880000
+                perVisitLimit: 2000000
+                annualLimit: 5000000
+                consumedBefore: 4200000
+                remainingLimit: 800000
+                payableAmount: 800000
+                projectedRemainingAfter: 0
+                isStale: false
+                createdAt: '2026-10-14T03:12:00Z'
+                formula:
+                  - {label: Claimed, ruleCode: null, delta: null, total: 1400000}
+                  - {label: Excluded, ruleCode: EX-04, delta: -300000, total: 1100000}
+                  - {label: Coinsurance 80%, ruleCode: COINS-80, delta: -220000, total: 880000}
+                  - {label: Capped by remaining balance, ruleCode: LIM-ANNUAL, delta: -80000, total: 800000}
+                lines:
+                  - {expenseLineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a01, lineNo: 1, description: Khám nội tổng quát, categoryCode: CONSULTATION, claimedAmount: 300000, engineResult: COVERED, engineCoveredAmount: 300000, engineRule: {ruleCode: COV-01, clauseText: Outpatient consultation is covered., clauseRef: '3.1'}, isOverridden: false, finalResult: COVERED, finalCoveredAmount: 300000, changedSincePrevious: false}
+                  - {expenseLineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a02, lineNo: 2, description: Xét nghiệm công thức máu, categoryCode: LAB_TEST, claimedAmount: 250000, engineResult: COVERED, engineCoveredAmount: 250000, engineRule: {ruleCode: COV-03, clauseText: Laboratory tests are covered., clauseRef: '3.3'}, isOverridden: false, finalResult: COVERED, finalCoveredAmount: 250000, changedSincePrevious: false}
+                  - {expenseLineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a03, lineNo: 3, description: Amoxicillin 500mg, categoryCode: PRESCRIPTION_DRUG, claimedAmount: 150000, engineResult: COVERED, engineCoveredAmount: 150000, engineRule: {ruleCode: COV-05, clauseText: Prescribed drugs are covered., clauseRef: '3.5'}, isOverridden: false, finalResult: COVERED, finalCoveredAmount: 150000, changedSincePrevious: false}
+                  - {expenseLineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a04, lineNo: 4, description: Kem dưỡng phục hồi da Obagi, categoryCode: COSMETIC, claimedAmount: 300000, engineResult: EXCLUDED, engineCoveredAmount: 0, engineRule: {ruleCode: EX-04, clauseText: Chi phí mỹ phẩm và sản phẩm dưỡng da không được chi trả., clauseRef: '5.4'}, isOverridden: false, finalResult: EXCLUDED, finalCoveredAmount: 0, changedSincePrevious: true}
+                  - {expenseLineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a05, lineNo: 5, description: Siêu âm ổ bụng, categoryCode: DIAGNOSTIC_IMAGING, claimedAmount: 400000, engineResult: COVERED, engineCoveredAmount: 400000, engineRule: {ruleCode: COV-04, clauseText: Diagnostic imaging is covered., clauseRef: '3.4'}, isOverridden: false, finalResult: COVERED, finalCoveredAmount: 400000, changedSincePrevious: false}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/flags:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: listFlags
+      tags: [Risk]
+      summary: List AI risk flags
+      description: >-
+        A flag is a signal, not a finding, and never changes an amount. The reviewer gets every flag except `SUPERSEDED` ones; the approver gets
+        `OPEN` and `KEPT` flags, read-only. `clinicalCheck` tells "no flags" apart from "Clinical check not run".
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: should, stories: [US09, US14, US18], rules: [BR-08, BR-11, BR-12], audit: read}
+      responses:
+        '200':
+          description: The flags.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlagList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /claims/{claimId}/flags/{flagId}/dismiss:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/FlagId'
+    post:
+      operationId: dismissFlag
+      tags: [Risk]
+      summary: Dismiss a flag with a reason
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: should, stories: [US14], rules: [BR-07, BR-08, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DismissFlagRequest'
+      responses:
+        '200':
+          description: Flag dismissed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskFlag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, FLAG_NOT_OPEN.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/flags/{flagId}/keep:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+      - $ref: '#/components/parameters/FlagId'
+    post:
+      operationId: keepFlag
+      tags: [Risk]
+      summary: Keep a flag for the approver
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: should, stories: [US14], rules: [BR-07, BR-08, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeepFlagRequest'
+      responses:
+        '200':
+          description: Flag kept.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskFlag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, FLAG_NOT_OPEN.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/recommendation:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: getRecommendation
+      tags: [Decision]
+      summary: Get the Decision tab
+      description: >-
+        The latest recommendation (with the return comment or decision on it), the proposed outcome from the payable, what is still missing before
+        Submit, the auto-accepted AI values to attest and the actions open to an approver.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US17, US18], rules: [BR-03, BR-06, BR-11, BR-12, BR-13], audit: read}
+      responses:
+        '200':
+          description: The Decision tab data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationWorkspace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: saveRecommendationDraft
+      tags: [Decision]
+      summary: Save the recommendation draft
+      description: Keeps the reviewer's summary and chosen outcome on a `DRAFT` row tied to the current revision, so closing the tab loses nothing.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US17], rules: [BR-12, BR-13], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveRecommendationDraftRequest'
+      responses:
+        '200':
+          description: Draft saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recommendation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, NO_CALCULATION_REVISION.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/recommendation/summary-draft:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: draftSummary
+      tags: [Decision]
+      summary: Ask AI to draft the summary
+      description: >-
+        Queues a `SUMMARY_DRAFT` run. It is a POST because it starts AI work. The finished draft replaces `summary` on the draft recommendation,
+        so the web app warns first when `summaryEdited` is true. If the run fails, the reviewer writes from the empty template.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: should, stories: [US15], rules: [BR-02, BR-12], audit: write}
+      responses:
+        '202':
+          description: Queued; poll `getClaimStatus`, then read `getRecommendation`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRunRef'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, NO_CALCULATION_REVISION.'
+  /claims/{claimId}/recommendation/submit:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: submitRecommendation
+      tags: [Decision]
+      summary: Submit the recommendation
+      description: >-
+        Moves the claim to `PENDING_APPROVAL`. `revisionNo` must be the latest, non-stale revision. `recommendedOutcome` is the proposed outcome, or
+        `REJECTED` with a reason code and note; the amount is set by the server. `attestedItems` must equal the server's current list of auto-accepted
+        AI values used in the calculation. Open flags do not block submission; they are shown to the approver.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned}, states: [IN_REVIEW], release: must, stories: [US15, US17], rules: [BR-03, BR-06, BR-07, BR-09, BR-13], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRecommendationRequest'
+      responses:
+        '200':
+          description: Submitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Codes: CLAIM_STATE_CONFLICT, REVISION_OUTDATED, REVISION_STALE, BLOCKING_ALERT_OPEN, MAPPING_UNCONFIRMED, ATTESTATION_OUTDATED.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, SUMMARY_REQUIRED, OUTCOME_NOT_ALLOWED, OUTCOME_REASON_REQUIRED.'
+  /claims/{claimId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: decideClaim
+      tags: [Decision]
+      summary: Approve, partially approve or reject
+      description: >-
+        The client never sends an amount. `APPROVE` and `PARTIALLY_APPROVE` must match the payable of `revisionNo` (BR-13) and consume the balance.
+        `REJECT` is always open: it needs a reason code, also a comment when the payable is above 0, and its final amount is 0. An approval locks
+        the policy row and compares `balance_version`. If it changed, the answer is 409 `BALANCE_CHANGED` and a `BALANCE_RECHECK` revision now exists:
+        with the same payable the approver repeats the call on the new revision; with a different payable only `returnClaim` or `REJECT` remain.
+      x-claimlens: {roles: {SENIOR_APPROVER: all}, states: [PENDING_APPROVAL], release: must, stories: [US18], rules: [BR-01, BR-06, BR-10, BR-12, BR-13], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideClaimRequest'
+      responses:
+        '200':
+          description: Decision recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Codes: FORBIDDEN_ROLE, MAKER_CHECKER.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 'Codes: CLAIM_STATE_CONFLICT, REVISION_OUTDATED, BALANCE_CHANGED.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: about:blank
+                title: The balance changed since the calculation
+                status: 409
+                code: BALANCE_CHANGED
+                requestId: 01JB7Q6T2M8X
+                details:
+                  newRevisionNo: 3
+                  previousPayable: 800000
+                  newPayable: 500000
+                  payableChanged: true
+                  allowedActions: [REJECT, RETURN]
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, DECISION_NOT_ALLOWED, DECISION_REASON_REQUIRED, DECISION_COMMENT_REQUIRED.'
+  /claims/{claimId}/return:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    post:
+      operationId: returnClaim
+      tags: [Decision]
+      summary: Return the claim to the reviewer
+      description: Needs a comment. The claim goes back to `IN_REVIEW` and appears in the reviewer's Returned tab; the reviewer starts a new recommendation.
+      x-claimlens: {roles: {SENIOR_APPROVER: all}, states: [PENDING_APPROVAL], release: must, stories: [US18], rules: [BR-06, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnClaimRequest'
+      responses:
+        '200':
+          description: Returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 'Codes: FORBIDDEN_ROLE, MAKER_CHECKER.'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: CLAIM_STATE_CONFLICT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /claims/{claimId}/timeline:
+    parameters:
+      - $ref: '#/components/parameters/ClaimId'
+    get:
+      operationId: getClaimTimeline
+      tags: [Timeline]
+      summary: Get the claim history
+      description: Events in time order, each with actor and time. Read events are hidden unless `includeViews` is true. An Administrator gets 403.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US22], rules: [BR-11, BR-12], audit: read}
+      parameters:
+        - name: eventType
+          in: query
+          description: Only these event types, for example FIELD_CORRECTED.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              maxLength: 60
+        - name: includeViews
+          in: query
+          description: Also return read events such as CLAIM_VIEWED.
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelinePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [Policy]
+      summary: List benefit plans
+      x-claimlens: {roles: {CLAIMS_REVIEWER: any, SENIOR_APPROVER: any, ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04], audit: none}
+      responses:
+        '200':
+          description: Plans with their current published version and open draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /plans/{planId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+    get:
+      operationId: listPlanVersions
+      tags: [Policy]
+      summary: List rule-set versions of a plan
+      x-claimlens: {roles: {CLAIMS_REVIEWER: any, SENIOR_APPROVER: any, ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04], audit: none}
+      responses:
+        '200':
+          description: Versions, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createPlanVersion
+      tags: [Policy]
+      summary: Create a draft version
+      description: Copies the rules of `basedOnVersionId`, or starts empty. A plan has at most one draft.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanVersionRequest'
+      responses:
+        '201':
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: DRAFT_ALREADY_EXISTS.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /plans/{planId}/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      operationId: getPlanVersion
+      tags: [Policy]
+      summary: Get a version with its rules
+      x-claimlens: {roles: {CLAIMS_REVIEWER: any, SENIOR_APPROVER: any, ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04], audit: none}
+      responses:
+        '200':
+          description: The version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /plans/{planId}/versions/{versionId}/rules:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+      - $ref: '#/components/parameters/VersionId'
+    put:
+      operationId: updateRuleSet
+      tags: [Policy]
+      summary: Replace the rules of a draft
+      description: >-
+        Replaces every rule of the draft at once; the editor tabs are views of one list. `ELIGIBILITY` has no tab and is added by the system,
+        so it is not accepted here. A published version cannot be changed.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04, BR-05, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRuleSetRequest'
+      responses:
+        '200':
+          description: Draft saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: RULE_SET_NOT_DRAFT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, RULE_INVALID, UNKNOWN_CATEGORY.'
+  /plans/{planId}/versions/{versionId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      operationId: publishPlanVersion
+      tags: [Policy]
+      summary: Publish a draft
+      description: The effective date must be later than the current published version's, and every active category must be covered or excluded. A published version is immutable.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishPlanVersionRequest'
+      responses:
+        '200':
+          description: Published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: RULE_SET_NOT_DRAFT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED.'
+  /plans/{planId}/versions/{versionId}/discard:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      operationId: discardPlanVersion
+      tags: [Policy]
+      summary: Discard a draft
+      description: Marks the draft `DISCARDED`, which frees the plan to have a new draft.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-12], audit: write}
+      responses:
+        '200':
+          description: Discarded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSetVersionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: RULE_SET_NOT_DRAFT.'
+  /plans/{planId}/versions/{versionId}/test-runs:
+    parameters:
+      - $ref: '#/components/parameters/PlanId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      operationId: testRuleSet
+      tags: [Policy]
+      summary: Test a draft on sample claims
+      description: >-
+        Runs the real Rule Engine on synthetic sample claims and shows the draft next to the current published version. Computed on request and not
+        stored; no real claim, balance or decision changes. Runs within the request.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: should, stories: [US20], rules: [BR-04, BR-11, BR-12], audit: write}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRuleSetRequest'
+      responses:
+        '200':
+          description: Draft and current results side by side.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 'Code: RULE_SET_NOT_DRAFT.'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /benefit-categories:
+    get:
+      operationId: listBenefitCategories
+      tags: [Policy]
+      summary: List benefit categories
+      description: The stable taxonomy behind the mapping choice and the rule editor. Seeded; there is no operation to change it.
+      x-claimlens: {roles: {CLAIMS_REVIEWER: any, SENIOR_APPROVER: any, ADMINISTRATOR: any}, release: must, stories: [US10, US19], rules: [BR-03], audit: none}
+      responses:
+        '200':
+          description: Active categories.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenefitCategoryList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /sample-claims:
+    get:
+      operationId: listSampleClaims
+      tags: [Policy]
+      summary: List synthetic sample claims
+      description: Seeded synthetic claims for test runs; there is no operation to create them.
+      x-claimlens: {roles: {ADMINISTRATOR: any}, release: should, stories: [US20], rules: [BR-11], audit: none}
+      parameters:
+        - name: planId
+          in: query
+          description: Only samples of this plan.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sample claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SampleClaimList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /ai-quality/metrics:
+    get:
+      operationId: getAiQualityMetrics
+      tags: [AI quality]
+      summary: Get AI quality metrics
+      description: >-
+        KPI tiles and breakdowns for a date range and model version, with the change from the previous period of the same length. `aiRunCount` of 0 means
+        no AI ran, which the empty state tells apart from "no results".
+      x-claimlens: {roles: {SENIOR_APPROVER: any}, release: should, stories: [US21], rules: [BR-11], audit: none}
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/ModelVersion'
+      responses:
+        '200':
+          description: The metrics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiQualityMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /ai-quality/drill-down:
+    get:
+      operationId: getAiQualityDrillDown
+      tags: [AI quality]
+      summary: List the claims behind a metric
+      x-claimlens: {roles: {SENIOR_APPROVER: all}, release: should, stories: [US21], rules: [BR-11, BR-12], audit: read}
+      parameters:
+        - name: metric
+          in: query
+          required: true
+          description: The metric to open.
+          schema:
+            $ref: '#/components/schemas/AiQualityMetric'
+        - name: dimension
+          in: query
+          description: A breakdown key, for example a field key, document type, category or flag type.
+          schema:
+            type: string
+            maxLength: 40
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/ModelVersion'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimQueuePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /ai-quality/export:
+    get:
+      operationId: exportReport
+      tags: [AI quality]
+      summary: Export the dashboard as XLSX
+      description: The filtered figures and the claim numbers behind them. No member or medical data leaves the system in this file.
+      x-claimlens: {roles: {SENIOR_APPROVER: any}, release: should, stories: [US21], rules: [BR-11, BR-12], audit: read}
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/ModelVersion'
+      responses:
+        '200':
+          description: The workbook.
+          headers:
+            Content-Disposition:
+              description: File name for the download.
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from `login` or `refreshToken`. Lives 15 minutes and is kept in memory by the web app.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: claimlens_refresh
+      description: Refresh token. HttpOnly, Secure, SameSite=Strict, Path=/api/v1/auth. JavaScript cannot read it.
+  headers:
+    RefreshTokenCookie:
+      description: Sets, rotates or clears the refresh token cookie.
+      schema:
+        type: string
+      example: claimlens_refresh=opaque-value; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth; Max-Age=28800
+  parameters:
+    ClaimId:
+      name: claimId
+      in: path
+      required: true
+      description: Claim id.
+      schema:
+        type: string
+        format: uuid
+    PolicyId:
+      name: policyId
+      in: path
+      required: true
+      description: Policy id.
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      description: Document id.
+      schema:
+        type: string
+        format: uuid
+    PageId:
+      name: pageId
+      in: path
+      required: true
+      description: Document page id.
+      schema:
+        type: string
+        format: uuid
+    FieldId:
+      name: fieldId
+      in: path
+      required: true
+      description: Claim field id.
+      schema:
+        type: string
+        format: uuid
+    AlertId:
+      name: alertId
+      in: path
+      required: true
+      description: Alert id.
+      schema:
+        type: string
+        format: uuid
+    LineId:
+      name: lineId
+      in: path
+      required: true
+      description: Expense line id.
+      schema:
+        type: string
+        format: uuid
+    FlagId:
+      name: flagId
+      in: path
+      required: true
+      description: Risk flag id.
+      schema:
+        type: string
+        format: uuid
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      description: Benefit plan id.
+      schema:
+        type: string
+        format: uuid
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      description: Rule-set version id.
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      description: Page number, from 1.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      description: Rows per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    From:
+      name: from
+      in: query
+      required: true
+      description: First day of the range.
+      schema:
+        type: string
+        format: date
+    To:
+      name: to
+      in: query
+      required: true
+      description: Last day of the range.
+      schema:
+        type: string
+        format: date
+    ModelVersion:
+      name: modelVersion
+      in: query
+      description: Only runs of this model version. All versions when left out.
+      schema:
+        type: string
+        maxLength: 40
+  responses:
+    Unauthorized:
+      description: 'Code: AUTH_REQUIRED. The access token is missing, expired or invalid; the app calls `refreshToken` and retries once.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: 'Codes: FORBIDDEN_ROLE, CLAIM_OUT_OF_SCOPE.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: 'Code: NOT_FOUND.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 'The current state does not allow this. See `code`; `VERSION_CONFLICT` carries the current values in `details`.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Another user changed this claim
+            status: 409
+            code: VERSION_CONFLICT
+            requestId: 01JB7Q6T2M8X
+            details:
+              currentRowVersion: 15
+              current:
+                claimedTotal: 1400000
+    Unprocessable:
+      description: 'Code: VALIDATION_FAILED, with one entry per field in `errors`, or a more specific rule code.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Check the highlighted fields
+            status: 422
+            code: VALIDATION_FAILED
+            requestId: 01JB7Q6T2M8X
+            errors:
+              - field: note
+                code: REQUIRED
+                message: A note is required.
+    TooManyRequests:
+      description: 'Code: TOO_MANY_ATTEMPTS. Too many sign-in attempts from this address or for this email.'
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PayloadTooLarge:
+      description: 'Code: FILE_TOO_LARGE. The limit is 20 MB per file.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedMediaType:
+      description: 'Code: UNSUPPORTED_FILE_TYPE. Accepted: JPG, PNG, PDF, DOCX and XLSX.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    # ---- Shared values ----
+    Money:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Whole VND, with no decimals.
+    NullableMoney:
+      type: [integer, 'null']
+      format: int64
+      minimum: 0
+      description: Whole VND, or null when not known yet.
+    Confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: AI confidence from 0 to 1, with three decimals.
+    Bbox:
+      type: object
+      description: A region of a page, normalised to the page size (0 to 1), so it survives rendering at another size.
+      required: [x, y, w, h]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        w: {type: number, minimum: 0, maximum: 1}
+        h: {type: number, minimum: 0, maximum: 1}
+    StaffRef:
+      type: object
+      required: [id, fullName, initials]
+      properties:
+        id: {type: string, format: uuid}
+        fullName: {type: string}
+        initials: {type: string, maxLength: 4, description: Replaces the AI marker once this person accepts or edits a value.}
+    NullableStaffRef:
+      oneOf:
+        - $ref: '#/components/schemas/StaffRef'
+        - type: 'null'
+    RowVersion:
+      type: integer
+      minimum: 0
+      description: Optimistic lock. Send back the value you read; a newer one on the server gives 409 `VERSION_CONFLICT`.
+    Warning:
+      type: object
+      description: Something the user should see that does not stop the action.
+      required: [code, message]
+      properties:
+        code: {$ref: '#/components/schemas/WarningCode'}
+        message: {type: string}
+    WarningCode:
+      type: string
+      enum: [COVERAGE_OUTSIDE_PERIOD, POLICY_NOT_ACTIVE, OPEN_FLAGS, OPEN_HIGH_FLAGS, UNCITED_SENTENCES, CLINICAL_CHECK_NOT_RUN]
+    # ---- Errors ----
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with a stable `code` that the web app maps to a message.
+      required: [title, status, code, requestId]
+      properties:
+        type: {type: string, format: uri-reference, default: about:blank}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string}
+        code: {$ref: '#/components/schemas/ErrorCode'}
+        requestId: {type: string, description: Same value as the X-Request-Id response header and audit_event.request_id.}
+        errors:
+          type: array
+          description: Field problems, present with VALIDATION_FAILED.
+          items:
+            $ref: '#/components/schemas/FieldError'
+        details:
+          description: Extra data for some codes.
+          oneOf:
+            - $ref: '#/components/schemas/VersionConflictDetails'
+            - $ref: '#/components/schemas/BalanceChangedDetails'
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field: {type: string, description: Name of the request property.}
+        code: {type: string, description: 'For example REQUIRED, TOO_LONG, OUT_OF_RANGE.'}
+        message: {type: string}
+    VersionConflictDetails:
+      type: object
+      description: Lets the Conflict UI state keep local input and show what changed.
+      required: [currentRowVersion, current]
+      properties:
+        currentRowVersion: {$ref: '#/components/schemas/RowVersion'}
+        current: {type: object, description: The resource as it is now.}
+    BalanceChangedDetails:
+      type: object
+      required: [newRevisionNo, previousPayable, newPayable, payableChanged, allowedActions]
+      properties:
+        newRevisionNo: {type: integer, description: The BALANCE_RECHECK revision the system just created.}
+        previousPayable: {$ref: '#/components/schemas/Money'}
+        newPayable: {$ref: '#/components/schemas/Money'}
+        payableChanged: {type: boolean}
+        allowedActions:
+          type: array
+          description: What the approver can do now.
+          items:
+            $ref: '#/components/schemas/DecisionAction'
+    ErrorCode:
+      type: string
+      description: Stable error codes; the meaning of each is in 07-api-contract.md.
+      enum:
+        - INVALID_CREDENTIALS
+        - REFRESH_TOKEN_INVALID
+        - AUTH_REQUIRED
+        - ORIGIN_NOT_ALLOWED
+        - TOO_MANY_ATTEMPTS
+        - FORBIDDEN_ROLE
+        - CLAIM_OUT_OF_SCOPE
+        - MAKER_CHECKER
+        - NOT_FOUND
+        - VALIDATION_FAILED
+        - FILE_TOO_LARGE
+        - UNSUPPORTED_FILE_TYPE
+        - POLICY_MEMBER_MISMATCH
+        - CLAIM_STATE_CONFLICT
+        - VERSION_CONFLICT
+        - UPLOAD_IN_PROGRESS
+        - NO_READY_DOCUMENT
+        - CLAIM_ALREADY_ASSIGNED
+        - SOURCE_REQUIRED
+        - FIELD_HAS_NO_AI_VALUE
+        - ALERT_NOT_OPEN
+        - ALERT_NOT_DISMISSIBLE
+        - FLAG_NOT_OPEN
+        - BLOCKING_ALERT_OPEN
+        - MAPPING_UNCONFIRMED
+        - LINE_AMOUNT_MISSING
+        - NO_EFFECTIVE_RULE_SET
+        - NO_CALCULATION_REVISION
+        - NO_ACTIVE_OVERRIDE
+        - UNKNOWN_CATEGORY
+        - OVERRIDE_EXCEEDS_LINE
+        - OVERRIDE_AMOUNT_MISMATCH
+        - REVISION_OUTDATED
+        - REVISION_STALE
+        - ATTESTATION_OUTDATED
+        - SUMMARY_REQUIRED
+        - OUTCOME_NOT_ALLOWED
+        - OUTCOME_REASON_REQUIRED
+        - DECISION_NOT_ALLOWED
+        - DECISION_REASON_REQUIRED
+        - DECISION_COMMENT_REQUIRED
+        - BALANCE_CHANGED
+        - DRAFT_ALREADY_EXISTS
+        - RULE_SET_NOT_DRAFT
+        - RULE_INVALID
+        - EFFECTIVE_DATE_NOT_LATER
+        - CATEGORY_NOT_CONFIGURED
+    # ---- Enums, same values as claimlens.dbml ----
+    StaffRole:
+      type: string
+      enum: [INTAKE_OFFICER, CLAIMS_REVIEWER, SENIOR_APPROVER, ADMINISTRATOR]
+    PolicyStatus:
+      type: string
+      enum: [ACTIVE, LAPSED, TERMINATED]
+    RuleSetStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, DISCARDED]
+    RuleType:
+      type: string
+      enum: [ELIGIBILITY, COVERAGE, EXCLUSION, WAITING_PERIOD, COINSURANCE, LIMIT]
+    LimitScope:
+      type: string
+      enum: [PER_VISIT, ANNUAL]
+    ClaimStatus:
+      type: string
+      enum: [DRAFT, PROCESSING, NEEDS_VERIFICATION, READY_FOR_REVIEW, IN_REVIEW, PENDING_APPROVAL, APPROVED, PARTIALLY_APPROVED, REJECTED]
+    IntakeChannel:
+      type: string
+      enum: [COUNTER, POST, EMAIL, PARTNER]
+    FileFormat:
+      type: string
+      enum: [JPG, PNG, PDF, DOCX, XLSX]
+    DocumentStatus:
+      type: string
+      enum: [UPLOADING, CONVERTING, READY, REJECTED, REMOVED]
+    PageType:
+      type: string
+      enum: [INVOICE, RECEIPT, PRESCRIPTION, VISIT_SUMMARY, LAB_RESULT, OTHER, UNCLASSIFIED]
+    PageQuality:
+      type: string
+      enum: [NOT_CHECKED, READABLE, LOW_QUALITY]
+    PageAiStatus:
+      type: string
+      enum: [QUEUED, READING, DONE, FAILED]
+    ValueSource:
+      type: string
+      enum: [AI, USER]
+    AiTask:
+      type: string
+      enum: [PAGE_CHECK, FIELD_EXTRACTION, PAGE_REREAD, BENEFIT_MAPPING, CLINICAL_CHECK, SUMMARY_DRAFT]
+    AiRunStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
+    ConfidenceLevel:
+      type: string
+      description: 'HIGH is shown as High, CHECK as Check, MISSING as Missing. MISSING applies to fields only.'
+      enum: [HIGH, CHECK, MISSING]
+    FieldKey:
+      type: string
+      enum: [insured_name, national_id, policy_number, provider_name, provider_tax_code, service_date, invoice_number, invoice_total, line_description, line_quantity, line_unit_price, line_amount, diagnosis, medication]
+    FieldStatus:
+      type: string
+      enum: [NEEDS_VERIFICATION, NEEDS_ENTRY, AUTO_ACCEPTED, CONFIRMED, CORRECTED, ENTERED, NOT_PRESENT]
+    LineOrigin:
+      type: string
+      enum: [AI_EXTRACTED, MANUAL]
+    MappingStatus:
+      type: string
+      enum: [PENDING, AUTO_ACCEPTED, NEEDS_CONFIRMATION, CONFIRMED, CHANGED, MANUAL]
+    AlertCheck:
+      type: string
+      enum: [REQUIRED_DOCUMENTS, INSURED_IDENTITY, POLICY_MATCH, DATE_CONSISTENCY, INVOICE_ARITHMETIC, CLAIMED_TOTAL_MISMATCH, DUPLICATE_INVOICE]
+    AlertSeverity:
+      type: string
+      enum: [BLOCKING, WARNING]
+    AlertStatus:
+      type: string
+      enum: [OPEN, RESOLVED, DISMISSED]
+    FlagType:
+      type: string
+      enum: [MEDICATION_DIAGNOSIS, SERVICE_DIAGNOSIS, LAB_DIAGNOSIS, QUANTITY]
+    FlagSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+    FlagStatus:
+      type: string
+      enum: [OPEN, DISMISSED, KEPT, SUPERSEDED]
+    ReasonCode:
+      type: string
+      enum:
+        - DISMISS_VALUE_VERIFIED
+        - DISMISS_CLINICALLY_PLAUSIBLE
+        - DISMISS_KNOWN_EXCEPTION
+        - KEEP_NEEDS_APPROVER
+        - KEEP_EVIDENCE_MISSING
+        - OVERRIDE_MEDICAL_NECESSITY
+        - OVERRIDE_CONTRACT_EXCEPTION
+        - OVERRIDE_DATA_ERROR
+        - OUTCOME_EXCLUSION_AND_LIMIT
+        - OUTCOME_MEDICAL_NECESSITY
+        - OUTCOME_GENERAL_EXCLUSION
+        - OUTCOME_ANNUAL_MAXIMUM
+        - OUTCOME_OUTSIDE_COVERAGE
+        - OUTCOME_EVIDENCE_MISSING
+    AlertDismissReason:
+      type: string
+      enum: [DISMISS_VALUE_VERIFIED, DISMISS_KNOWN_EXCEPTION]
+    FlagDismissReason:
+      type: string
+      enum: [DISMISS_VALUE_VERIFIED, DISMISS_CLINICALLY_PLAUSIBLE, DISMISS_KNOWN_EXCEPTION]
+    FlagKeepReason:
+      type: string
+      enum: [KEEP_NEEDS_APPROVER, KEEP_EVIDENCE_MISSING]
+    OverrideReason:
+      type: string
+      enum: [OVERRIDE_MEDICAL_NECESSITY, OVERRIDE_CONTRACT_EXCEPTION, OVERRIDE_DATA_ERROR]
+    OutcomeReason:
+      type: string
+      enum: [OUTCOME_EXCLUSION_AND_LIMIT, OUTCOME_MEDICAL_NECESSITY, OUTCOME_GENERAL_EXCLUSION, OUTCOME_ANNUAL_MAXIMUM, OUTCOME_OUTSIDE_COVERAGE, OUTCOME_EVIDENCE_MISSING]
+    LineResult:
+      type: string
+      enum: [COVERED, PARTIALLY_COVERED, EXCLUDED]
+    RevisionTrigger:
+      type: string
+      enum: [INITIAL, DATA_CHANGE, MAPPING_CHANGE, OVERRIDE, BALANCE_RECHECK]
+    ClaimOutcome:
+      type: string
+      enum: [APPROVED, PARTIALLY_APPROVED, REJECTED]
+    RecommendationStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED, RETURNED, DECIDED]
+    DecisionAction:
+      type: string
+      enum: [APPROVE, PARTIALLY_APPROVE, REJECT, RETURN]
+    ActorType:
+      type: string
+      enum: [USER, SYSTEM, AI]
+    # ---- Enums that exist only in the API ----
+    Priority:
+      type: string
+      description: Label for display and filtering (BR-09). HIGH means high value or an unresolved High flag. The queue order itself follows the full BR-09 keys.
+      enum: [HIGH, NORMAL]
+    QueueView:
+      type: string
+      description: >-
+        AVAILABLE, ASSIGNED_TO_ME, NEEDS_VERIFICATION and RETURNED belong to the Claims Reviewer. PENDING_APPROVAL and DECIDED_BY_ME belong to the
+        Senior Approver. MY_DRAFTS and MY_SUBMISSIONS belong to the Intake Officer.
+      enum: [AVAILABLE, ASSIGNED_TO_ME, NEEDS_VERIFICATION, RETURNED, PENDING_APPROVAL, DECIDED_BY_ME, MY_DRAFTS, MY_SUBMISSIONS]
+    AllowedAction:
+      type: string
+      description: What this caller can do now. The web app renders actions from this list and never decides them itself.
+      enum: [EDIT_CLAIM, UPLOAD_DOCUMENT, SUBMIT_CLAIM, START_REVIEW, EDIT_FIELDS, DISMISS_ALERT, RUN_ADJUDICATION, OVERRIDE_LINE, REVIEW_FLAGS, SUBMIT_RECOMMENDATION, APPROVE, PARTIALLY_APPROVE, REJECT, RETURN]
+    ClinicalCheckState:
+      type: string
+      description: NOT_RUN and FAILED are both shown as "Clinical check not run".
+      enum: [NOT_RUN, RUNNING, DONE, FAILED]
+    FieldValueKind:
+      type: string
+      description: Which value property applies. TEXT and NUMBER use valueText, MONEY uses valueAmount, DATE uses valueDate.
+      enum: [TEXT, NUMBER, MONEY, DATE]
+    AiQualityMetric:
+      type: string
+      enum: [LOW_CONFIDENCE, FIELD_CORRECTION, MAPPING_CORRECTION, MAPPING_AUTO_ACCEPTED, FLAG_DISMISSAL, CLINICAL_FALSE_POSITIVE]
+    # ---- Auth ----
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, format: password, maxLength: 200}
+    StaffUser:
+      type: object
+      required: [id, email, fullName, initials, role]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        fullName: {type: string}
+        initials: {type: string, maxLength: 4}
+        role: {$ref: '#/components/schemas/StaffRole'}
+    AuthSession:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken: {type: string}
+        tokenType: {type: string, const: Bearer}
+        expiresIn: {type: integer, description: Seconds until the access token expires.}
+        user: {$ref: '#/components/schemas/StaffUser'}
+    # ---- Members and policies ----
+    MemberSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query: {type: string, minLength: 2, maxLength: 120, description: 'Member name, national ID or policy number.'}
+    MemberSearchResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/MemberSearchResult'
+    MemberSearchResult:
+      type: object
+      description: One member with one policy. A member with two policy years gives two rows.
+      required: [memberId, memberCode, fullName, dateOfBirth, nationalIdMasked, policy]
+      properties:
+        memberId: {type: string, format: uuid}
+        memberCode: {type: string}
+        fullName: {type: string}
+        dateOfBirth: {type: string, format: date}
+        nationalIdMasked: {type: string, description: Only the last four digits are readable.}
+        policy: {$ref: '#/components/schemas/PolicySummary'}
+    PolicySummary:
+      type: object
+      required: [policyId, policyNumber, memberId, planCode, planName, status, coverageStart, coverageEnd, firstEnrolledOn, consumedAmount, annualLimit, remainingBalance, asOfDate]
+      properties:
+        policyId: {type: string, format: uuid}
+        policyNumber: {type: string}
+        memberId: {type: string, format: uuid}
+        planCode: {type: string}
+        planName: {type: string}
+        status: {$ref: '#/components/schemas/PolicyStatus'}
+        coverageStart: {type: string, format: date}
+        coverageEnd: {type: string, format: date}
+        firstEnrolledOn: {type: string, format: date}
+        consumedAmount: {$ref: '#/components/schemas/Money'}
+        annualLimit: {$ref: '#/components/schemas/NullableMoney'}
+        remainingBalance: {$ref: '#/components/schemas/NullableMoney'}
+        asOfDate: {type: string, format: date, description: Date that selected the rule-set version.}
+    # ---- Claims ----
+    CreateClaimRequest:
+      type: object
+      required: [memberId, policyId, serviceDate, providerName, claimedTotal, channel]
+      properties:
+        memberId: {type: string, format: uuid}
+        policyId: {type: string, format: uuid}
+        serviceDate: {type: string, format: date}
+        providerName: {type: string, minLength: 1, maxLength: 200}
+        claimedTotal: {type: integer, format: int64, minimum: 1, description: Whole VND.}
+        channel: {$ref: '#/components/schemas/IntakeChannel'}
+    UpdateClaimRequest:
+      type: object
+      required: [rowVersion]
+      minProperties: 2
+      properties:
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        memberId: {type: string, format: uuid}
+        policyId: {type: string, format: uuid}
+        serviceDate: {type: string, format: date}
+        providerName: {type: string, minLength: 1, maxLength: 200}
+        claimedTotal: {type: integer, format: int64, minimum: 1, description: Whole VND.}
+        channel: {$ref: '#/components/schemas/IntakeChannel'}
+    UpdateClaimFactsRequest:
+      type: object
+      required: [rowVersion]
+      minProperties: 2
+      properties:
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        serviceDate: {type: string, format: date}
+        providerName: {type: string, minLength: 1, maxLength: 200}
+        claimedTotal: {type: integer, format: int64, minimum: 1, description: Whole VND.}
+    ClaimQueueItem:
+      type: object
+      description: One queue row. In the AVAILABLE view `memberName` is null, because the reviewer has not taken the claim yet (BR-11).
+      required: [id, claimNumber, status, isReturned, memberName, planCode, serviceDate, claimedTotal, priority, statusChangedAt, assigneeInitials, fieldsToVerify, blockingAlerts, warningAlerts, openFlags, payableAmount, recommendedOutcome, decisionAction, decidedAt]
+      properties:
+        id: {type: string, format: uuid}
+        claimNumber: {type: string}
+        status: {$ref: '#/components/schemas/ClaimStatus'}
+        isReturned: {type: boolean, description: IN_REVIEW with a return comment; shown as the Returned pill.}
+        memberName: {type: [string, 'null']}
+        planCode: {type: string}
+        serviceDate: {type: string, format: date}
+        claimedTotal: {$ref: '#/components/schemas/Money'}
+        priority: {$ref: '#/components/schemas/Priority'}
+        statusChangedAt: {type: string, format: date-time, description: The web app shows the queue age from this.}
+        assigneeInitials: {type: [string, 'null']}
+        fieldsToVerify: {type: integer, minimum: 0}
+        blockingAlerts: {type: integer, minimum: 0}
+        warningAlerts: {type: integer, minimum: 0}
+        openFlags: {type: integer, minimum: 0}
+        payableAmount: {$ref: '#/components/schemas/NullableMoney'}
+        recommendedOutcome:
+          description: Approval queue preview.
+          oneOf:
+            - $ref: '#/components/schemas/ClaimOutcome'
+            - type: 'null'
+        decisionAction:
+          description: Set in DECIDED_BY_ME.
+          oneOf:
+            - $ref: '#/components/schemas/DecisionAction'
+            - type: 'null'
+        decidedAt: {type: [string, 'null'], format: date-time}
+    ClaimQueuePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimQueueItem'
+        page: {type: integer, minimum: 1}
+        pageSize: {type: integer, minimum: 1}
+        total: {type: integer, minimum: 0}
+        counts:
+          type: object
+          description: Badge count of each tab of the caller's role. Left out of a drill-down.
+          propertyNames:
+            $ref: '#/components/schemas/QueueView'
+          additionalProperties:
+            type: integer
+            minimum: 0
+    ClaimMember:
+      type: object
+      required: [id, memberCode, fullName, dateOfBirth, nationalIdMasked]
+      properties:
+        id: {type: string, format: uuid}
+        memberCode: {type: string}
+        fullName: {type: string}
+        dateOfBirth: {type: string, format: date}
+        nationalIdMasked: {type: string}
+    ClaimPolicy:
+      type: object
+      required: [id, policyNumber, status, coverageStart, coverageEnd, planCode, planName]
+      properties:
+        id: {type: string, format: uuid}
+        policyNumber: {type: string}
+        status: {$ref: '#/components/schemas/PolicyStatus'}
+        coverageStart: {type: string, format: date}
+        coverageEnd: {type: string, format: date}
+        planCode: {type: string}
+        planName: {type: string}
+    RuleSetRef:
+      type: object
+      required: [id, versionNo, effectiveFrom]
+      properties:
+        id: {type: string, format: uuid}
+        versionNo: {type: integer, description: Shown as v3.}
+        effectiveFrom: {type: string, format: date}
+    NullableRuleSetRef:
+      oneOf:
+        - $ref: '#/components/schemas/RuleSetRef'
+        - type: 'null'
+    CurrentRevision:
+      type: object
+      required: [revisionNo, payableAmount, isStale, createdAt]
+      properties:
+        revisionNo: {type: integer, minimum: 1}
+        payableAmount: {$ref: '#/components/schemas/Money'}
+        isStale: {type: boolean, description: The inputs changed since this revision and it was not recalculated. Blocks submission.}
+        createdAt: {type: string, format: date-time}
+    ClaimBalance:
+      type: object
+      required: [annualLimit, consumedAmount, remainingBalance, projectedAfter]
+      properties:
+        annualLimit: {$ref: '#/components/schemas/NullableMoney'}
+        consumedAmount: {$ref: '#/components/schemas/Money'}
+        remainingBalance: {$ref: '#/components/schemas/NullableMoney'}
+        projectedAfter: {$ref: '#/components/schemas/NullableMoney'}
+    ClaimCounts:
+      type: object
+      required: [fieldsToVerify, blockingAlerts, warningAlerts, mappingsToConfirm, openFlags, keptFlags]
+      properties:
+        fieldsToVerify: {type: integer, minimum: 0}
+        blockingAlerts: {type: integer, minimum: 0}
+        warningAlerts: {type: integer, minimum: 0}
+        mappingsToConfirm: {type: integer, minimum: 0}
+        openFlags: {type: integer, minimum: 0}
+        keptFlags: {type: integer, minimum: 0}
+    ClaimAiState:
+      type: object
+      required: [fallbackActive, clinicalCheck]
+      properties:
+        fallbackActive: {type: boolean, description: An AI run failed; the web app shows the fallback banner and the work continues by hand.}
+        clinicalCheck: {$ref: '#/components/schemas/ClinicalCheckState'}
+    Blocker:
+      type: object
+      description: Why an action is not open yet, so the screen can name the missing item.
+      required: [code, message]
+      properties:
+        code: {$ref: '#/components/schemas/ErrorCode'}
+        message: {type: string}
+    ClaimDetail:
+      type: object
+      required: [id, claimNumber, status, isReturned, returnComment, member, policy, providerName, serviceDate, claimedTotal, channel, priority, registeredBy, assignee, assignedAt, submittedAt, statusChangedAt, createdAt, updatedAt, rowVersion, ruleSetVersion, currentRevision, balance, counts, ai, allowedActions, blockers]
+      properties:
+        id: {type: string, format: uuid}
+        claimNumber: {type: string, description: 'CLM-YYYY-NNNNNN.'}
+        status: {$ref: '#/components/schemas/ClaimStatus'}
+        isReturned: {type: boolean}
+        returnComment: {type: [string, 'null']}
+        member: {$ref: '#/components/schemas/ClaimMember'}
+        policy: {$ref: '#/components/schemas/ClaimPolicy'}
+        providerName: {type: string}
+        serviceDate: {type: string, format: date}
+        claimedTotal: {$ref: '#/components/schemas/Money'}
+        channel: {$ref: '#/components/schemas/IntakeChannel'}
+        priority: {$ref: '#/components/schemas/Priority'}
+        registeredBy: {$ref: '#/components/schemas/StaffRef'}
+        assignee: {$ref: '#/components/schemas/NullableStaffRef'}
+        assignedAt: {type: [string, 'null'], format: date-time}
+        submittedAt: {type: [string, 'null'], format: date-time}
+        statusChangedAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        ruleSetVersion: {$ref: '#/components/schemas/NullableRuleSetRef'}
+        currentRevision:
+          oneOf:
+            - $ref: '#/components/schemas/CurrentRevision'
+            - type: 'null'
+        balance:
+          oneOf:
+            - $ref: '#/components/schemas/ClaimBalance'
+            - type: 'null'
+        counts:
+          oneOf:
+            - $ref: '#/components/schemas/ClaimCounts'
+            - type: 'null'
+        ai: {$ref: '#/components/schemas/ClaimAiState'}
+        allowedActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllowedAction'
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Blocker'
+    ClaimSaved:
+      type: object
+      required: [claim, warnings]
+      properties:
+        claim: {$ref: '#/components/schemas/ClaimDetail'}
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+    ClaimProgress:
+      type: object
+      description: What a change did to the claim. Validation and adjudication have already re-run when this comes back.
+      required: [status, isReturned, rowVersion, fieldsToVerify, blockingAlerts, warningAlerts, mappingsToConfirm, currentRevisionNo, payableAmount, isRevisionStale, revisionCreated]
+      properties:
+        status: {$ref: '#/components/schemas/ClaimStatus'}
+        isReturned: {type: boolean}
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        fieldsToVerify: {type: integer, minimum: 0}
+        blockingAlerts: {type: integer, minimum: 0}
+        warningAlerts: {type: integer, minimum: 0}
+        mappingsToConfirm: {type: integer, minimum: 0}
+        currentRevisionNo: {type: [integer, 'null']}
+        payableAmount: {$ref: '#/components/schemas/NullableMoney'}
+        isRevisionStale: {type: boolean}
+        revisionCreated: {type: boolean, description: This change created a new revision; the web app shows "What changed".}
+    AiRunRef:
+      type: object
+      required: [id, task, status, requestedAt]
+      properties:
+        id: {type: string, format: uuid}
+        task: {$ref: '#/components/schemas/AiTask'}
+        status: {$ref: '#/components/schemas/AiRunStatus'}
+        requestedAt: {type: string, format: date-time}
+    AiRunState:
+      type: object
+      required: [id, task, status, errorCode, modelName, modelVersion, requestedAt, startedAt, finishedAt]
+      properties:
+        id: {type: string, format: uuid}
+        task: {$ref: '#/components/schemas/AiTask'}
+        status: {$ref: '#/components/schemas/AiRunStatus'}
+        errorCode: {type: [string, 'null']}
+        modelName: {type: string}
+        modelVersion: {type: string}
+        requestedAt: {type: string, format: date-time}
+        startedAt: {type: [string, 'null'], format: date-time}
+        finishedAt: {type: [string, 'null'], format: date-time}
+    PageState:
+      type: object
+      required: [id, claimPageNo, pageType, quality, aiStatus]
+      properties:
+        id: {type: string, format: uuid}
+        claimPageNo: {type: integer, minimum: 1, maximum: 30}
+        pageType: {$ref: '#/components/schemas/PageType'}
+        quality: {$ref: '#/components/schemas/PageQuality'}
+        aiStatus: {$ref: '#/components/schemas/PageAiStatus'}
+    DocumentState:
+      type: object
+      required: [id, status, rejectionReason, pages]
+      properties:
+        id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/DocumentStatus'}
+        rejectionReason: {type: [string, 'null']}
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageState'
+    ClaimStatusSnapshot:
+      type: object
+      description: The polling response. No medical data, identity data or file names, so it is not audited.
+      required: [claimId, status, isReturned, rowVersion, fallbackActive, clinicalCheck, currentRevisionNo, isRevisionStale, documents, aiRuns]
+      properties:
+        claimId: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/ClaimStatus'}
+        isReturned: {type: boolean}
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        fallbackActive: {type: boolean}
+        clinicalCheck: {$ref: '#/components/schemas/ClinicalCheckState'}
+        currentRevisionNo: {type: [integer, 'null']}
+        isRevisionStale: {type: boolean}
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentState'
+        aiRuns:
+          type: array
+          description: The latest run of each task, or of each page for PAGE_CHECK and PAGE_REREAD.
+          items:
+            $ref: '#/components/schemas/AiRunState'
+    # ---- Documents and pages ----
+    UploadDocumentRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          contentMediaType: application/octet-stream
+          description: 'JPG, PNG, PDF, DOCX or XLSX, up to 20 MB.'
+    PageAiSuggestion:
+      type: object
+      required: [pageType, confidence, level, qualityScore, runId]
+      properties:
+        pageType: {$ref: '#/components/schemas/PageType'}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+        level: {$ref: '#/components/schemas/ConfidenceLevel'}
+        qualityScore: {$ref: '#/components/schemas/Confidence'}
+        runId: {type: string, format: uuid}
+    DocumentPage:
+      type: object
+      required: [id, documentId, pageNo, claimPageNo, widthPx, heightPx, pageType, pageTypeSource, pageTypeSetBy, quality, aiStatus, ai]
+      properties:
+        id: {type: string, format: uuid}
+        documentId: {type: string, format: uuid}
+        pageNo: {type: integer, minimum: 1, description: Page inside the file.}
+        claimPageNo: {type: integer, minimum: 1, maximum: 30, description: 'Page across the claim, shown as p1 to p30.'}
+        widthPx: {type: integer}
+        heightPx: {type: integer}
+        pageType: {$ref: '#/components/schemas/PageType'}
+        pageTypeSource:
+          oneOf:
+            - $ref: '#/components/schemas/ValueSource'
+            - type: 'null'
+        pageTypeSetBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        quality: {$ref: '#/components/schemas/PageQuality'}
+        aiStatus: {$ref: '#/components/schemas/PageAiStatus'}
+        ai:
+          oneOf:
+            - $ref: '#/components/schemas/PageAiSuggestion'
+            - type: 'null'
+    Document:
+      type: object
+      required: [id, originalFilename, fileFormat, sizeBytes, pageCount, status, rejectionReason, uploadedBy, uploadedAt, pages]
+      properties:
+        id: {type: string, format: uuid}
+        originalFilename: {type: string}
+        fileFormat: {$ref: '#/components/schemas/FileFormat'}
+        sizeBytes: {type: integer, format: int64}
+        pageCount: {type: [integer, 'null']}
+        status: {$ref: '#/components/schemas/DocumentStatus'}
+        rejectionReason: {type: [string, 'null']}
+        uploadedBy: {$ref: '#/components/schemas/StaffRef'}
+        uploadedAt: {type: string, format: date-time}
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentPage'
+    DocumentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+    ReclassifyPageRequest:
+      type: object
+      required: [pageType]
+      properties:
+        pageType:
+          type: string
+          description: Any page type except UNCLASSIFIED.
+          enum: [INVOICE, RECEIPT, PRESCRIPTION, VISIT_SUMMARY, LAB_RESULT, OTHER]
+    # ---- Fields ----
+    FieldAiSuggestion:
+      type: object
+      required: [value, confidence, level, pageId, bbox, runId]
+      properties:
+        value: {type: [string, 'null'], description: Null when the level is MISSING; a value below 0.70 is never shown (US05).}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+        level: {$ref: '#/components/schemas/ConfidenceLevel'}
+        pageId: {type: [string, 'null'], format: uuid}
+        bbox:
+          oneOf:
+            - $ref: '#/components/schemas/Bbox'
+            - type: 'null'
+        runId: {type: string, format: uuid}
+    ClaimField:
+      type: object
+      required: [id, documentId, fieldKey, itemNo, expenseLineId, status, required, valueKind, valueText, valueAmount, valueDate, sourcePageId, sourceBbox, ai, aiMarker, resolvedBy, resolvedAt, rowVersion]
+      properties:
+        id: {type: string, format: uuid}
+        documentId: {type: string, format: uuid}
+        fieldKey: {$ref: '#/components/schemas/FieldKey'}
+        itemNo: {type: integer, minimum: 0, description: '0 is the document header; n is expense line or prescription item n.'}
+        expenseLineId: {type: [string, 'null'], format: uuid}
+        status: {$ref: '#/components/schemas/FieldStatus'}
+        required: {type: boolean, description: Must be resolved before the claim can leave NEEDS_VERIFICATION.}
+        valueKind: {$ref: '#/components/schemas/FieldValueKind'}
+        valueText: {type: [string, 'null']}
+        valueAmount: {$ref: '#/components/schemas/NullableMoney'}
+        valueDate: {type: [string, 'null'], format: date}
+        sourcePageId: {type: [string, 'null'], format: uuid}
+        sourceBbox:
+          oneOf:
+            - $ref: '#/components/schemas/Bbox'
+            - type: 'null'
+        ai:
+          oneOf:
+            - $ref: '#/components/schemas/FieldAiSuggestion'
+            - type: 'null'
+        aiMarker: {type: boolean, description: Show the AI marker; false once a person has resolved the field.}
+        resolvedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        resolvedAt: {type: [string, 'null'], format: date-time}
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+    FieldList:
+      type: object
+      required: [items, remainingToVerify]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimField'
+        remainingToVerify: {type: integer, minimum: 0}
+    AcceptFieldRequest:
+      type: object
+      required: [rowVersion]
+      properties:
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        sourcePageId: {type: string, format: uuid, description: Only when AI gave no source and the reviewer drew one.}
+        sourceBbox: {$ref: '#/components/schemas/Bbox'}
+    UpdateFieldRequest:
+      type: object
+      required: [rowVersion, action]
+      properties:
+        rowVersion: {$ref: '#/components/schemas/RowVersion'}
+        action:
+          type: string
+          enum: [SET_VALUE, NOT_PRESENT]
+        valueText: {type: string, description: 'For TEXT and NUMBER fields, with SET_VALUE.'}
+        valueAmount: {type: integer, format: int64, minimum: 0, description: 'For MONEY fields, with SET_VALUE.'}
+        valueDate: {type: string, format: date, description: 'For DATE fields, with SET_VALUE.'}
+        sourcePageId: {type: string, format: uuid}
+        sourceBbox: {$ref: '#/components/schemas/Bbox'}
+    FieldChangeResult:
+      type: object
+      required: [field, progress]
+      properties:
+        field: {$ref: '#/components/schemas/ClaimField'}
+        progress: {$ref: '#/components/schemas/ClaimProgress'}
+    # ---- Alerts ----
+    ClaimRef:
+      type: object
+      description: A link to another claim. Opening it follows the caller's own scope.
+      required: [id, claimNumber]
+      properties:
+        id: {type: string, format: uuid}
+        claimNumber: {type: string}
+    Alert:
+      type: object
+      required: [id, checkCode, severity, message, details, duplicateOfClaim, status, dismissible, raisedAt, lastCheckedAt, resolvedBy, resolvedAt, reasonCode, note]
+      properties:
+        id: {type: string, format: uuid}
+        checkCode: {$ref: '#/components/schemas/AlertCheck'}
+        severity: {$ref: '#/components/schemas/AlertSeverity'}
+        message: {type: string}
+        details: {type: [object, 'null'], description: Conflicting values with their claim_field ids.}
+        duplicateOfClaim:
+          oneOf:
+            - $ref: '#/components/schemas/ClaimRef'
+            - type: 'null'
+        status: {$ref: '#/components/schemas/AlertStatus'}
+        dismissible: {type: boolean, description: False for CLAIMED_TOTAL_MISMATCH.}
+        raisedAt: {type: string, format: date-time}
+        lastCheckedAt: {type: string, format: date-time}
+        resolvedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        resolvedAt: {type: [string, 'null'], format: date-time}
+        reasonCode:
+          oneOf:
+            - $ref: '#/components/schemas/ReasonCode'
+            - type: 'null'
+        note: {type: [string, 'null']}
+    AlertList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+    DismissAlertRequest:
+      type: object
+      required: [reasonCode, note]
+      properties:
+        reasonCode: {$ref: '#/components/schemas/AlertDismissReason'}
+        note: {type: string, minLength: 1, maxLength: 2000}
+    AlertChangeResult:
+      type: object
+      required: [alert, progress]
+      properties:
+        alert: {$ref: '#/components/schemas/Alert'}
+        progress: {$ref: '#/components/schemas/ClaimProgress'}
+    ValidationResult:
+      type: object
+      required: [items, progress]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alert'
+        progress: {$ref: '#/components/schemas/ClaimProgress'}
+    # ---- Expense lines ----
+    LineMappingAi:
+      type: object
+      required: [categoryCode, confidence, level, runId]
+      properties:
+        categoryCode: {type: string}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+        level: {$ref: '#/components/schemas/ConfidenceLevel'}
+        runId: {type: string, format: uuid}
+    LineMapping:
+      type: object
+      required: [status, categoryCode, ai, resolvedBy, resolvedAt]
+      properties:
+        status: {$ref: '#/components/schemas/MappingStatus'}
+        categoryCode: {type: [string, 'null'], description: The benefit category in use.}
+        ai:
+          oneOf:
+            - $ref: '#/components/schemas/LineMappingAi'
+            - type: 'null'
+        resolvedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        resolvedAt: {type: [string, 'null'], format: date-time}
+    LineOverride:
+      type: object
+      required: [result, amount, reasonCode, note, by, at]
+      properties:
+        result: {$ref: '#/components/schemas/LineResult'}
+        amount: {$ref: '#/components/schemas/Money'}
+        reasonCode: {$ref: '#/components/schemas/OverrideReason'}
+        note: {type: string}
+        by: {$ref: '#/components/schemas/StaffRef'}
+        at: {type: string, format: date-time}
+    ExpenseLine:
+      type: object
+      required: [id, documentId, lineNo, description, quantity, unitPrice, amount, origin, mapping, override]
+      properties:
+        id: {type: string, format: uuid}
+        documentId: {type: string, format: uuid, description: The invoice the line was read from.}
+        lineNo: {type: integer, minimum: 1}
+        description: {type: [string, 'null'], description: As printed on the invoice.}
+        quantity: {type: [number, 'null']}
+        unitPrice: {$ref: '#/components/schemas/NullableMoney'}
+        amount: {$ref: '#/components/schemas/NullableMoney'}
+        origin: {$ref: '#/components/schemas/LineOrigin'}
+        mapping: {$ref: '#/components/schemas/LineMapping'}
+        override:
+          oneOf:
+            - $ref: '#/components/schemas/LineOverride'
+            - type: 'null'
+    ExpenseLineList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseLine'
+    AddExpenseLineRequest:
+      type: object
+      required: [documentId]
+      properties:
+        documentId: {type: string, format: uuid, description: The invoice this line belongs to.}
+    ConfirmMappingRequest:
+      type: object
+      required: [categoryCode]
+      properties:
+        categoryCode: {type: string, maxLength: 40}
+    OverrideLineRequest:
+      type: object
+      required: [result, reasonCode, note]
+      properties:
+        result: {$ref: '#/components/schemas/LineResult'}
+        amount: {type: integer, format: int64, minimum: 0, description: Required for PARTIALLY_COVERED; must be above 0 and below the line amount.}
+        reasonCode: {$ref: '#/components/schemas/OverrideReason'}
+        note: {type: string, minLength: 1, maxLength: 2000}
+    LineChangeResult:
+      type: object
+      required: [line, progress]
+      properties:
+        line: {$ref: '#/components/schemas/ExpenseLine'}
+        progress: {$ref: '#/components/schemas/ClaimProgress'}
+    # ---- Calculation ----
+    FormulaRow:
+      type: object
+      required: [label, ruleCode, delta, total]
+      properties:
+        label: {type: string}
+        ruleCode: {type: [string, 'null']}
+        delta: {type: [integer, 'null'], format: int64, description: Change in VND at this step; negative when reduced.}
+        total: {$ref: '#/components/schemas/Money'}
+    RuleCitation:
+      type: object
+      required: [ruleCode, clauseText, clauseRef]
+      properties:
+        ruleCode: {type: string}
+        clauseText: {type: string}
+        clauseRef: {type: [string, 'null']}
+    CalculationLine:
+      type: object
+      required: [expenseLineId, lineNo, description, categoryCode, claimedAmount, engineResult, engineCoveredAmount, engineRule, isOverridden, finalResult, finalCoveredAmount, changedSincePrevious]
+      properties:
+        expenseLineId: {type: string, format: uuid}
+        lineNo: {type: integer, minimum: 1}
+        description: {type: [string, 'null']}
+        categoryCode: {type: string}
+        claimedAmount: {$ref: '#/components/schemas/Money'}
+        engineResult: {$ref: '#/components/schemas/LineResult'}
+        engineCoveredAmount: {$ref: '#/components/schemas/Money'}
+        engineRule: {$ref: '#/components/schemas/RuleCitation'}
+        isOverridden: {type: boolean}
+        finalResult: {$ref: '#/components/schemas/LineResult'}
+        finalCoveredAmount: {$ref: '#/components/schemas/Money'}
+        changedSincePrevious: {type: boolean}
+    CalculationRevisionSummary:
+      type: object
+      required: [revisionNo, triggerType, triggeredBy, ruleSetVersionNo, payableAmount, isStale, createdAt]
+      properties:
+        revisionNo: {type: integer, minimum: 1}
+        triggerType: {$ref: '#/components/schemas/RevisionTrigger'}
+        triggeredBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        ruleSetVersionNo: {type: integer}
+        payableAmount: {$ref: '#/components/schemas/Money'}
+        isStale: {type: boolean}
+        createdAt: {type: string, format: date-time}
+    CalculationRevisionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalculationRevisionSummary'
+    CalculationRevision:
+      type: object
+      description: An immutable snapshot of one calculation. Only the highest revision can be stale.
+      required: [id, revisionNo, ruleSetVersion, triggerType, triggeredBy, engineVersion, claimedTotal, eligibleTotal, afterRateAmount, perVisitLimit, annualLimit, consumedBefore, remainingLimit, payableAmount, projectedRemainingAfter, isStale, createdAt, formula, lines]
+      properties:
+        id: {type: string, format: uuid}
+        revisionNo: {type: integer, minimum: 1}
+        ruleSetVersion: {$ref: '#/components/schemas/RuleSetRef'}
+        triggerType: {$ref: '#/components/schemas/RevisionTrigger'}
+        triggeredBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        engineVersion: {type: string}
+        claimedTotal: {$ref: '#/components/schemas/Money'}
+        eligibleTotal: {$ref: '#/components/schemas/Money'}
+        afterRateAmount: {$ref: '#/components/schemas/Money'}
+        perVisitLimit: {$ref: '#/components/schemas/NullableMoney'}
+        annualLimit: {$ref: '#/components/schemas/NullableMoney'}
+        consumedBefore: {$ref: '#/components/schemas/Money'}
+        remainingLimit: {type: integer, format: int64, description: 'min(per-visit limit, annual limit - consumed). Can be below 0; the payable then is 0.'}
+        payableAmount: {$ref: '#/components/schemas/Money'}
+        projectedRemainingAfter: {type: integer, format: int64}
+        isStale: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        formula:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormulaRow'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalculationLine'
+    # ---- Risk flags ----
+    RiskFlag:
+      type: object
+      description: A signal, not a finding.
+      required: [id, aiRunId, expenseLine, diagnosis, flagType, severity, relevanceScore, aiReason, status, reviewedBy, reviewedAt, reasonCode, note, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        aiRunId: {type: string, format: uuid}
+        expenseLine:
+          type: object
+          required: [id, lineNo, description]
+          properties:
+            id: {type: string, format: uuid}
+            lineNo: {type: integer, minimum: 1}
+            description: {type: [string, 'null']}
+        diagnosis:
+          type: [object, 'null']
+          required: [fieldId, value]
+          properties:
+            fieldId: {type: string, format: uuid}
+            value: {type: [string, 'null']}
+        flagType: {$ref: '#/components/schemas/FlagType'}
+        severity: {$ref: '#/components/schemas/FlagSeverity'}
+        relevanceScore: {$ref: '#/components/schemas/Confidence'}
+        aiReason: {type: string, description: One sentence.}
+        status: {$ref: '#/components/schemas/FlagStatus'}
+        reviewedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        reviewedAt: {type: [string, 'null'], format: date-time}
+        reasonCode:
+          oneOf:
+            - $ref: '#/components/schemas/ReasonCode'
+            - type: 'null'
+        note: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+    FlagList:
+      type: object
+      required: [items, clinicalCheck]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFlag'
+        clinicalCheck: {$ref: '#/components/schemas/ClinicalCheckState'}
+    DismissFlagRequest:
+      type: object
+      required: [reasonCode, note]
+      properties:
+        reasonCode: {$ref: '#/components/schemas/FlagDismissReason'}
+        note: {type: string, minLength: 1, maxLength: 2000}
+    KeepFlagRequest:
+      type: object
+      required: [reasonCode, note]
+      properties:
+        reasonCode: {$ref: '#/components/schemas/FlagKeepReason'}
+        note: {type: string, minLength: 1, maxLength: 2000}
+    # ---- Recommendation and decision ----
+    Citation:
+      type: object
+      required: [label, kind, id]
+      properties:
+        label: {type: string, description: 'Chip text, for example Invoice p2 or EX-04.'}
+        kind:
+          type: string
+          enum: [FIELD, PAGE, RULE, OVERRIDE, FLAG, CALCULATION]
+        id: {type: string, description: 'Id of the cited item; for a rule, its rule code.'}
+    SummarySentence:
+      type: object
+      description: A sentence without citations is marked "No source" for the reviewer.
+      required: [text, origin, citations]
+      properties:
+        text: {type: string, minLength: 1, maxLength: 2000}
+        origin: {$ref: '#/components/schemas/ValueSource'}
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+    AttestationItem:
+      type: object
+      description: One auto-accepted AI value used in the calculation, the `line_amount` of a line or its benefit mapping.
+      required: [kind, id, label, value, confidence]
+      properties:
+        kind:
+          type: string
+          enum: [FIELD, MAPPING]
+        id: {type: string, format: uuid, description: The claim_field id or the expense_line id.}
+        label: {type: string}
+        value: {type: string}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+    AttestedItemRef:
+      type: object
+      required: [kind, id]
+      properties:
+        kind:
+          type: string
+          enum: [FIELD, MAPPING]
+        id: {type: string, format: uuid}
+    Decision:
+      type: object
+      required: [action, decidedBy, decidedAt, decisionRevisionNo, finalPayable, reasonCode, comment]
+      properties:
+        action: {$ref: '#/components/schemas/DecisionAction'}
+        decidedBy: {$ref: '#/components/schemas/StaffRef'}
+        decidedAt: {type: string, format: date-time}
+        decisionRevisionNo: {type: integer, minimum: 1}
+        finalPayable: {$ref: '#/components/schemas/NullableMoney'}
+        reasonCode:
+          oneOf:
+            - $ref: '#/components/schemas/OutcomeReason'
+            - type: 'null'
+        comment: {type: [string, 'null']}
+    Recommendation:
+      type: object
+      required: [id, status, revisionNo, proposedOutcome, recommendedOutcome, outcomeReason, outcomeNote, recommendedPayable, claimedTotal, summary, summaryAiRunId, summaryEdited, attestedValues, attestedAt, openHighFlags, submittedBy, submittedAt, decision, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/RecommendationStatus'}
+        revisionNo: {type: integer, minimum: 1, description: The revision the reviewer recommended on.}
+        proposedOutcome: {$ref: '#/components/schemas/ClaimOutcome'}
+        recommendedOutcome:
+          oneOf:
+            - $ref: '#/components/schemas/ClaimOutcome'
+            - type: 'null'
+        outcomeReason:
+          oneOf:
+            - $ref: '#/components/schemas/OutcomeReason'
+            - type: 'null'
+        outcomeNote: {type: [string, 'null']}
+        recommendedPayable: {$ref: '#/components/schemas/NullableMoney'}
+        claimedTotal: {$ref: '#/components/schemas/NullableMoney'}
+        summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/SummarySentence'
+        summaryAiRunId: {type: [string, 'null'], format: uuid}
+        summaryEdited: {type: boolean}
+        attestedValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttestationItem'
+        attestedAt: {type: [string, 'null'], format: date-time}
+        openHighFlags: {type: integer, minimum: 0}
+        submittedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        submittedAt: {type: [string, 'null'], format: date-time}
+        decision:
+          oneOf:
+            - $ref: '#/components/schemas/Decision'
+            - type: 'null'
+        createdAt: {type: string, format: date-time}
+    SubmissionReadiness:
+      type: object
+      description: The "Before you submit" list. Submit stays disabled while `missing` has items.
+      required: [ready, missing, warnings]
+      properties:
+        ready: {type: boolean}
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/Blocker'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+    RecommendationWorkspace:
+      type: object
+      required: [recommendation, proposedOutcome, readiness, attestationItems, allowedDecisionActions]
+      properties:
+        recommendation:
+          description: The latest row, which holds the return comment or the decision. Null before the first draft.
+          oneOf:
+            - $ref: '#/components/schemas/Recommendation'
+            - type: 'null'
+        proposedOutcome:
+          description: From the current payable (BR-13). Null before the first revision.
+          oneOf:
+            - $ref: '#/components/schemas/ClaimOutcome'
+            - type: 'null'
+        readiness: {$ref: '#/components/schemas/SubmissionReadiness'}
+        attestationItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttestationItem'
+        allowedDecisionActions:
+          type: array
+          description: Filled for a Senior Approver in PENDING_APPROVAL; empty otherwise. Empty for the person who submitted (BR-06).
+          items:
+            $ref: '#/components/schemas/DecisionAction'
+    SaveRecommendationDraftRequest:
+      type: object
+      required: [summary]
+      properties:
+        summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/SummarySentence'
+        recommendedOutcome: {$ref: '#/components/schemas/ClaimOutcome'}
+        outcomeReason: {$ref: '#/components/schemas/OutcomeReason'}
+        outcomeNote: {type: string, maxLength: 2000}
+    SubmitRecommendationRequest:
+      type: object
+      required: [revisionNo, recommendedOutcome, summary, attestedItems]
+      properties:
+        revisionNo: {type: integer, minimum: 1}
+        recommendedOutcome: {$ref: '#/components/schemas/ClaimOutcome'}
+        outcomeReason: {$ref: '#/components/schemas/OutcomeReason'}
+        outcomeNote: {type: string, maxLength: 2000}
+        summary:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SummarySentence'
+        attestedItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttestedItemRef'
+    DecideClaimRequest:
+      type: object
+      required: [revisionNo, action]
+      properties:
+        revisionNo: {type: integer, minimum: 1, description: The revision the approver saw.}
+        action:
+          type: string
+          enum: [APPROVE, PARTIALLY_APPROVE, REJECT]
+        reasonCode: {$ref: '#/components/schemas/OutcomeReason'}
+        comment: {type: string, maxLength: 2000, description: Required for REJECT when the payable is above 0.}
+    ReturnClaimRequest:
+      type: object
+      required: [comment]
+      properties:
+        comment: {type: string, minLength: 1, maxLength: 2000}
+    RecommendationResult:
+      type: object
+      required: [recommendation, progress]
+      properties:
+        recommendation: {$ref: '#/components/schemas/Recommendation'}
+        progress: {$ref: '#/components/schemas/ClaimProgress'}
+    # ---- Timeline ----
+    TimelineEvent:
+      type: object
+      required: [id, occurredAt, actorType, actor, eventType, entityType, entityId, before, after, aiRun]
+      properties:
+        id: {type: integer, format: int64}
+        occurredAt: {type: string, format: date-time}
+        actorType: {$ref: '#/components/schemas/ActorType'}
+        actor: {$ref: '#/components/schemas/NullableStaffRef'}
+        eventType: {type: string, description: 'For example CLAIM_STATUS_CHANGED, FIELD_CORRECTED or DECISION_RECORDED.'}
+        entityType: {type: string}
+        entityId: {type: string}
+        before: {type: [object, 'null']}
+        after: {type: [object, 'null']}
+        aiRun:
+          type: [object, 'null']
+          required: [id, modelName, modelVersion]
+          properties:
+            id: {type: string, format: uuid}
+            modelName: {type: string}
+            modelVersion: {type: string}
+    TimelinePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelineEvent'
+        page: {type: integer, minimum: 1}
+        pageSize: {type: integer, minimum: 1}
+        total: {type: integer, minimum: 0}
+    # ---- Policy ----
+    Plan:
+      type: object
+      required: [id, code, name, description, currentVersion, draftVersionId]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        currentVersion: {$ref: '#/components/schemas/NullableRuleSetRef'}
+        draftVersionId: {type: [string, 'null'], format: uuid}
+    PlanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Plan'
+    RuleSetVersionSummary:
+      type: object
+      required: [id, planId, versionNo, status, effectiveFrom, basedOnVersionId, changeNote, createdBy, createdAt, publishedBy, publishedAt]
+      properties:
+        id: {type: string, format: uuid}
+        planId: {type: string, format: uuid}
+        versionNo: {type: integer, minimum: 1}
+        status: {$ref: '#/components/schemas/RuleSetStatus'}
+        effectiveFrom: {type: [string, 'null'], format: date}
+        basedOnVersionId: {type: [string, 'null'], format: uuid}
+        changeNote: {type: [string, 'null']}
+        createdBy: {$ref: '#/components/schemas/StaffRef'}
+        createdAt: {type: string, format: date-time}
+        publishedBy: {$ref: '#/components/schemas/NullableStaffRef'}
+        publishedAt: {type: [string, 'null'], format: date-time}
+    RuleSetVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleSetVersionSummary'
+    BenefitRule:
+      type: object
+      required: [id, ruleCode, ruleType, categoryCode, clauseText, clauseRef, applyOrder, rateBp, limitAmount, limitScope, waitingDays]
+      properties:
+        id: {type: string, format: uuid}
+        ruleCode: {type: string, description: 'For example COV-01, EX-04, COINS-80, LIM-ANNUAL.'}
+        ruleType: {$ref: '#/components/schemas/RuleType'}
+        categoryCode: {type: [string, 'null']}
+        clauseText: {type: string}
+        clauseRef: {type: [string, 'null']}
+        applyOrder: {type: integer}
+        rateBp: {type: [integer, 'null'], minimum: 0, maximum: 10000, description: 'Share the insurer pays, in basis points. 8000 means 80%.'}
+        limitAmount: {$ref: '#/components/schemas/NullableMoney'}
+        limitScope:
+          oneOf:
+            - $ref: '#/components/schemas/LimitScope'
+            - type: 'null'
+        waitingDays: {type: [integer, 'null'], minimum: 0}
+    BenefitRuleInput:
+      type: object
+      description: Which of `rateBp`, `limitAmount`, `limitScope`, `waitingDays` and `categoryCode` apply depends on `ruleType` (checks ck_rule_*).
+      required: [ruleCode, ruleType, clauseText, applyOrder]
+      properties:
+        ruleCode: {type: string, minLength: 1, maxLength: 20}
+        ruleType:
+          type: string
+          enum: [COVERAGE, EXCLUSION, WAITING_PERIOD, COINSURANCE, LIMIT]
+        categoryCode: {type: string, maxLength: 40}
+        clauseText: {type: string, minLength: 1}
+        clauseRef: {type: string, maxLength: 40}
+        applyOrder: {type: integer}
+        rateBp: {type: integer, minimum: 0, maximum: 10000}
+        limitAmount: {type: integer, format: int64, minimum: 1}
+        limitScope: {$ref: '#/components/schemas/LimitScope'}
+        waitingDays: {type: integer, minimum: 0}
+    RuleSetVersionDetail:
+      allOf:
+        - $ref: '#/components/schemas/RuleSetVersionSummary'
+        - type: object
+          required: [rules]
+          properties:
+            rules:
+              type: array
+              items:
+                $ref: '#/components/schemas/BenefitRule'
+    CreatePlanVersionRequest:
+      type: object
+      properties:
+        basedOnVersionId: {type: string, format: uuid}
+        changeNote: {type: string, maxLength: 2000}
+    UpdateRuleSetRequest:
+      type: object
+      required: [rules]
+      properties:
+        changeNote: {type: string, maxLength: 2000}
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/BenefitRuleInput'
+    PublishPlanVersionRequest:
+      type: object
+      required: [effectiveFrom]
+      properties:
+        effectiveFrom: {type: string, format: date}
+    BenefitCategory:
+      type: object
+      required: [code, name, description]
+      properties:
+        code: {type: string}
+        name: {type: string}
+        description: {type: [string, 'null']}
+    BenefitCategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BenefitCategory'
+    SampleClaimLine:
+      type: object
+      required: [lineNo, description, categoryCode, claimedAmount]
+      properties:
+        lineNo: {type: integer, minimum: 1}
+        description: {type: string}
+        categoryCode: {type: string}
+        claimedAmount: {$ref: '#/components/schemas/Money'}
+    SampleClaim:
+      type: object
+      required: [id, code, name, planId, serviceDate, firstEnrolledOn, consumedBefore, lines]
+      properties:
+        id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        planId: {type: string, format: uuid}
+        serviceDate: {type: string, format: date}
+        firstEnrolledOn: {type: string, format: date}
+        consumedBefore: {$ref: '#/components/schemas/Money'}
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SampleClaimLine'
+    SampleClaimList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SampleClaim'
+    TestRuleSetRequest:
+      type: object
+      required: [sampleClaimIds]
+      properties:
+        sampleClaimIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    SampleLineResult:
+      type: object
+      required: [result, coveredAmount, ruleCode]
+      properties:
+        result: {$ref: '#/components/schemas/LineResult'}
+        coveredAmount: {$ref: '#/components/schemas/Money'}
+        ruleCode: {type: string}
+    SampleOutcome:
+      type: object
+      required: [eligibleTotal, afterRateAmount, remainingLimit, payableAmount]
+      properties:
+        eligibleTotal: {$ref: '#/components/schemas/Money'}
+        afterRateAmount: {$ref: '#/components/schemas/Money'}
+        remainingLimit: {type: integer, format: int64}
+        payableAmount: {$ref: '#/components/schemas/Money'}
+    TestRunSample:
+      type: object
+      required: [sampleClaimId, code, name, draft, current, lines, differs]
+      properties:
+        sampleClaimId: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        draft: {$ref: '#/components/schemas/SampleOutcome'}
+        current:
+          description: Null when the plan has no published version yet.
+          oneOf:
+            - $ref: '#/components/schemas/SampleOutcome'
+            - type: 'null'
+        lines:
+          type: array
+          items:
+            type: object
+            required: [lineNo, description, categoryCode, claimedAmount, draft, current, differs]
+            properties:
+              lineNo: {type: integer, minimum: 1}
+              description: {type: string}
+              categoryCode: {type: string}
+              claimedAmount: {$ref: '#/components/schemas/Money'}
+              draft: {$ref: '#/components/schemas/SampleLineResult'}
+              current:
+                oneOf:
+                  - $ref: '#/components/schemas/SampleLineResult'
+                  - type: 'null'
+              differs: {type: boolean}
+        differs: {type: boolean}
+    TestRunResult:
+      type: object
+      required: [draftVersionNo, currentVersionNo, samples]
+      properties:
+        draftVersionNo: {type: integer, minimum: 1}
+        currentVersionNo: {type: [integer, 'null']}
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestRunSample'
+    # ---- AI quality ----
+    Kpi:
+      type: object
+      required: [value, previousValue, change]
+      properties:
+        value: {type: number, description: A count for fieldsExtracted; a rate from 0 to 1 for the others.}
+        previousValue: {type: [number, 'null'], description: Same measure in the previous period of the same length.}
+        change: {type: [number, 'null']}
+    NullableKpi:
+      oneOf:
+        - $ref: '#/components/schemas/Kpi'
+        - type: 'null'
+    BreakdownRow:
+      type: object
+      required: [key, rate, count]
+      properties:
+        key: {type: string, description: 'A document type, field key, benefit category or flag type.'}
+        rate: {type: number, minimum: 0, maximum: 1}
+        count: {type: integer, minimum: 0}
+    AiQualityMetrics:
+      type: object
+      required: [from, to, modelVersion, availableModelVersions, aiRunCount, kpis, breakdowns]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        modelVersion: {type: [string, 'null']}
+        availableModelVersions:
+          type: array
+          description: Values for the model filter, newest first.
+          items:
+            type: string
+        aiRunCount: {type: integer, minimum: 0}
+        kpis:
+          type: object
+          required: [fieldsExtracted, lowConfidenceRate, correctionRate, mappingCorrectionRate, mappingAutoAcceptedRate, flagDismissalRate, clinicalFalsePositiveRate]
+          properties:
+            fieldsExtracted: {$ref: '#/components/schemas/Kpi'}
+            lowConfidenceRate: {$ref: '#/components/schemas/Kpi'}
+            correctionRate: {$ref: '#/components/schemas/Kpi'}
+            mappingCorrectionRate: {$ref: '#/components/schemas/Kpi'}
+            mappingAutoAcceptedRate: {$ref: '#/components/schemas/Kpi'}
+            flagDismissalRate: {$ref: '#/components/schemas/Kpi'}
+            clinicalFalsePositiveRate:
+              description: Golden-set runs only; null when there are none.
+              $ref: '#/components/schemas/NullableKpi'
+        breakdowns:
+          type: object
+          required: [lowConfidenceByDocumentType, correctionsByField, mappingAutoAcceptedByCategory, flagDismissalByType]
+          properties:
+            lowConfidenceByDocumentType:
+              type: array
+              items:
+                $ref: '#/components/schemas/BreakdownRow'
+            correctionsByField:
+              type: array
+              items:
+                $ref: '#/components/schemas/BreakdownRow'
+            mappingAutoAcceptedByCategory:
+              type: array
+              items:
+                $ref: '#/components/schemas/BreakdownRow'
+            flagDismissalByType:
+              type: array
+              items:
+                $ref: '#/components/schemas/BreakdownRow'

@@ -1,0 +1,258 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Claim Workspace — Decision Tab (Senior Approver)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Lexend+Exa:wght@500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Be Vietnam Pro"', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+            display: ['"Lexend Exa"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      font-family: 'Be Vietnam Pro', sans-serif;
+      background-color: #F4F3EF;
+      color: #111111;
+      -webkit-font-smoothing: antialiased;
+    }
+    .chip { display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 2px; font-size: 11px; white-space: nowrap;
+      font-family: 'IBM Plex Mono', monospace; background: #F3EEFD; color: #5B21B6; border: 1px solid #E4D7F5; }
+    .kicker { font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: #666562; }
+    .modal { display: none; }
+    .modal.open { display: flex; }
+    .modal-panel { box-shadow: 0 16px 40px rgba(9, 9, 9, .18); }
+    html:not(.state-balance) .only-balance { display: none !important; }
+    html.state-balance .not-balance { display: none !important; }
+  </style>
+<script>
+    // Prototype only: #balance-changed shows BR-10 after an approval was blocked; #confirm, #reject and #return open a dialog.
+    if (location.hash === '#balance-changed') document.documentElement.classList.add('state-balance');
+  </script>
+</head>
+<body class="min-h-screen flex bg-[#F4F3EF] overflow-x-hidden text-[14px]">
+<!-- LEFT 64px ICON-ONLY SIDEBAR: Senior Approver items -->
+<aside class="w-16 bg-[#090909] flex flex-col items-center py-4 justify-between shrink-0 select-none z-30">
+<div class="flex flex-col items-center gap-6 w-full">
+<a class="flex flex-col items-center justify-center gap-1" href="#" title="ClaimLens"><div class="w-3 h-3 bg-[#EB0029]"></div><span class="text-[10px] font-semibold text-white tracking-tight leading-none">ClaimLens</span></a>
+<nav class="flex flex-col items-center gap-2 w-full mt-2">
+<a class="w-10 h-10 flex items-center justify-center text-white bg-[#1D1C1C] relative rounded-[2px]" href="#" title="Approval queue"><span class="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-[#EB0029]"></span><span class="material-symbols-outlined text-[20px]">fact_check</span></a>
+<a class="w-10 h-10 flex items-center justify-center text-stone-400 hover:text-white rounded-[2px] transition-colors" href="#" title="Benefit plans"><span class="material-symbols-outlined text-[20px]">policy</span></a>
+<a class="w-10 h-10 flex items-center justify-center text-stone-400 hover:text-white rounded-[2px] transition-colors" href="#" title="AI quality dashboard"><span class="material-symbols-outlined text-[20px]">neurology</span></a>
+</nav>
+</div>
+<div class="w-8 h-8 rounded-full bg-[#1D1C1C] border border-[#333333] flex items-center justify-center text-xs font-mono font-medium text-stone-200" title="Lê Minh Quân">LQ</div>
+</aside>
+<!-- MAIN VIEWPORT -->
+<div class="flex-1 flex flex-col min-w-0 bg-[#F4F3EF]">
+<!-- TOP BAR -->
+<header class="h-14 bg-white border-b border-[#D8D6D1] flex items-center justify-between px-6 shrink-0 z-20">
+<div class="w-96 max-w-md relative">
+<span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-stone-400"><span class="material-symbols-outlined text-[16px]">search</span></span>
+<input class="w-full h-8 pl-9 pr-3 text-[13px] bg-[#F7F6F2] border border-[#D8D6D1] rounded-[2px] placeholder:text-stone-500 focus:outline-none focus:border-stone-800 transition-colors" placeholder="Go to claim no." type="text">
+</div>
+<div class="w-8 h-8 rounded-full bg-[#111111] text-white flex items-center justify-center font-mono text-[12px] font-medium" title="Lê Minh Quân · Senior approver">LQ</div>
+</header>
+<!-- CASE HEADER -->
+<section class="h-16 bg-white border-b border-[#D8D6D1] px-6 flex items-center justify-between shrink-0">
+<div class="flex items-center gap-3">
+<span class="font-mono text-[13px] text-[#666562] tracking-tight">CLM-2026-000184</span>
+<span class="text-stone-300">·</span>
+<h1 class="text-[16px] font-semibold text-[#111111] tracking-tight">Nguyễn Văn An</h1>
+<span class="text-stone-300">·</span>
+<span class="text-[13px] text-[#666562]">Gold Outpatient · <span class="font-mono">12/10/2026</span></span>
+</div>
+<div class="flex items-center gap-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium bg-[#090909] text-white"><span class="material-symbols-outlined text-[13px]">hourglass_empty</span>Pending approval</span>
+<div class="flex items-baseline gap-2">
+<span class="kicker">Payable</span>
+<span class="font-mono text-[20px] font-bold text-[#111111]"><span class="not-balance">800,000 ₫</span><span class="only-balance">500,000 ₫</span></span>
+</div>
+</div>
+</section>
+<!-- WORKFLOW TABS -->
+<nav class="h-11 bg-white border-b border-[#D8D6D1] px-6 flex items-center gap-7 shrink-0 text-[13px] font-medium">
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap" href="#">Overview</a>
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap" href="#">Evidence</a>
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap" href="#">Validation</a>
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap" href="#">Adjudication</a>
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap flex items-center gap-1.5" href="#">Risk<span class="px-1.5 bg-[#F0EEEB] text-[#666562] rounded text-[11px] font-mono">1</span></a>
+<a class="text-[#111111] font-semibold relative py-2.5 whitespace-nowrap" href="#">Decision<span class="absolute bottom-0 left-0 right-0 h-[2px] bg-[#111111]"></span></a>
+<a class="text-[#666562] hover:text-[#111111] transition-colors whitespace-nowrap" href="#">Timeline</a>
+</nav>
+<!-- BR-10: the balance changed since the calculation -->
+<div class="only-balance bg-[#FDF3DE] border-b border-[#F9DCA0] px-6 py-3 flex items-start gap-2.5 text-[13px] text-[#8A4B00] shrink-0">
+<span class="material-symbols-outlined text-[18px] shrink-0">warning</span>
+<p><span class="font-semibold">The balance changed since this calculation.</span> Revision #3 gives <span class="font-mono font-semibold">500,000 ₫</span> instead of <span class="font-mono font-semibold">800,000 ₫</span>. Return the claim so the reviewer can write a new recommendation, or reject it.</p>
+</div>
+<!-- THREE-COLUMN BODY -->
+<main class="flex-1 flex overflow-hidden">
+<!-- LEFT: Documents -->
+<section class="w-[200px] border-r border-[#D8D6D1] bg-white flex flex-col shrink-0 p-4 select-none">
+<div class="mb-3"><span class="kicker">Documents</span></div>
+<div class="space-y-2">
+<div class="p-2 border border-[#D8D6D1] rounded-[2px] bg-white hover:bg-[#F9F8F6] transition-colors flex items-center justify-between cursor-pointer"><span class="text-[13px] font-medium text-[#111111]">Invoice</span><span class="font-mono text-[11px] text-[#666562]">2 pages</span></div>
+<div class="p-2 border border-[#D8D6D1] rounded-[2px] bg-white hover:bg-[#F9F8F6] transition-colors flex items-center justify-between cursor-pointer"><span class="text-[13px] font-medium text-[#111111]">Receipt</span><span class="font-mono text-[11px] text-[#666562]">1 page</span></div>
+<div class="p-2 border border-[#D8D6D1] rounded-[2px] bg-white hover:bg-[#F9F8F6] transition-colors flex items-center justify-between cursor-pointer"><span class="text-[13px] font-medium text-[#111111]">Prescription</span><span class="font-mono text-[11px] text-[#666562]">1 page</span></div>
+<div class="p-2 border border-[#D8D6D1] rounded-[2px] bg-white hover:bg-[#F9F8F6] transition-colors flex items-center justify-between cursor-pointer"><span class="text-[13px] font-medium text-[#111111]">Visit summary</span><span class="font-mono text-[11px] text-[#666562]">1 page</span></div>
+</div>
+</section>
+<!-- MIDDLE: Recommendation, summary and line results, all read-only -->
+<section class="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+<div class="bg-white border border-[#D8D6D1] rounded-[2px] p-6">
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-[15px] font-semibold text-[#111111] tracking-tight">Recommendation</h2>
+<span class="text-[12px] text-[#666562]">Trần Thu Hà · <span class="font-mono">14/10/2026</span> · Revision #2</span>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div><div class="kicker mb-1">Outcome</div><div class="text-[14px] font-semibold text-[#111111]">Approve partial</div></div>
+<div><div class="kicker mb-1">Claimed</div><div class="font-mono text-[14px] text-[#111111]">1,400,000 ₫</div></div>
+<div><div class="kicker mb-1">Recommended amount</div><div class="font-mono text-[14px] font-semibold text-[#111111]">800,000 ₫</div></div>
+</div>
+<div class="mt-4 pt-4 border-t border-[#D8D6D1] text-[13px] text-[#111111]"><span class="kicker mr-2">Reason</span>Exclusion + limit applied</div>
+</div>
+<div class="bg-white border border-[#D8D6D1] rounded-[2px] p-6">
+<h2 class="text-[15px] font-semibold text-[#111111] tracking-tight mb-4">Summary</h2>
+<div class="space-y-3 text-[14px] leading-relaxed text-[#111111]">
+<p>Outpatient visit on <span class="font-mono">12/10/2026</span>, diagnosis <span class="font-mono">J02.9</span> acute pharyngitis. <span class="chip ml-1">Visit summary</span></p>
+<p>Line 4, a skin-care cream, is excluded as a cosmetic product. <span class="chip ml-1">Invoice p2</span> <span class="chip">EX-04</span></p>
+<p>Eligible <span class="font-mono">1,100,000 ₫</span> at <span class="font-mono">80%</span> gives <span class="font-mono">880,000 ₫</span>, capped to <span class="font-mono">800,000 ₫</span> by the remaining balance. <span class="chip ml-1">COINS-80</span> <span class="chip">LIM-ANNUAL</span></p>
+</div>
+</div>
+<div class="bg-white border border-[#D8D6D1] rounded-[2px] p-6">
+<div class="flex items-center justify-between mb-2">
+<h2 class="text-[15px] font-semibold text-[#111111] tracking-tight">Line results</h2>
+<span class="text-[12px] text-[#666562]">No overrides</span>
+</div>
+<table class="w-full text-[13px]">
+<thead><tr class="border-b border-[#D8D6D1] text-[#666562]"><th class="py-2 text-left font-medium">Line</th><th class="py-2 text-right font-medium">Claimed</th><th class="py-2 pl-6 text-left font-medium">Result</th><th class="py-2 text-right font-medium">Covered</th></tr></thead>
+<tbody class="divide-y divide-[#D8D6D1]">
+<tr><td class="py-2">Khám nội tổng quát</td><td class="py-2 text-right font-mono">300,000 ₫</td><td class="py-2 pl-6 text-[#11703C]">Covered</td><td class="py-2 text-right font-mono">300,000 ₫</td></tr>
+<tr><td class="py-2">Xét nghiệm công thức máu</td><td class="py-2 text-right font-mono">250,000 ₫</td><td class="py-2 pl-6 text-[#11703C]">Covered</td><td class="py-2 text-right font-mono">250,000 ₫</td></tr>
+<tr><td class="py-2">Amoxicillin 500mg</td><td class="py-2 text-right font-mono">150,000 ₫</td><td class="py-2 pl-6 text-[#11703C]">Covered</td><td class="py-2 text-right font-mono">150,000 ₫</td></tr>
+<tr><td class="py-2">Kem dưỡng phục hồi da Obagi</td><td class="py-2 text-right font-mono">300,000 ₫</td><td class="py-2 pl-6 text-[#A40022]">Excluded <span class="ml-1 px-1.5 py-0.5 rounded-[2px] bg-[#FBEAEC] font-mono text-[11px]">EX-04</span></td><td class="py-2 text-right font-mono">0 ₫</td></tr>
+<tr><td class="py-2">Siêu âm ổ bụng</td><td class="py-2 text-right font-mono">400,000 ₫</td><td class="py-2 pl-6 text-[#11703C]">Covered</td><td class="py-2 text-right font-mono">400,000 ₫</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- RIGHT: Signals, balance and attested values -->
+<section class="w-[400px] border-l border-[#D8D6D1] bg-white flex flex-col shrink-0 p-6 space-y-6 overflow-y-auto">
+<div>
+<h3 class="kicker mb-3">Signals</h3>
+<div class="p-4 bg-[#FDEDE4] border border-[#F5D0C5] rounded-[2px] space-y-2">
+<div class="flex items-start gap-2.5 text-[#9A3412]">
+<span class="material-symbols-outlined text-[18px] shrink-0">flag</span>
+<div><h4 class="text-[13px] font-semibold leading-snug">Ultrasound may not match diagnosis</h4><p class="text-[11px] mt-0.5">AI signal — not a finding · Kept for you</p></div>
+</div>
+<p class="pt-2 border-t border-[#F5D0C5] text-[12px] text-[#9A3412]"><span class="font-semibold">TH:</span> Check whether imaging was needed for this visit.</p>
+</div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-2"><h3 class="kicker">Remaining balance</h3><span class="font-mono text-[11px] text-[#666562]">Revision <span class="not-balance">#2</span><span class="only-balance">#3</span></span></div>
+<div class="w-full h-2 bg-[#E6E2DE] flex overflow-hidden"><div class="h-full bg-[#090909] not-balance w-[84%]"></div><div class="h-full bg-[#090909] only-balance w-[90%]"></div><div class="h-full bg-[#8C8984] not-balance w-[16%]"></div><div class="h-full bg-[#8C8984] only-balance w-[10%]"></div></div>
+<p class="mt-2 font-mono text-[11px] text-[#666562]"><span class="not-balance">Used 4,200,000 · This claim 800,000 · Remaining 0 ₫ of 5,000,000 ₫</span><span class="only-balance">Used 4,500,000 · This claim 500,000 · Remaining 0 ₫ of 5,000,000 ₫</span></p>
+</div>
+<div>
+<div class="flex items-center justify-between mb-2"><h3 class="kicker">Attested AI values</h3><span class="text-[11px] text-[#666562]">9 values · TH · <span class="font-mono">14/10/2026</span></span></div>
+<div class="border border-[#D8D6D1] rounded-[2px] divide-y divide-[#D8D6D1] text-[12px]">
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 1 amount</span><span class="font-mono">300,000 ₫ · 0.98</span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 2 amount</span><span class="font-mono">250,000 ₫ · 0.97</span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 3 amount</span><span class="font-mono">150,000 ₫ · 0.97</span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 4 amount</span><span class="font-mono">300,000 ₫ · 0.96</span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 5 amount</span><span class="font-mono">400,000 ₫ · 0.98</span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 1 category</span><span>Consultation <span class="font-mono">· 0.93</span></span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 2 category</span><span>Laboratory tests <span class="font-mono">· 0.91</span></span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 3 category</span><span>Prescription drugs <span class="font-mono">· 0.90</span></span></div>
+<div class="px-3 py-1.5 flex justify-between gap-3"><span class="text-[#666562]">Line 5 category</span><span>Diagnostic imaging <span class="font-mono">· 0.88</span></span></div>
+</div>
+</div>
+</section>
+</main>
+<!-- BOTTOM ACTION BAR -->
+<footer class="h-14 bg-white border-t border-[#D8D6D1] px-6 flex items-center justify-between shrink-0 z-20">
+<div class="flex items-center gap-2 text-[13px] text-[#9A3412] font-medium"><span class="material-symbols-outlined text-[18px]">flag</span><span>1 kept signal</span></div>
+<div class="flex items-center gap-3">
+<button class="not-balance h-9 px-4 text-[13px] font-medium text-[#111111] bg-white border border-[#8C8984] hover:bg-[#F7F6F2] rounded-[2px] transition-colors whitespace-nowrap" data-open="return">Return to reviewer</button>
+<button class="h-9 px-4 text-[13px] font-medium text-[#111111] bg-white border border-[#8C8984] hover:bg-[#F7F6F2] rounded-[2px] transition-colors whitespace-nowrap" data-open="reject">Reject</button>
+<button class="not-balance h-9 px-4 text-[13px] font-semibold text-white bg-[#EB0029] hover:bg-[#d40025] rounded-[2px] transition-colors whitespace-nowrap flex items-center gap-2" data-open="confirm"><span>Approve partial</span><span class="font-mono">800,000 ₫</span></button>
+<button class="only-balance h-9 px-4 text-[13px] font-semibold text-white bg-[#EB0029] hover:bg-[#d40025] rounded-[2px] transition-colors whitespace-nowrap" data-open="return">Return to reviewer</button>
+</div>
+</footer>
+</div>
+<!-- SCR-39: confirm the decision -->
+<div class="modal fixed inset-0 z-50 items-center justify-center bg-[#09090999]" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+<div class="modal-panel w-[480px] bg-white p-6">
+<div class="font-mono text-[11px] text-[#666562] mb-1">CLM-2026-000184</div>
+<h2 class="font-display text-[20px] leading-7 font-semibold text-[#111111] mb-5" id="confirm-title">Confirm decision</h2>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div><div class="kicker mb-1">Outcome</div><div class="text-[14px] font-semibold text-[#111111]">Partially approved</div></div>
+<div><div class="kicker mb-1">Final amount</div><div class="font-mono text-[24px] leading-8 font-semibold text-[#111111]">800,000 ₫</div></div>
+</div>
+<p class="text-[13px] text-[#666562] mb-6">The balance will be used by this amount, leaving <span class="font-mono">0 ₫</span>. This decision cannot be undone.</p>
+<div class="flex justify-end gap-3">
+<button class="h-9 px-4 text-[13px] font-medium text-[#111111] hover:bg-[#F7F6F2] rounded-[2px]" data-close="">Cancel</button>
+<button class="h-9 px-4 text-[13px] font-semibold text-white bg-[#EB0029] hover:bg-[#d40025] rounded-[2px]" data-close="">Confirm decision</button>
+</div>
+</div>
+</div>
+<!-- SCR-39: reject -->
+<div class="modal fixed inset-0 z-50 items-center justify-center bg-[#09090999]" id="modal-reject" role="dialog" aria-modal="true" aria-labelledby="reject-title">
+<div class="modal-panel w-[480px] bg-white p-6">
+<div class="font-mono text-[11px] text-[#666562] mb-1">CLM-2026-000184</div>
+<h2 class="font-display text-[20px] leading-7 font-semibold text-[#111111] mb-5" id="reject-title">Reject claim</h2>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div><div class="kicker mb-1">Outcome</div><div class="text-[14px] font-semibold text-[#A40022]">Rejected</div></div>
+<div><div class="kicker mb-1">Final amount</div><div class="font-mono text-[24px] leading-8 font-semibold text-[#111111]">0 ₫</div></div>
+</div>
+<label class="block kicker mb-1.5" for="reject-reason">Reason</label>
+<select class="w-full h-9 px-3 mb-4 text-[13px] bg-white border border-[#8C8984] rounded-[2px] focus:outline-none focus:border-stone-800" id="reject-reason"><option hidden="" selected="" value="">Choose a reason</option><option>Exclusion + limit applied</option><option>Medical necessity requirement</option><option>General policy exclusion</option><option>Exceeded annual maximum</option><option>Outside the coverage period</option><option>Evidence missing</option></select>
+<label class="block kicker mb-1.5" for="reject-comment">Comment</label>
+<textarea class="w-full h-20 p-3 mb-4 text-[13px] bg-white border border-[#8C8984] rounded-[2px] focus:outline-none focus:border-stone-800 placeholder:text-[#6F6D69]" id="reject-comment" placeholder="Why reject although the payable is above 0?"></textarea>
+<p class="text-[13px] text-[#666562] mb-6">No benefit balance is used. This decision cannot be undone.</p>
+<div class="flex justify-end gap-3">
+<button class="h-9 px-4 text-[13px] font-medium text-[#111111] hover:bg-[#F7F6F2] rounded-[2px]" data-close="">Cancel</button>
+<button class="h-9 px-4 text-[13px] font-semibold text-white bg-[#A40022] hover:bg-[#860019] rounded-[2px]" data-close="">Reject claim</button>
+</div>
+</div>
+</div>
+<!-- SCR-39: return -->
+<div class="modal fixed inset-0 z-50 items-center justify-center bg-[#09090999]" id="modal-return" role="dialog" aria-modal="true" aria-labelledby="return-title">
+<div class="modal-panel w-[480px] bg-white p-6">
+<div class="font-mono text-[11px] text-[#666562] mb-1">CLM-2026-000184</div>
+<h2 class="font-display text-[20px] leading-7 font-semibold text-[#111111] mb-5" id="return-title">Return to reviewer</h2>
+<label class="block kicker mb-1.5" for="return-comment">Comment</label>
+<textarea class="w-full h-24 p-3 mb-4 text-[13px] bg-white border border-[#8C8984] rounded-[2px] focus:outline-none focus:border-stone-800 placeholder:text-[#6F6D69]" id="return-comment" placeholder="What should the reviewer check or change?"></textarea>
+<p class="text-[13px] text-[#666562] mb-6">The claim goes back to Trần Thu Hà, in the Returned tab.</p>
+<div class="flex justify-end gap-3">
+<button class="h-9 px-4 text-[13px] font-medium text-[#111111] hover:bg-[#F7F6F2] rounded-[2px]" data-close="">Cancel</button>
+<button class="h-9 px-4 text-[13px] font-semibold text-white bg-[#EB0029] hover:bg-[#d40025] rounded-[2px]" data-close="">Return claim</button>
+</div>
+</div>
+</div>
+<script>
+  (function () {
+    function open(name) {
+      document.querySelectorAll('.modal').forEach(function (m) { m.classList.toggle('open', m.id === 'modal-' + name); });
+    }
+    document.querySelectorAll('[data-open]').forEach(function (b) {
+      b.addEventListener('click', function () { open(b.dataset.open); });
+    });
+    document.querySelectorAll('[data-close]').forEach(function (b) {
+      b.addEventListener('click', function () { open(''); });
+    });
+    if (['#confirm', '#reject', '#return'].indexOf(location.hash) >= 0) open(location.hash.slice(1));
+  })();
+</script>
+</body></html>

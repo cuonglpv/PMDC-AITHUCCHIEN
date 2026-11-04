@@ -2,9 +2,9 @@
 
 > Design status: TARGET MVP
 >
-> Database: PostgreSQL 14 or later. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (20 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins.
+> Database: PostgreSQL 14 or later. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (21 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins.
 
-The schema is built so that the database itself, not only the application, can check the product rule **AI reads, the Rule Engine calculates, people decide**. The latest AI output is kept next to the value people use, rule results next to human overrides, and the most important business rules (BR-01 to BR-13 in [Use cases](03-use-cases.md#business-rules-referenced-by-use-cases)) are written as constraints. All 11 use cases are covered by the 20 tables; no use case had to be removed.
+The schema is built so that the database itself, not only the application, can check the product rule **AI reads, the Rule Engine calculates, people decide**. The latest AI output is kept next to the value people use, rule results next to human overrides, and the most important business rules (BR-01 to BR-13 in [Use cases](03-use-cases.md#business-rules-referenced-by-use-cases)) are written as constraints. All 11 use cases are covered by the 21 tables; no use case had to be removed.
 
 ## 1. Design decisions
 
@@ -21,6 +21,7 @@ The schema is built so that the database itself, not only the application, can c
 | D9 | Reason codes are typed by use | `reason_code` is an enum whose prefix says where it may be used: `DISMISS_` (alerts, flags), `KEEP_` (flags), `OVERRIDE_` (lines) and `OUTCOME_`, the Reason list on the Decision tab that the reviewer's recommendation and the approver's rejection share. Each table checks the prefix. | BR-07, BR-13, US16, US17 |
 | D10 | Synthetic test claims live apart | Rule-set test runs read `sample_claim`, never `claim`, so the Administrator needs no access to claim tables. Test results are computed on request and not stored. | BR-11, US20 |
 | D11 | One insert-only audit trail | `audit_event` records every state change, correction, override, dismissal, decision and claim access with before and after values. It also keeps what the tables overwrite: earlier AI suggestions and earlier overrides. | BR-12, US22 |
+| D12 | Refresh tokens are stored, access tokens are not | The access token is a signed token that lives 15 minutes. `refresh_token` keeps a hash of each refresh token with its sign-in family and fixed expiry, so sign-out can revoke it and reuse of a rotated token can end the whole session. | US01, [API contract](07-api-contract.md#sign-in-and-tokens) |
 
 ## 2. Conventions
 
@@ -34,10 +35,11 @@ The schema is built so that the database itself, not only the application, can c
 
 ## 3. Overview
 
-All 20 tables and how they connect; each line is labelled with the foreign-key column. Lines to `staff_account` (all `…_by`, `assignee_id` and `actor_id` columns) are left out to keep the picture readable.
+All 21 tables and how they connect; each line is labelled with the foreign-key column. Lines to `staff_account` (all `…_by`, `assignee_id` and `actor_id` columns) are left out to keep the picture readable; the one from `refresh_token` is drawn because it is that table's only link.
 
 ```mermaid
 erDiagram
+    staff_account ||--o{ refresh_token : "staff_account_id"
     member ||--o{ policy : "member_id"
     benefit_plan ||--o{ policy : "plan_id"
     benefit_plan ||--o{ rule_set_version : "plan_id"
@@ -82,17 +84,17 @@ erDiagram
     document ||--o{ document_page : "(document_id, claim_id)"
     claim |o--o{ audit_event : "claim_id"
     ai_run |o--o{ audit_event : "ai_run_id"
-    staff_account
 ```
 
 ## 4. ER diagrams by area
 
-How to read them: `||` exactly one, `|o` zero or one, `o{` zero or more. Every column is listed with its key (`PK`, `FK`, `UK`); an `FK` comment names the table it points to. Each diagram draws the foreign keys held by its own tables; tables from other areas appear as plain boxes, and lines to `staff_account` are not drawn.
+How to read them: `||` exactly one, `|o` zero or one, `o{` zero or more. Every column is listed with its key (`PK`, `FK`, `UK`); an `FK` comment names the table it points to. Each diagram draws the foreign keys held by its own tables; tables from other areas appear as plain boxes, and lines to `staff_account` are not drawn, except the one from `refresh_token`.
 
 ### 4.1 Access, policies and benefit rule sets
 
 ```mermaid
 erDiagram
+    staff_account ||--o{ refresh_token : "staff_account_id"
     member ||--o{ policy : "member_id"
     benefit_plan ||--o{ policy : "plan_id"
     benefit_plan ||--o{ rule_set_version : "plan_id"
@@ -110,6 +112,16 @@ erDiagram
         account_status status
         timestamptz last_sign_in_at
         timestamptz created_at
+    }
+    refresh_token {
+        uuid id PK
+        uuid staff_account_id FK "-> staff_account"
+        uuid family_id "Every token rotated from one sign-in"
+        char token_hash UK "SHA-256; the token itself is never stored"
+        timestamptz issued_at
+        timestamptz expires_at "8 hours after sign-in; never extended"
+        timestamptz rotated_at
+        timestamptz revoked_at
     }
     member {
         uuid id PK
@@ -328,6 +340,8 @@ erDiagram
         text override_note
         uuid override_by FK "-> staff_account"
         timestamptz override_at
+        uuid removed_by FK "-> staff_account. Line removed by the reviewer"
+        timestamptz removed_at
     }
 ```
 
@@ -483,6 +497,7 @@ erDiagram
 | Area | Table | Holds | Use cases |
 |---|---|---|---|
 | Access & policy | `staff_account` | Seeded staff, exactly one role each; `initials` replace the AI marker. | UC01 |
+| | `refresh_token` | Hash of each refresh token, its sign-in family, fixed expiry and revocation. | UC01 |
 | | `member` | Insured person; name, citizen ID and birth date are identity data (BR-11). | UC02 |
 | | `benefit_plan` | Product, e.g. `GOLD-OP` Gold Outpatient. | UC02, UC09 |
 | | `policy` | A member's policy for one year: plan, status, coverage, enrolment date, annual usage and its version. | UC02, UC05, UC08 |
@@ -535,7 +550,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | `READY_FOR_REVIEW` | Every required field slot resolved (`AUTO_ACCEPTED`, `CONFIRMED`, `CORRECTED`, `ENTERED` or `NOT_PRESENT`) and no page left `UNCLASSIFIED`. |
 | `IN_REVIEW` | `assignee_id` set (`ck_claim_assignee_required`). Returned = latest `recommendation` is `RETURNED`. |
 | Adjudication may run | No `alert` that is `OPEN` and `BLOCKING`; every `expense_line` has an amount and a mapping that is not `PENDING` or `NEEDS_CONFIRMATION`; a `PUBLISHED` `rule_set_version` is effective on the service date. |
-| `PENDING_APPROVAL` | A `SUBMITTED` `recommendation` on the latest revision, with `attested_at` and `attested_values`. |
+| `PENDING_APPROVAL` | A `SUBMITTED` `recommendation` on the latest revision, which is not stale (its `input_hash` matches the current inputs), with `attested_at` and `attested_values`. |
 | `APPROVED`, `PARTIALLY_APPROVED`, `REJECTED` | The `recommendation` is `DECIDED` by a `SENIOR_APPROVER` who is not the submitter, with an action that matches BR-13. An approval adds `final_payable` to `policy.consumed_amount` and raises `balance_version`. |
 | Back to `IN_REVIEW` | The `recommendation` is `RETURNED` with a comment. |
 
@@ -549,13 +564,13 @@ What must be true in the tables before a claim can enter each status. The move i
 | BR-04 Version on the service date | `rule_set_version.effective_from`; `calculation_revision.rule_set_version_id`; one published version per effective date (partial unique index). |
 | BR-05 Line results and payable | `benefit_rule` kinds and `apply_order`; result checks on `calculation_line` and `expense_line` overrides; `ck_revision_payable_formula`. |
 | BR-06 Maker–checker | `ck_decision_maker_checker` (`decided_by <> submitted_by` on the same row). |
-| BR-07 Reasons and override caps | `ck_alert_dismiss_reason`, `ck_risk_flag_reason`, `ck_override_complete`, `ck_override_cap`, and the reason-prefix checks. |
+| BR-07 Reasons and override caps | `ck_alert_dismiss_reason`, `ck_alert_total_not_dismissible`, `ck_risk_flag_reason`, `ck_override_complete`, `ck_override_cap`, and the reason-prefix checks. |
 | BR-08 Alert versus risk flag | Deterministic checks → `alert` (including `DUPLICATE_INVOICE`: same `invoice_number` and `provider_tax_code` in another claim, or the normalised `provider_name` when the document has no tax code); AI signals → `risk_flag`, which no calculation table references. |
-| BR-09 Approval queue priority | Sort by the latest revision's payable against the configured high-value threshold, open `HIGH` flags, then `submitted_at`. |
+| BR-09 Queue priority | Approval queue: the latest revision's payable against the configured high-value threshold, `OPEN` or `KEPT` `HIGH` flags, then `submitted_at`. Review queue: the same with `claimed_total` in place of the payable and `status_changed_at` for age. |
 | BR-10 Balance consumed on approval, re-checked | `policy.balance_version`; `calculation_revision.balance_version`; `recommendation.balance_version_checked`; `ck_policy_consumed`. |
-| BR-11 Who sees claim data | `claim.registered_by`, `claim.assignee_id` and the staff role drive row-level security; synthetic `sample_claim` for the Administrator. |
+| BR-11 Who sees claim data | `claim.registered_by`, `claim.assignee_id` and the staff role drive row-level security; the API returns reduced columns for the Available list; synthetic `sample_claim` for the Administrator. |
 | BR-12 Immutable audit | `audit_event`, insert-only. |
-| BR-13 Outcome by amount | `proposed_outcome` and `ck_recommendation_mismatch_reason`; `ck_decision_br13_approved`, `_partial`, `_rejected`. |
+| BR-13 Outcome by amount | `proposed_outcome` and `ck_recommendation_mismatch_reason`; `ck_decision_br13_approved`, `_partial`, `_rejected`. `recommended_payable` and `final_payable` are set by the system, never sent by the client. |
 
 ## 9. The golden case as rows
 
@@ -582,29 +597,30 @@ These go in the migration next to the DDL exported from the DBML.
 |---|---|
 | One open recommendation per claim | `create unique index ux_recommendation_open on recommendation (claim_id) where status in ('DRAFT', 'SUBMITTED');` |
 | One published version per plan and date | `create unique index ux_rule_set_published_effective on rule_set_version (plan_id, effective_from) where status = 'PUBLISHED';` |
+| One draft per plan | `create unique index ux_rule_set_one_draft on rule_set_version (plan_id) where status = 'DRAFT';` |
 | Lifecycle moves only along the state diagram | Trigger on `claim.status`; final statuses only when the latest `recommendation` is `DECIDED` with the matching action. |
 | Published rule sets are frozen | Trigger blocks updates to a `PUBLISHED` version and its `benefit_rule` rows, and requires `effective_from` later than the current published version. Publishing also checks that every active category has one `COVERAGE` or `EXCLUSION` rule. |
 | Approval and usage stay in step | The decision and the `policy` update run in one transaction with the policy row locked; a trigger can assert `consumed_amount = opening_consumed + sum(final_payable)` of approved recommendations. |
 | Audit is insert-only | `revoke update, delete on audit_event from claimlens_app;` optionally a hash chain over `id` order. |
-| BR-11 visibility | Row-level security on `claim` and its child tables: Intake Officer where `registered_by = me`, Claims Reviewer where `assignee_id = me`, Senior Approver all, Administrator none. |
+| BR-11 visibility | Row-level security on `claim` and its child tables: Intake Officer where `registered_by = me`, Claims Reviewer where `assignee_id = me`, Senior Approver all, Administrator none. On `claim` only, a Claims Reviewer also reads unassigned rows in `NEEDS_VERIFICATION` or `READY_FOR_REVIEW`, so the Available list works; the API returns only the columns BR-11 allows there. |
 | Line values follow their fields | `expense_line` amounts and descriptions are written in the same transaction as the `claim_field` change that feeds them. |
 | Vietnamese name search | `create extension pg_trgm; create extension unaccent;` and a GIN index on `unaccent(full_name)`. |
 
 To get the DDL, paste the DBML into [dbdiagram.io](https://dbdiagram.io) and export PostgreSQL, or run:
 
 ```bash
-npx @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres -o claimlens.sql
+npx -p @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres -o claimlens.sql
 ```
 
 ## 11. Open questions and assumptions
 
 | # | Question | Assumption in this model |
 |---|---|---|
-| Q1 | The golden case differs between documents: [03](03-use-cases.md) UC05 and [08](08-invest-requirements.md) US12 use four lines (200,000 · 500,000 · 400,000 · 300,000), the UI prototype and stitch-prompts use five (300,000 · 250,000 · 150,000 · 300,000 · 400,000). Totals and payable are the same. | Seed data follows the UI. 03 and 08 should be aligned before the golden set is built. |
+| Q1 | The golden case differed between documents. | Resolved: every document now uses the five lines of the UI prototype (300,000 · 250,000 · 150,000 · 300,000 · 400,000). |
 | Q2 | Intake channel values are not defined. | `COUNTER`, `POST`, `EMAIL`, `PARTNER`. |
 | Q3 | Which documents are required (the `REQUIRED_DOCUMENTS` check)? | Config: invoice, receipt, visit summary; prescription when there are drug lines. |
 | Q4 | The per-visit limit of `GOLD-OP` is not given. | 2,000,000 VND, so the annual limit caps the golden case. |
-| Q5 | BR-10: when the balance changed during `PENDING_APPROVAL`, who re-runs adjudication, and what if the payable changes? | The system creates a `BALANCE_RECHECK` revision. Same payable: the approver decides on it (`decision_revision_id`). Different payable: the claim is returned to the reviewer. |
+| Q5 | BR-10: when the balance changed during `PENDING_APPROVAL`, who re-runs adjudication, and what if the payable changes? | Resolved: the system creates a `BALANCE_RECHECK` revision when an approval is attempted. Same payable: the approver confirms on it (`decision_revision_id`). Different payable: the approver returns the claim or rejects it, so `decided_by` always names a person who acted (BR-01). |
 | Q6 | Waiting periods count from which date? | `policy.first_enrolled_on`, so renewals do not restart them. |
 | Q7 | A category that is neither covered nor excluded in a version. | Not allowed: publishing requires every active category to be covered or excluded. |
 | Q8 | Receipts may carry no seller tax code, and invoice numbers may restart each year under a new invoice series (e.g. `1C26THN`). | The duplicate key is `invoice_number` + `provider_tax_code`, falling back to the normalised `provider_name`. The invoice series is not stored; a repeat number from another year raises a Blocking alert that the reviewer dismisses with a reason. Add an `invoice_series` field if that happens often. |

@@ -65,6 +65,7 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** an active account, **when** valid credentials are submitted, **then** the user lands on their role home (Intake → Intake; Reviewer → Review queue; Approver → Approval queue; Administrator → Benefit plans) and sees only permitted navigation.
 - **Given** invalid credentials or a disabled account, **when** sign-in is attempted, **then** the same generic error appears and no account state is disclosed.
 - **Given** a signed-in user without permission, **when** a protected URL is opened directly, **then** the 403 page is shown with a link back to the role home.
+- **Given** an expired access token, **when** the user keeps working, **then** the token is refreshed without interrupting them; **given** an expired or revoked refresh token, **then** the user returns to Sign in.
 
 ### US02 — Register claim
 - **Given** a search by member name, national ID or policy number, **when** results return, **then** each shows policy status, coverage period and remaining outpatient balance.
@@ -96,12 +97,15 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** an assigned claim with fields to verify, **when** the Evidence tab opens, **then** fields are grouped by document, ordered by lowest confidence first, with a counter of remaining items.
 - **Given** a field, **when** the reviewer accepts, edits or marks "Not present", **then** old value, new value, user and time are stored and the AI marker is replaced by the reviewer's initials.
 - **Given** all required fields are accepted (by threshold or by a person), **then** the claim moves to `ReadyForReview` and, being assigned, on to `InReview`.
-- **Given** a misclassified or unreadable page, **when** the reviewer reclassifies it and re-runs AI on that page, **then** only that page is re-extracted and verified fields on other pages are kept; **given** the AI service fails, **then** the reviewer enters that page's fields manually.
+- **Given** a misclassified or unreadable page, **when** the reviewer reclassifies it and re-runs AI on that page, **then** only that page is re-extracted, fields a person has already resolved keep their values on every page, and unresolved fields on that page take the new AI values; **given** the AI service fails, **then** the reviewer enters that page's fields manually.
+- **Given** extraction failed or missed a line, **when** the reviewer adds an expense line, **then** its fields can be entered by hand with a drawn source region; **given** AI invented a line, **then** the reviewer can remove it and the removal is audited.
 
 ### US07 — Completeness and consistency checks
-- **Given** accepted fields, **when** validation runs, **then** it checks: required documents present, insured name and policy match the claim, service dates consistent across documents, invoice total equals sum of lines (tolerance 0 VND).
+- **Given** accepted fields, **when** validation runs, **then** it checks: required documents present, insured name and policy match the claim, service dates consistent across documents, invoice total equals sum of lines and claimed total equals sum of lines (tolerance 0 VND).
 - **Given** a failed check, **then** an Alert shows severity (Blocking / Warning), the conflicting values and their sources.
 - **Given** an open Blocking alert, **when** adjudication is requested, **then** it is blocked until the alert is resolved or dismissed with a reason code and note.
+- **Given** a claimed total that differs from the sum of lines, **then** the Blocking alert cannot be dismissed; the reviewer corrects the claimed total or the line values.
+- **Given** a wrong claimed total or service date from intake, **when** the reviewer corrects it on the claim, **then** the change is audited and validation and adjudication re-run.
 
 ### US08 — Duplicate detection
 - **Given** an invoice number + provider already used in another claim, **when** validation runs, **then** a Blocking duplicate Alert links to that claim. The provider is matched by the seller tax code on the invoice, or by the normalised provider name when the document has no tax code.
@@ -127,13 +131,15 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** no published rule-set version is effective on the service date, **then** adjudication is blocked with "No effective rule set".
 
 ### US12 — Payable amount and formula
-- **Given** the golden case (Consultation 200,000, Lab test 500,000, Medication 400,000 Covered; Cosmetic service 300,000 Excluded by EX-04; reimbursement rate 80%; remaining limit 800,000), **when** adjudication runs, **then** eligible = 1,100,000, after rate = 880,000, payable = min(880,000; 800,000) = 800,000 VND, and the formula shows each step.
+- **Given** the golden case (Consultation 300,000, Lab test 250,000, Medication 150,000, Diagnostic imaging 400,000 Covered; Cosmetic product 300,000 Excluded by EX-04; reimbursement rate 80%; remaining limit 800,000), **when** adjudication runs, **then** eligible = 1,100,000, after rate = 880,000, payable = min(880,000; 800,000) = 800,000 VND, and the formula shows each step.
 - **Given** any result, **then** remaining balance before (golden case: 800,000) and projected after (golden case: 0) are displayed.
 
 ### US13 — Re-run after corrections
 - **Given** a field, mapping or document is changed in `InReview`, **when** the change is saved, **then** validation and adjudication re-run automatically without leaving the claim workspace.
 - **Given** a re-run, **then** a new numbered calculation revision is created; previous revisions remain viewable and changed lines are highlighted.
 - **Given** a re-run in progress, **then** the previous result stays visible, dimmed, with "Recalculating…".
+- **Given** a change that opens a Blocking alert, **then** no new revision is created, the current revision is marked stale and the recommendation cannot be submitted until the alert is cleared.
+- **Given** the balance changed while the claim is `InReview`, **then** the current revision is marked stale and the reviewer re-runs adjudication before submitting.
 
 ### US14 — 🟣 Review risk flags
 - **Given** an AI risk flag, **then** it shows type, severity, evidence and the AI's reason, labelled "Signal — not a finding".
@@ -153,16 +159,16 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 ### US17 — Submit recommendation
 - **Given** no open Blocking alert, all mappings below 0.85 confirmed, a summary and a recommendation type, **when** Submit is clicked, **then** the reviewer confirms an attestation listing the auto-accepted AI values used in the calculation, and the claim moves to `PendingApproval`.
 - **Given** any of those conditions is missing, **then** Submit is disabled and the missing item is named.
-- **Given** a recommendation type that differs from the type implied by the payable (BR-13), **then** a reason is required.
+- **Given** a recommendation type that differs from the type implied by the payable (BR-13), **then** it can only be Rejected, and a reason code and note are required.
 - **Given** submission, **then** the claim appears in the approval queue ordered by priority (high value, open High flags, age).
 
 ### US18 — Approve / reject / return
 - **Given** the approver submitted the recommendation, **then** decision actions are disabled with an explanation.
-- **Given** approve, partially approve or reject is chosen, **when** confirming, **then** the confirmation shows claim number, outcome and final amount; the outcome must match BR-13; reject requires a reason code.
+- **Given** approve, partially approve or reject is chosen, **when** confirming, **then** the confirmation shows claim number, outcome and final amount, and the system calculates the amount, not the approver; approve and partially approve must match the payable (BR-13); reject requires a reason code, and also a comment when the payable is above 0.
 - **Given** return is chosen, **then** a comment is required and the claim moves back to `InReview` and the reviewer's Returned tab.
-- **Given** the remaining balance changed since the calculation revision, **when** approving, **then** approval is blocked until adjudication is re-run.
+- **Given** the remaining balance changed since the calculation revision, **when** approving, **then** the approval is blocked and the system creates a `BALANCE_RECHECK` revision; with the same payable the approver confirms on that revision, with a different payable the approver returns the claim or rejects it.
 - **Given** an approval, **then** the benefit balance is reduced by the paid amount and the decision is recorded with rule-set version and calculation revision.
-- **Given** kept risk flags, **then** they are shown read-only with the reviewer's note.
+- **Given** kept or still open risk flags, **then** they are shown read-only, kept flags with the reviewer's note.
 
 ### US19 — Configure and publish rule set
 - **Given** a draft version, **when** configuring, **then** covered categories, exclusions, waiting periods, reimbursement rate and per-visit/annual limits can be set, each with a rule code and clause text.
@@ -174,10 +180,10 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** a test run, **then** no real claim, balance or decision is changed.
 
 ### US21 — 🟣 AI quality dashboard
-- **Given** a date range and model version filter, **then** the dashboard shows low-confidence rate (fields marked Needs verification or Needs entry ÷ fields extracted), correction rate by field (fields changed by a person ÷ fields suggested by AI), mapping correction rate (mappings changed ÷ mappings suggested) and flag dismissal rate (flags dismissed ÷ flags raised).
+- **Given** a date range and model version filter, **then** the dashboard shows low-confidence rate (fields marked Needs verification or Needs entry ÷ fields extracted), correction rate by field (fields changed by a person ÷ fields suggested by AI), mapping correction rate (mappings changed ÷ mappings suggested), mappings auto-accepted (mappings auto-accepted ÷ mappings suggested) and flag dismissal rate (flags dismissed ÷ flags raised), each with its change from the previous period of the same length.
 - **Given** the golden-case runs, **then** the clinical check false-positive rate is shown.
 - **Given** a drill-down on a metric, **then** the claims behind it open with the same scope as the approval queue.
-- **Given** export is clicked, **then** an XLSX of the filtered data is downloaded.
+- **Given** export is clicked, **then** an XLSX of the filtered figures and the claim numbers behind them is downloaded, with no member or medical data.
 
 ### US22 — Claim timeline
 - **Given** a claim, **when** the Timeline opens, **then** it lists in order: status changes, uploads, AI runs (model version), field corrections (before/after), alerts resolved, flags, calculation revisions, overrides and decisions, each with actor and time.
@@ -185,8 +191,9 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** an Administrator, **then** the claim timeline is not available (403).
 
 ### US23 — Pick up claim from review queue
-- **Given** the review queue, **then** it has tabs Available · Assigned to me · Needs verification · Returned, sorted by priority (BR-09) then age.
-- **Given** an unassigned claim in `NeedsVerification` or `ReadyForReview`, **when** the reviewer clicks "Start review", **then** it is assigned to them; a `ReadyForReview` claim moves to `InReview`, a `NeedsVerification` claim opens on the Evidence tab.
+- **Given** the review queue, **then** it has tabs Available · Assigned to me · Needs verification · Returned, sorted by priority (BR-09), which ends in age.
+- **Given** the Available tab, **then** each claim shows only its number, plan, service date, claimed total, status and age, with no member name or document (BR-11).
+- **Given** an unassigned claim in `NeedsVerification` or `ReadyForReview`, **when** the reviewer clicks "Start review", **then** it is assigned to them and they see the full claim; a `ReadyForReview` claim moves to `InReview`, a `NeedsVerification` claim opens on the Evidence tab.
 - **Given** a claim assigned to another reviewer, **then** "Start review" is unavailable (one assignee per claim).
 - **Given** the top-bar search by claim number, **then** only a claim the user may see is opened.
 

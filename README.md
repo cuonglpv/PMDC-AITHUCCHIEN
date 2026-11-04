@@ -126,7 +126,7 @@ The full UML diagram (with `«include»` / `«extend»` relationships), a descri
 | Verify evidence, resolve alerts, review adjudication | No | Yes | No | No |
 | Override a line result (reason required) | No | Yes | No | No |
 | Submit recommendation | No | Yes | No | No |
-| Handle AI risk flags | No | Dismiss / keep | Read kept flags | No |
+| Handle AI risk flags | No | Dismiss / keep | Read kept and open flags | No |
 | Approve, partially approve, reject or return | No | No | Yes | No |
 | Publish benefit rule sets | No | Read | Read | Yes |
 | See medical and identity data | Claims they registered | Assigned claims | Yes | No |
@@ -239,6 +239,10 @@ Fonts are Lexend Exa for short uppercase headings and KPI numbers, Be Vietnam Pr
 
 ![Review queue](docs/ui/scr-20-review-queue.png)
 
+The Available tab lists claims nobody has taken yet, with no member name until a reviewer starts the review.
+
+![Available tab of the review queue](docs/ui/scr-20-review-queue-available.png)
+
 #### Claim workspace: Evidence
 
 The reviewer checks AI-extracted values next to the highlighted spot on the invoice.
@@ -251,11 +255,21 @@ Each expense line with its result and rule code, and the payout calculation.
 
 ![Adjudication](docs/ui/scr-33-adjudication.png)
 
+#### Claim workspace: Decision
+
+The reviewer writes the summary, confirms the proposed outcome and submits it.
+
+![Decision tab, reviewer](docs/ui/scr-35-decision.png)
+
+The Senior Approver reads the recommendation and decides. The system sets the amount.
+
+![Decision tab, Senior Approver](docs/ui/scr-35-decision-approver.png)
+
 #### AI quality dashboard
 
 ![AI quality dashboard](docs/ui/scr-50-ai-quality.png)
 
-The Decision screen (SCR-35) is still being polished in Stitch. For SCR-13, 20, 33 and 50, the `.html` files in [docs/ui](docs/ui/) are the up-to-date version: the fonts were corrected there after the `.png` screenshots were taken.
+The `.html` files in [docs/ui](docs/ui/) are the source of these screenshots and also hold the other states, such as a stale revision or a changed balance. The [API contract](docs/07-api-contract.md#ui-changes-this-contract-requires) lists how to open each one.
 
 ## 3. Architecture and technology direction
 
@@ -269,15 +283,19 @@ Database              PostgreSQL (claims, versioned rule sets, calculation revis
 Object Storage        S3-compatible (original files, renditions, page images, raw AI responses)
 ```
 
-OCR and language models come from an external AI Model Provider, still to be chosen. The API contract is not designed yet.
+OCR and language models come from an external AI Model Provider, still to be chosen.
 
 The [C4 model](docs/architecture/c4/README.md) has the [System Context](docs/architecture/c4/01-system-context.md), the [Container](docs/architecture/c4/02-container.md) view, and Component views of the [Claims API](docs/architecture/c4/03-component-claims-api.md) and the [Document AI Service](docs/architecture/c4/03-component-document-ai.md).
 
 ### 3.1 Data model
 
-The database has 20 PostgreSQL tables and covers all 11 use cases. Each AI value is stored next to the value people use, so what AI suggested and what a person changed are both kept. Every calculation is a numbered snapshot. The key business rules are database constraints: a value needs a source, the approver must be a different person from the reviewer, the outcome must match the amount, and an override cannot exceed the line amount.
+The database has 21 PostgreSQL tables and covers all 11 use cases. Each AI value is stored next to the value people use, so what AI suggested and what a person changed are both kept. Every calculation is a numbered snapshot. The key business rules are database constraints: a value needs a source, the approver must be a different person from the reviewer, the outcome must match the amount, and an override cannot exceed the line amount.
 
 The design, the ER diagrams (Mermaid) and the reasons behind each table are in [Data model](docs/06-data-model.md). The schema itself is [claimlens.dbml](docs/diagrams/claimlens.dbml); paste it into [dbdiagram.io](https://dbdiagram.io) to see the diagram or export SQL.
+
+### 3.2 API contract
+
+There are two contracts in OpenAPI 3.1: [claims-api.yaml](docs/api/claims-api.yaml) for the 59 operations between the web app and the Claims API, and [document-ai.yaml](docs/api/document-ai.yaml) for the 6 AI tasks between the Claims API and the Document AI Service. The rules behind them are in [API contract](docs/07-api-contract.md): sign-in with access and refresh tokens, what runs in the request and what goes through the AI queue, error codes, and which role may call each operation.
 
 ## Documentation
 
@@ -286,6 +304,7 @@ The design, the ER diagrams (Mermaid) and the reasons behind each table are in [
 - **Diagrams:** [Use case diagram (PlantUML)](docs/diagrams/use-case.puml).
 - **Architecture:** [C4 model](docs/architecture/c4/README.md).
 - **Data:** [Data model and ER diagrams](docs/06-data-model.md), [DBML schema](docs/diagrams/claimlens.dbml).
+- **API:** [API contract](docs/07-api-contract.md), [Claims API (OpenAPI)](docs/api/claims-api.yaml), [Document AI Service (OpenAPI)](docs/api/document-ai.yaml).
 - **UI/UX:** [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
 
 ## Project progress
@@ -299,12 +318,12 @@ The design, the ER diagrams (Mermaid) and the reasons behind each table are in [
 - [x] Audit requirements and trace use cases, stories, rules and screens
 - [x] Design the information architecture, screen inventory, task flows and UI states
 - [x] Write the design system (DESIGN.md) and Stitch prompts
-- [ ] Generate the UI prototype in Stitch (6 of 7 priority screens done; Decision still in progress)
+- [x] Build the UI prototype for the 7 priority screens (generated in Stitch, then corrected by hand in HTML)
 - [ ] Render-check the PlantUML use case diagram
 - [ ] Write non-functional requirements
 - [x] Design the C4 System Context, Container and Component views
 - [x] Design the PostgreSQL schema and ER diagram
-- [ ] Write the API contract in OpenAPI 3.0
+- [x] Write the API contract in OpenAPI 3.1
 - [ ] Design the frontend and backend folder structures
 - [ ] Design class diagrams and sequence diagrams
 - [ ] Build the backend, Rule Engine and Document AI service

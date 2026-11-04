@@ -55,12 +55,12 @@ Each arrow points from the caller to what it calls and says why. Arrows between 
 | OCR and language models | Hosted by an external provider | Keeps the MVP free of GPU hosting. Allowed because the MVP uses only synthetic or de-identified claim data ([08](../../08-invest-requirements.md#cross-cutting-acceptance-constraints)). |
 | Background jobs | A job runner inside the Claims API, reading `ai_run` | The schema already has a queue state (`QUEUED`), so the MVP needs no message broker. |
 | Who writes the database | Only the Claims API | The Document AI Service returns suggestions and has no database access, so AI cannot accept its own output. |
+| Keeping a user signed in | Access token and rotating refresh token | The access token lives 15 minutes in the page's memory; the refresh token sits in an HttpOnly cookie. See the [API contract](../../07-api-contract.md#sign-in-and-tokens). |
 
 ## Still open
 
 - Which AI Model Provider to use, and the model versions for each task.
-- How the Claims API keeps a user signed in (cookie session or token). No requirement sets this yet; the API contract will.
-- Hosting and the Object Storage product. The design only needs the S3 API.
+- Hosting and the Object Storage product. The design only needs the S3 API, and the Staff Web App and Claims API on the same site, because the refresh token cookie is `SameSite=Strict`.
 
 ## Terms
 
@@ -73,4 +73,4 @@ Each arrow points from the caller to what it calls and says why. Arrows between 
 | RBAC | Role-based access control |
 | Rendition | The PDF made from an uploaded DOCX or XLSX file, so its pages work like any other page |
 
-**Related:** [Use cases](../../03-use-cases.md) · [Data model](../../06-data-model.md) · [Information architecture](../../04-information-architecture.md)
+**Related:** [Use cases](../../03-use-cases.md) · [Data model](../../06-data-model.md) · [Information architecture](../../04-information-architecture.md) · [API contract](../../07-api-contract.md)

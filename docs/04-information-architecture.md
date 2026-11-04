@@ -64,7 +64,7 @@ Staff accounts, members and policies are seeded in the MVP, so there are no admi
 
 ## Navigation model
 
-Global shell: **left sidebar** (collapsible, icon + label) · **top bar** (go to a claim by claim no., notifications, profile) · **content area**.
+Global shell: **left sidebar** (collapsible, icon + label) · **top bar** (go to a claim by claim no., profile) · **content area**.
 
 Sidebar items are rendered per role — never shown disabled.
 
@@ -78,7 +78,7 @@ Sidebar items are rendered per role — never shown disabled.
 
 ● = landing page after sign-in (US01). Every home screen is in the Must release.
 
-Data visibility follows BR-11: medical and identity values are shown only to the Intake Officer who registered the claim, the assigned Reviewer and Senior Approvers; the Administrator never opens claim content.
+Data visibility follows BR-11: medical and identity values are shown only to the Intake Officer who registered the claim, the assigned Reviewer and Senior Approvers; the Administrator never opens claim content. The Available tab shows a reviewer each unassigned claim's number, plan, service date, claimed total, status and age, with no member name, until they click Start review.
 
 ## The core screen: Claim workspace
 
@@ -130,8 +130,8 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | `SCR-20` | Review queue | Page | Reviewer | US01, US23 |
 | `SCR-21` | Approval queue | Page | Approver | US17, US18 |
 | `SCR-30` | Claim workspace — Overview | Tab | Reviewer, Approver | US17, US18 |
-| `SCR-31` | Claim workspace — Documents & evidence | Tab | Reviewer | US04, US05, US06 |
-| `SCR-32` | Claim workspace — Validation | Tab | Reviewer | US07, US08 |
+| `SCR-31` | Claim workspace — Documents & evidence | Tab | Reviewer, Approver (read) | US04, US05, US06 |
+| `SCR-32` | Claim workspace — Validation | Tab | Reviewer, Approver (read) | US07, US08 |
 | `SCR-33` | Claim workspace — Adjudication | Tab | Reviewer, Approver (read) | US10, US11, US12, US13, US16 |
 | `SCR-34` | Claim workspace — Risk | Tab | Reviewer, Approver (read) | US09, US14, US18 |
 | `SCR-35` | Claim workspace — Decision | Tab | Reviewer, Approver | US15, US17, US18 |
@@ -220,7 +220,7 @@ flowchart LR
     a["Approval queue"] --> b["Overview: amount, outcome,<br/>overrides, kept flags"] --> c{"Agree?"}
     c -->|yes| d["Approve / Partial / Reject<br/>confirm amount + reason"] --> bal{"Balance unchanged<br/>since calculation?"}
     bal -->|yes| e["Decision recorded,<br/>balance consumed"]
-    bal -->|no| rc["Blocked: re-run<br/>adjudication"]
+    bal -->|no| rc["Blocked: new revision.<br/>Same payable: confirm.<br/>Different: return or reject"]
     c -->|"needs work or<br/>evidence missing"| f["Return with comment"] --> g["Back to reviewer<br/>(Returned tab)"]
 ```
 
@@ -252,6 +252,8 @@ AI content must be **recognisable, inspectable and reversible** everywhere it ap
 | Validation error | Keep input, associate message with the field, focus the first error. |
 | Recalculating | Previous result stays visible but dimmed with "Recalculating…"; new revision number on completion with a "What changed" link. |
 | Conflict | Another user changed the claim → keep local input, show diff, ask to reload. |
+| Stale result | The revision shows "Stale" when data changed and a Blocking alert stopped the recalculation; Submit is disabled and names the alert. |
+| Session expired | The app refreshes the token silently. If that fails, it goes to Sign in and returns to the same page afterwards; unsaved input is lost only there. |
 | Forbidden | 403 page with a safe route back to the role home. |
 | Destructive / final action | Confirmation shows claim no., outcome and final amount; final decisions cannot be undone in the UI. |
 | Success | Toast + next item from the queue ("Open next claim"). |
@@ -285,18 +287,21 @@ UI labels are in **English** (decided in the UI brief); sample data such as name
 
 ## Screen-to-API mapping
 
+Each name is an `operationId` in the [API contract](07-api-contract.md).
+
 | Screen | API operations |
 |---|---|
-| Sign in | `login`, `logout`, `getMe` |
-| Intake | `searchMembers`, `getPolicySummary`, `createClaim`, `uploadDocument`, `deleteDocument`, `submitClaim` |
-| Queues | `listClaims` (filters: status, assignee, priority; scoped by BR-11), `getClaimByNumber` (top-bar lookup), `startReview` (self-assign) |
-| Evidence | `listDocuments`, `getPage`, `listFields`, `acceptField`, `updateField`, `reclassifyPage`, `rerunExtraction` |
-| Validation | `listAlerts`, `resolveAlert`, `dismissAlert` |
-| Adjudication | `listExpenseLines`, `confirmMapping`, `runAdjudication`, `getCalculationRevision`, `overrideLine` |
+| Sign in | `login`, `refreshToken`, `logout`, `getMe` |
+| Intake | `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `listDocuments`, `getPage`, `reclassifyPage`, `getClaimStatus`, `submitClaim` |
+| Queues | `listClaims` (one `view` per tab; scoped by BR-11), `getClaimByNumber` (top-bar lookup), `startReview` (self-assign) |
+| Case header, Overview | `getClaim`, `getClaimStatus` |
+| Evidence | `listDocuments`, `getPage`, `listFields`, `acceptField`, `updateField`, `updateClaimFacts`, `reclassifyPage`, `rerunExtraction` |
+| Validation | `listAlerts`, `dismissAlert`, `revalidateClaim` |
+| Adjudication | `listExpenseLines`, `addExpenseLine`, `removeExpenseLine`, `confirmMapping`, `listBenefitCategories`, `runAdjudication`, `listCalculationRevisions`, `getCalculationRevision`, `overrideLine`, `removeOverride` |
 | Risk | `listFlags`, `dismissFlag`, `keepFlag` |
-| Decision | `getSummaryDraft`, `submitRecommendation` (with attestation), `decideClaim`, `returnClaim` |
+| Decision | `getRecommendation`, `saveRecommendationDraft`, `draftSummary`, `submitRecommendation` (with attestation), `decideClaim`, `returnClaim` |
 | Timeline | `getClaimTimeline` |
-| Policy | `listPlans`, `createPlanVersion`, `updateRuleSet`, `publishPlanVersion`, `testRuleSet` |
-| AI quality | `getAiQualityMetrics`, `exportReport` |
+| Policy | `listPlans`, `listPlanVersions`, `getPlanVersion`, `createPlanVersion`, `updateRuleSet`, `publishPlanVersion`, `discardPlanVersion`, `listBenefitCategories`, `listSampleClaims`, `testRuleSet` |
+| AI quality | `getAiQualityMetrics`, `getAiQualityDrillDown`, `exportReport` |
 
-**Related:** [Use cases](03-use-cases.md) · [User stories](08-invest-requirements.md)
+**Related:** [Use cases](03-use-cases.md) · [User stories](08-invest-requirements.md) · [API contract](07-api-contract.md)

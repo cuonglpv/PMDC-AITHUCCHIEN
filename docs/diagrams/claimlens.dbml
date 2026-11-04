@@ -1,6 +1,6 @@
-// ClaimLens: PostgreSQL data model (TARGET MVP, 20 tables)
+// ClaimLens: PostgreSQL data model (TARGET MVP, 21 tables)
 // Explained in docs/06-data-model.md. Paste into https://dbdiagram.io to draw it,
-// or export DDL with: npx @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres
+// or export DDL with: npx -p @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres
 
 Project ClaimLens {
   database_type: 'PostgreSQL'
@@ -91,7 +91,7 @@ Enum document_status {
   UPLOADING
   CONVERTING [note: 'DOCX / XLSX to PDF, then page split']
   READY
-  REJECTED [note: 'Wrong type, too large or conversion failed']
+  REJECTED [note: 'Conversion failed or the claim would pass 30 pages. A wrong type or an oversized file is refused before a row exists']
   REMOVED [note: 'Removed by the officer before submission']
 }
 
@@ -192,6 +192,7 @@ Enum alert_check {
   POLICY_MATCH
   DATE_CONSISTENCY
   INVOICE_ARITHMETIC
+  CLAIMED_TOTAL_MISMATCH [note: 'Claimed total differs from the sum of expense lines; cannot be dismissed']
   DUPLICATE_INVOICE
 }
 
@@ -320,6 +321,29 @@ Table staff_account [headercolor: #3C4043] {
   Note: 'Seeded in the MVP; there is no account administration screen.'
 }
 
+Table refresh_token [headercolor: #3C4043] {
+  id uuid [pk, default: `gen_random_uuid()`]
+  staff_account_id uuid [not null, ref: > staff_account.id]
+  family_id uuid [not null, note: 'Every token rotated from one sign-in; reuse after the grace period revokes the family']
+  token_hash char(64) [not null, unique, note: 'SHA-256; the token itself is never stored']
+  issued_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz [not null, note: '8 hours after sign-in; rotation copies it and never extends it']
+  rotated_at timestamptz [note: 'Still accepted for 10 seconds, so two tabs can refresh together']
+  revoked_at timestamptz
+
+  indexes {
+    family_id [name: 'ix_refresh_token_family']
+    (staff_account_id, expires_at) [name: 'ix_refresh_token_account']
+  }
+  checks {
+    `expires_at > issued_at` [name: 'ck_refresh_token_expiry']
+  }
+  Note: '''
+  One row per refresh token, so sign-out and a disabled account can end a session (US01).
+  Expired rows can be purged; the sign-in itself is in audit_event.
+  '''
+}
+
 Table member [headercolor: #3C4043] {
   id uuid [pk, default: `gen_random_uuid()`]
   member_code varchar(20) [not null, unique, note: 'e.g. MB-0007731']
@@ -399,6 +423,7 @@ Table rule_set_version [headercolor: #0F766E] {
   Note: '''
   Adjudication uses the PUBLISHED version of the member plan with the greatest effective_from on or before
   the service date (BR-04). A published version and its rules cannot be changed (trigger); a new version supersedes it.
+  A plan has at most one DRAFT (partial unique index in SQL).
   '''
 }
 
@@ -494,7 +519,8 @@ Table claim [headercolor: #1A56DB] {
   }
   Note: '''
   Status moves only along the lifecycle in docs/03-use-cases.md (trigger). Returned = IN_REVIEW whose latest
-  recommendation is RETURNED. Queue priority (BR-09) is computed: payable >= high-value threshold, open HIGH flags, age.
+  recommendation is RETURNED. Queue priority (BR-09) is computed: high value (payable in the approval queue,
+  claimed_total in the review queue), then open or kept HIGH flags, then age.
   '''
 }
 
@@ -652,6 +678,8 @@ Table expense_line [headercolor: #1A56DB] {
   override_note text
   override_by uuid [ref: > staff_account.id]
   override_at timestamptz
+  removed_by uuid [ref: > staff_account.id, note: 'Line removed by the reviewer; earlier revisions still point to it']
+  removed_at timestamptz
 
   indexes {
     (document_id, line_no) [unique, name: 'ux_expense_line_no']
@@ -666,11 +694,13 @@ Table expense_line [headercolor: #1A56DB] {
     `override_amount is null or override_amount between 0 and amount` [name: 'ck_override_cap']
     `(override_result <> 'COVERED' or override_amount = amount) and (override_result <> 'EXCLUDED' or override_amount = 0) and (override_result <> 'PARTIALLY_COVERED' or override_amount between 1 and amount - 1)` [name: 'ck_override_result']
     `override_reason is null or override_reason::text like 'OVERRIDE_%'` [name: 'ck_override_reason_kind']
+    `(removed_at is null) = (removed_by is null)` [name: 'ck_expense_line_removed']
   }
   Note: '''
   Accepted line values (projection of the line fields, written in the same transaction), the AI-02 suggestion,
   the category in use and the active override. Every later revision applies the override; the payable stays capped
   by the remaining limit (BR-07). Removing an override clears the columns and is audited.
+  A removed line stays as a row, is left out of later revisions and no longer counts as a required field slot.
   '''
 }
 
@@ -706,6 +736,7 @@ Table alert [headercolor: #A40022] {
     `reason_code is null or reason_code::text like 'DISMISS_%'` [name: 'ck_alert_reason_kind']
     `check_code <> 'DUPLICATE_INVOICE' or duplicate_of_claim_id is not null` [name: 'ck_alert_duplicate_link']
     `duplicate_of_claim_id is null or duplicate_of_claim_id <> claim_id` [name: 'ck_alert_not_self']
+    `status <> 'DISMISSED' or check_code <> 'CLAIMED_TOTAL_MISMATCH'` [name: 'ck_alert_total_not_dismissible']
   }
   Note: 'Deterministic problems, including exact duplicates (BR-08). An open BLOCKING alert blocks adjudication.'
 }
@@ -746,7 +777,7 @@ Table calculation_revision [headercolor: #0F766E] {
   trigger_type revision_trigger [not null]
   triggered_by uuid [ref: > staff_account.id]
   engine_version varchar(20) [not null]
-  input_hash char(64) [not null, note: 'SHA-256 of the inputs; same inputs and version give the same result (US11)']
+  input_hash char(64) [not null, note: 'SHA-256 of the inputs, balance included; same inputs and version give the same result (US11). A different hash for the current inputs marks the revision stale (US13)']
   claimed_total bigint [not null]
   eligible_total bigint [not null, note: 'Sum of final covered amounts']
   after_rate_amount bigint [not null, note: 'Eligible total after the reimbursement rate']
@@ -812,7 +843,7 @@ Table recommendation [headercolor: #E5484D] {
   recommended_outcome claim_outcome
   outcome_reason reason_code [note: 'OUTCOME_ reason; required when the reviewer differs from the proposal (BR-13)']
   outcome_note text
-  recommended_payable bigint
+  recommended_payable bigint [note: 'Set by the system: the revision payable, or 0 when recommending REJECTED']
   claimed_total bigint [note: 'Snapshot at submission, used by the BR-13 checks']
   summary jsonb [note: 'Sentences with citation chips: [{text, origin, citations: [{label, kind, id}]}]']
   summary_ai_run_id uuid [ref: > ai_run.id, note: 'AI-04 draft run; empty when AI was unavailable']
@@ -828,7 +859,7 @@ Table recommendation [headercolor: #E5484D] {
   decider_role staff_role [not null, default: 'SENIOR_APPROVER']
   decided_at timestamptz
   decision_revision_id uuid [ref: > calculation_revision.id, note: 'Revision the decision rests on; newer after a BALANCE_RECHECK']
-  final_payable bigint [note: 'Empty for RETURN']
+  final_payable bigint [note: 'Set by the system from the decision revision: its payable, 0 for REJECT, empty for RETURN']
   decision_reason reason_code [note: 'OUTCOME_ reason; required for REJECT']
   decision_comment text [note: 'Required for RETURN']
   balance_version_checked integer [note: 'policy.balance_version seen at approval (BR-10)']
@@ -901,6 +932,7 @@ Table audit_event [headercolor: #3C4043] {
 
 TableGroup access_and_policy [color: #3C4043] {
   staff_account
+  refresh_token
   member
   benefit_plan
   policy

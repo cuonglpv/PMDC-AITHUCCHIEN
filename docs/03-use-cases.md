@@ -173,7 +173,7 @@ Deliberately **no AI** in: benefit calculation, eligibility, rule authoring (UC0
 | UC03 Verify extracted evidence | | ✓ | | |
 | UC04 Resolve validation alerts | | ✓ | | |
 | UC05 Review benefit adjudication | | ✓ | read | |
-| UC06 Review risk flags | | ✓ (dismiss / keep) | read kept flags | |
+| UC06 Review risk flags | | ✓ (dismiss / keep) | read kept and open flags | |
 | UC07 Submit recommendation | | ✓ | | |
 | UC08 Approve / reject / return | | | ✓ | |
 | UC09 Publish benefit rule-set version | | read | read | ✓ |
@@ -203,7 +203,7 @@ stateDiagram-v2
 ```
 
 - Assignment is an attribute, not a state: a reviewer self-assigns a claim in `NeedsVerification` or `ReadyForReview` (US23). An assigned claim that reaches `ReadyForReview` moves straight on to `InReview`.
-- Any data correction in `InReview` re-runs validation (UC04) and adjudication (UC05) and creates a new calculation revision; earlier revisions remain readable.
+- Any data correction in `InReview` re-runs validation (UC04) and adjudication (UC05) and creates a new calculation revision; earlier revisions remain readable. If the correction opens a Blocking alert, no revision is created: the current one is marked stale and the recommendation cannot be submitted until the alert is cleared.
 - **Returned** (review queue tab) = `InReview` with a return comment; it is not a separate state.
 - Missing evidence is not a separate path in the MVP: the reviewer records it in the summary and recommends rejection, or the approver returns the claim. Contacting the policyholder happens outside the system.
 
@@ -219,11 +219,11 @@ stateDiagram-v2
 | BR-06 | Maker–checker: the person who submitted a recommendation cannot decide it. (One role per account already separates duties; the check is defence in depth.) |
 | BR-07 | Every override and every dismissed alert or flag requires a reason code and free-text note. An override cannot exceed the claimed line amount, and the payable stays capped by the remaining limit (BR-05). |
 | BR-08 | Deterministic problems, including exact duplicates, are **Alerts** (Validation). AI clinical signals are **Risk flags** (Risk). A risk flag is a signal, not a fraud finding; the reviewer dismisses it or keeps it for the approver. |
-| BR-09 | Approval queue priority: payable ≥ high-value threshold (seed value 5,000,000 VND), then open High flags, then age. Every recommendation still requires a Senior Approver (BR-01). |
-| BR-10 | Benefit balance is consumed only when a claim is approved; pending claims show a projected balance. At decision time the system re-checks the remaining balance; if it changed since the calculation revision, approval is blocked until adjudication is re-run. |
-| BR-11 | Medical documents, medical field values and identity data are visible only to roles working on the claim (Intake Officer who registered it, assigned Reviewer, Senior Approvers). The Administrator sees no claim content; rule-set test runs use synthetic sample claims only. |
-| BR-12 | Every state change, field correction, override, dismissal, decision and access to claim data writes an immutable audit event with actor and time. |
-| BR-13 | Outcome by amount: **Approved** when payable = claimed total; **PartiallyApproved** when 0 < payable < claimed total; **Rejected** when payable = 0 (reason code required). A recommendation type that differs from this requires a reason. |
+| BR-09 | Queue priority sorts by high value (at or above the seed threshold of 5,000,000 VND), then unresolved High flags (open or kept), then age. The approval queue measures high value on the payable, the review queue on the claimed total, because a claim under review may have no payable yet. A claim that meets either of the first two keys is labelled High, any other Normal. Every recommendation still requires a Senior Approver (BR-01). |
+| BR-10 | Benefit balance is consumed only when a claim is approved; pending claims show a projected balance. At decision time the system re-checks the remaining balance; if it changed since the calculation revision, the approval is blocked and the system creates a new revision. Same payable: the approver confirms on the new revision. Different payable: the approver returns the claim to the reviewer or rejects it. |
+| BR-11 | Medical documents, medical field values and identity data are visible only to roles working on the claim: the Intake Officer who registered it (claim header and documents, not extracted fields), the assigned Reviewer and Senior Approvers. Before a Reviewer takes a claim, the Available list shows only its number, plan, service date, claimed total, status and age. The Administrator sees no claim content; rule-set test runs use synthetic sample claims only. |
+| BR-12 | Every state change, field correction, override, dismissal, decision and access to claim data writes an immutable audit event with actor and time. Status polling carries no claim content and is not audited. |
+| BR-13 | Outcome by amount: **Approved** when payable = claimed total; **PartiallyApproved** when 0 < payable < claimed total; **Rejected** when payable = 0 (reason code required). The one allowed departure: a Reviewer may recommend, and a Senior Approver may decide, **Rejected** although payable > 0, with a reason code and a note; the final amount is then 0. Any other change of amount goes through a line override, which creates a new revision. |
 
 ## Use case specifications
 
@@ -235,7 +235,8 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Goal:** reach the workspace and queue that match the assigned role.
 - **Trigger:** user opens ClaimLens.
 - **Preconditions:** an active, seeded staff account with exactly one role.
-- **Main flow:** enter email and password → system verifies credentials and active status → returns access token and role → opens the role's home (Intake: Intake; Reviewer: Review queue; Approver: Approval queue; Administrator: Benefit plans).
+- **Main flow:** enter email and password → system verifies credentials and active status → returns a short-lived access token, a refresh token cookie and the role → opens the role's home (Intake: Intake; Reviewer: Review queue; Approver: Approval queue; Administrator: Benefit plans).
+- **Alternatives:** access token expired → the app refreshes it without interrupting the user. Refresh token expired or revoked → back to Sign in.
 - **Exceptions:** invalid credentials or disabled account → same generic error, no account state disclosed. Protected URL without permission → 403 page with a route back to the role home.
 - **Postconditions:** session established; sign-in written as an audit event.
 - **Rules:** BR-11, BR-12.
@@ -266,7 +267,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Preconditions:** claim assigned to the reviewer (US23); extraction run finished or failed.
 - **Main flow:** open the Evidence tab → fields grouped by document, sorted by lowest confidence → clicking a field highlights its region in the document viewer → reviewer accepts, edits or marks "Not present" → system records who changed what from which value; the AI marker is replaced by the reviewer's initials.
 - **Extension point *Page re-read*:** `[page misclassified or unreadable]` → reviewer reclassifies the page and **AI-01** re-reads that page only; verified fields on other pages are kept.
-- **Alternatives:** AI unavailable → reviewer enters fields manually beside the viewer.
+- **Alternatives:** AI unavailable → the reviewer sets each page type, enters fields manually beside the viewer and adds expense lines by hand. The same operations add a line AI missed or remove one it invented.
 - **Exceptions:** a value without a source region cannot be accepted (BR-02) → reviewer must draw a region or mark "Not present".
 - **Postconditions:** all required fields accepted (auto-accepted or by a person) → claim `ReadyForReview`, then `InReview` because it is assigned; downstream checks re-run.
 - **Rules:** BR-02, BR-03, BR-07, BR-11, BR-12.
@@ -279,8 +280,8 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Goal:** know the packet is complete, consistent and not a duplicate before money is computed.
 - **Trigger:** required fields accepted, or any field changed in `InReview`.
 - **Preconditions:** claim in `InReview`, assigned to the reviewer.
-- **Main flow:** system runs deterministic checks — required documents present, insured name and policy match, dates consistent across documents, invoice total equals sum of lines, invoice number + provider tax code (provider name when the document has none) not used in another claim — and raises **Alerts** (Blocking / Warning) with evidence → system runs **AI-03** for clinical consistency (diagnosis vs. medication and services); its output becomes **Risk flags** handled in UC06 → reviewer resolves each alert (fix data) or dismisses it with reason.
-- **Alternatives:** evidence missing → reviewer dismisses the alert with reason, records the gap in the summary and recommends accordingly (UC07).
+- **Main flow:** system runs deterministic checks — required documents present, insured name and policy match, dates consistent across documents, invoice total equals sum of lines, claimed total equals sum of lines, invoice number + provider tax code (provider name when the document has none) not used in another claim — and raises **Alerts** (Blocking / Warning) with evidence → system runs **AI-03** for clinical consistency (diagnosis vs. medication and services); its output becomes **Risk flags** handled in UC06 → reviewer resolves each alert (fix data) or dismisses it with reason.
+- **Alternatives:** evidence missing → reviewer dismisses the alert with reason, records the gap in the summary and recommends accordingly (UC07). Claimed total or service date wrong at intake → reviewer corrects it on the claim, and the checks re-run. A claimed-total mismatch cannot be dismissed, only fixed, because the calculation needs the two to agree.
 - **Exceptions:** AI service unavailable → no clinical flags; claim shows "Clinical check not run"; validation continues.
 - **Postconditions:** no open Blocking alert → adjudication can run.
 - **Rules:** BR-07, BR-08, BR-12.
@@ -296,7 +297,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Main flow:** **AI-02** maps each expense line to a benefit category with confidence → reviewer confirms mappings below 0.85 → **SYS-01** loads the rule-set version effective on the service date and evaluates eligibility, waiting period, exclusions, reimbursement rate and limits per line → system shows, per line: result, covered amount, rule code, clause text and formula; and the claim total with remaining balance before and projected after.
 - **Alternatives:** mapping corrected or data edited → recalculation creates a new revision. AI unavailable → reviewer selects every category manually.
 - **Exceptions:** no rule-set version effective on the service date → adjudication blocked with "No effective rule set"; Administrator named as owner.
-- **Example (golden case):** Consultation 200,000, Lab test 500,000, Medication 400,000 Covered; Cosmetic service 300,000 Excluded by EX-04 → claimed 1,400,000, eligible 1,100,000 → × 80% = 880,000 → remaining limit 800,000 → **payable = min(880,000; 800,000) = 800,000 VND**; projected balance after = 0.
+- **Example (golden case):** Consultation 300,000, Lab test 250,000, Medication 150,000, Diagnostic imaging 400,000 Covered; Cosmetic product 300,000 Excluded by EX-04 → claimed 1,400,000, eligible 1,100,000 → × 80% = 880,000 → remaining limit 800,000 → **payable = min(880,000; 800,000) = 800,000 VND**; projected balance after = 0.
 - **Postconditions:** a numbered calculation revision exists.
 - **Rules:** BR-04, BR-05, BR-10.
 - **Stories:** US10, US11, US12, US13. **Screens:** SCR-33.
@@ -308,7 +309,7 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Trigger:** a claim has open risk flags from AI-03.
 - **Preconditions:** claim in `InReview`, assigned to the reviewer.
 - **Main flow:** open the Risk tab → each flag shows type, severity, evidence (the line, the diagnosis, the source documents) and the AI's one-sentence reason, labelled "Signal — not a finding" → reviewer dismisses it with reason, or keeps it for the approver with a note.
-- **Alternatives:** the Senior Approver sees kept flags, read-only, when deciding (UC08).
+- **Alternatives:** the Senior Approver sees kept flags and any flag still open, read-only, when deciding (UC08).
 - **Exceptions:** dismiss or keep without reason code and note → blocked.
 - **Postconditions:** every flag is dismissed or kept, with an audit event.
 - **Rules:** BR-07, BR-08, BR-12.
@@ -320,8 +321,8 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Secondary:** AI Document Intelligence Service (via AI-04)
 - **Goal:** hand a complete, justified decision proposal to the approver.
 - **Trigger:** adjudication result available.
-- **Preconditions:** claim in `InReview`; no open Blocking alert; all mappings below 0.85 confirmed.
-- **Main flow:** review adjudication result → optionally override a line (new amount or result, reason code, note) → **AI-04** drafts a summary that cites accepted facts, rule codes, overrides and kept flags → reviewer edits the summary → system proposes the recommendation type from the payable (BR-13) → reviewer confirms or changes it with a reason → reviewer attests the auto-accepted AI values used in the calculation → submits → claim `PendingApproval`.
+- **Preconditions:** claim in `InReview`; no open Blocking alert; all mappings below 0.85 confirmed; the latest revision is not stale.
+- **Main flow:** review adjudication result → optionally override a line (new amount or result, reason code, note) → **AI-04** drafts a summary that cites accepted facts, rule codes, overrides and kept flags → reviewer edits the summary → system proposes the recommendation type from the payable (BR-13) → reviewer confirms it, or changes it to Rejected with a reason code and note → reviewer attests the auto-accepted AI values used in the calculation → submits → claim `PendingApproval`.
 - **Alternatives:** AI unavailable → summary box shows a structured template.
 - **Exceptions:** an open High flag → warning; the flag is shown to the approver. Any precondition missing → Submit disabled with the missing item named.
 - **Postconditions:** claim in `PendingApproval` in the approval queue by priority (BR-09).
@@ -334,9 +335,9 @@ Every specification uses the same template: Actor · Secondary · Goal · Trigge
 - **Goal:** take an accountable final decision.
 - **Trigger:** claim in the approval queue.
 - **Preconditions:** claim in `PendingApproval`; the approver did not submit the recommendation.
-- **Main flow:** open approval queue → see recommendation, payable amount, line results, overrides, attested AI values, kept flags and summary → approve, partially approve or reject (outcome per BR-13; reject needs a reason code) → confirmation shows claim number, outcome and final amount → system re-checks the remaining balance → records the decision with rule-set version and calculation revision → benefit balance consumed on approval.
+- **Main flow:** open approval queue → see recommendation, payable amount, line results, overrides, attested AI values, kept and open flags, and summary → take the action that matches the payable, or reject (BR-13; reject needs a reason code, and also a comment when the payable is above 0) → confirmation shows claim number, outcome and final amount; the approver never types an amount → system re-checks the remaining balance on an approval → records the decision with rule-set version and calculation revision → benefit balance consumed on approval.
 - **Alternatives:** return to reviewer with a comment (also used when evidence is missing) → claim `InReview`, shown in the reviewer's Returned tab.
-- **Exceptions:** approver is the submitter → actions disabled with explanation (BR-06). Remaining balance changed since the calculation revision → approval blocked until adjudication is re-run (BR-10).
+- **Exceptions:** approver is the submitter → actions disabled with explanation (BR-06). Remaining balance changed since the calculation revision → approval blocked, and the system creates a `BALANCE_RECHECK` revision. Same payable: the approver confirms on the new revision. Different payable: the approver returns the claim or rejects it (BR-10).
 - **Postconditions:** claim `Approved`, `PartiallyApproved`, `Rejected` or back in `InReview`; audit event recorded.
 - **Rules:** BR-01, BR-06, BR-09, BR-10, BR-12, BR-13.
 - **Stories:** US18. **Screens:** SCR-21, SCR-30, SCR-35, SCR-39.

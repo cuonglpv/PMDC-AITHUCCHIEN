@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: ClaimLens Document AI Service
+  version: 1.0.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  summary: Contract between the AI Job Runner in the Claims API and the Document AI Service (TARGET MVP).
+  description: |
+    An internal contract: the browser never reaches this service. One operation per `ai_task`.
+
+    The service is stateless and reports raw results. It does not apply thresholds, create flags, write files or
+    touch the database; the AI Job Runner does all of that with the response
+    ([C3: Document AI Service](../architecture/c4/03-component-document-ai.md)).
+
+    **Calls are synchronous.** The job runner is already the background queue, so it holds the request open and
+    gives up after the timeout of the task, which it reads from its configuration. Starting values:
+
+    | Operation | Timeout |
+    |---|---|
+    | `runPageCheck` | 30 s |
+    | `runFieldExtraction` | 120 s |
+    | `runPageReread` | 60 s |
+    | `runBenefitMapping` | 30 s |
+    | `runClinicalCheck` | 30 s |
+    | `runSummaryDraft` | 30 s |
+
+    A timeout or any error response marks the `ai_run` as `FAILED`, with the response's `code` as `error_code`, and the
+    claim follows the manual fallback. One bad page does not fail a whole run: see `PageFailure`.
+
+    Only synthetic or de-identified claim data reaches this service in the MVP. Each request carries only what its task
+    needs. Only `runPageCheck`, `runFieldExtraction` and `runPageReread` receive page images.
+servers:
+  - url: /v1
+    description: Reachable only from the Claims API, on the private network.
+security:
+  - serviceKey: []
+tags:
+  - name: AI-01 Documents
+    description: Page check, field extraction and page re-read.
+  - name: AI-02 Mapping
+    description: Expense line text to benefit category.
+  - name: AI-03 Clinical
+    description: Relevance of each line to the diagnosis.
+  - name: AI-04 Summary
+    description: Draft summary with citations.
+paths:
+  /tasks/page-check:
+    post:
+      operationId: runPageCheck
+      tags: [AI-01 Documents]
+      summary: Classify pages and score their quality
+      description: >-
+        Task `PAGE_CHECK`. Always returns the best page type with its confidence. The Claims API decides what is Unclassified (below 0.80) and
+        what is Low quality, from the scores.
+      x-claimlens: {task: PAGE_CHECK, aiUseCase: AI-01, stories: [US04], rules: [BR-03]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageCheckRequest'
+      responses:
+        '200':
+          description: One result per page that could be read, and the pages that could not.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCheckResponse'
+              example:
+                runId: 8c1d7e42-90ab-4f36-a2d5-3e6b1f0c9a77
+                model: {name: page-classifier, version: v2.4}
+                pages:
+                  - {pageId: 1f4e9a30-7b62-4d18-9c05-8a3d6e2f1b90, pageType: INVOICE, typeConfidence: 0.982, qualityScore: 0.941}
+                failedPages: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+  /tasks/field-extraction:
+    post:
+      operationId: runFieldExtraction
+      tags: [AI-01 Documents]
+      summary: Extract fields from a submitted claim
+      description: >-
+        Task `FIELD_EXTRACTION`. Returns each field in the catalogue with its value, page, bounding box and confidence. A field it cannot find
+        comes back with a null value; it never guesses. Line fields carry `itemNo`, one number per expense line or prescription item.
+      x-claimlens: {task: FIELD_EXTRACTION, aiUseCase: AI-01, stories: [US05], rules: [BR-02, BR-03]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FieldExtractionRequest'
+      responses:
+        '200':
+          description: Suggestions per document.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldExtractionResponse'
+              example:
+                runId: 2d90b6e1-5f47-4c28-8ea3-7c14d0a9f365
+                model: {name: field-extractor, version: v2.4}
+                documents:
+                  - documentId: a7e3c150-2d94-4b86-b1f7-90c6e4d2a813
+                    fields:
+                      - {fieldKey: invoice_number, itemNo: 0, value: HN-0045821, confidence: 0.884, pageId: 1f4e9a30-7b62-4d18-9c05-8a3d6e2f1b90, bbox: {x: 0.71, y: 0.08, w: 0.21, h: 0.03}}
+                      - {fieldKey: line_description, itemNo: 4, value: Kem dưỡng phục hồi da Obagi, confidence: 0.78, pageId: 1f4e9a30-7b62-4d18-9c05-8a3d6e2f1b90, bbox: {x: 0.12, y: 0.47, w: 0.48, h: 0.03}}
+                      - {fieldKey: diagnosis, itemNo: 0, value: null, confidence: 0.41, pageId: null, bbox: null}
+                failedPages: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+  /tasks/page-reread:
+    post:
+      operationId: runPageReread
+      tags: [AI-01 Documents]
+      summary: Read one page again
+      description: Task `PAGE_REREAD`. Same result as field extraction, for one page. The Claims API decides which values replace those in use.
+      x-claimlens: {task: PAGE_REREAD, aiUseCase: AI-01, stories: [US06], rules: [BR-02, BR-03]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageRereadRequest'
+      responses:
+        '200':
+          description: Suggestions for that page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageRereadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+  /tasks/benefit-mapping:
+    post:
+      operationId: runBenefitMapping
+      tags: [AI-02 Mapping]
+      summary: Map expense lines to benefit categories
+      description: Task `BENEFIT_MAPPING`. Picks a category from the list it was given. A code outside the list is treated as bad model output. Never decides coverage or amounts.
+      x-claimlens: {task: BENEFIT_MAPPING, aiUseCase: AI-02, stories: [US10], rules: [BR-03]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BenefitMappingRequest'
+      responses:
+        '200':
+          description: One suggestion per line.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenefitMappingResponse'
+              example:
+                runId: 4b7a2f90-13c6-4e58-9d07-6f2e8c1a5d34
+                model: {name: benefit-mapper, version: v2.4}
+                mappings:
+                  - {lineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a04, categoryCode: COSMETIC, confidence: 0.81}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+  /tasks/clinical-check:
+    post:
+      operationId: runClinicalCheck
+      tags: [AI-03 Clinical]
+      summary: Score each line against the diagnosis
+      description: >-
+        Task `CLINICAL_CHECK`. Returns a signal type, relevance score and one-sentence reason per line. It does not raise flags or call anything
+        fraud: the Claims API creates a `risk_flag` when the score is below the clinical threshold and sets its severity from the score.
+      x-claimlens: {task: CLINICAL_CHECK, aiUseCase: AI-03, release: should, stories: [US09], rules: [BR-08]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicalCheckRequest'
+      responses:
+        '200':
+          description: One signal per line.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClinicalCheckResponse'
+              example:
+                runId: 6e3f1a84-7d20-4b95-8c16-2a9d5e0f7b41
+                model: {name: clinical-signals, version: v2.4}
+                signals:
+                  - {lineId: 0b1e7a10-61c2-4a7d-9f30-5c8d2e4b7a05, flagType: SERVICE_DIAGNOSIS, relevanceScore: 0.32, reason: Abdominal ultrasound is not usually related to acute pharyngitis.}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+  /tasks/summary-draft:
+    post:
+      operationId: runSummaryDraft
+      tags: [AI-04 Summary]
+      summary: Draft the review summary
+      description: >-
+        Task `SUMMARY_DRAFT`. Writes sentences that cite only the facts it was given. A sentence may have no citation; the reviewer sees it marked "No source".
+        A citation to an id that was not given is treated as bad model output.
+      x-claimlens: {task: SUMMARY_DRAFT, aiUseCase: AI-04, release: should, stories: [US15], rules: [BR-02]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummaryDraftRequest'
+      responses:
+        '200':
+          description: The draft sentences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryDraftResponse'
+              example:
+                runId: 9a5c7e10-4f83-4d26-b6e9-1c0d8a3f2e75
+                model: {name: summary-drafter, version: v2.4}
+                sentences:
+                  - {text: 'Line 4, a skin-care cream, is excluded as a cosmetic product.', citations: [field-line-4, rule-EX-04]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/ServiceError'
+        '502':
+          $ref: '#/components/responses/ModelFailed'
+        '504':
+          $ref: '#/components/responses/ModelTimeout'
+components:
+  securitySchemes:
+    serviceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Shared secret held only by the Claims API and this service, from their secret stores. Never sent to a browser.
+  responses:
+    Unauthorized:
+      description: 'Code: SERVICE_KEY_INVALID.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidRequest:
+      description: 'Code: INVALID_REQUEST. The request does not match this contract, which is a bug in the caller.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ServiceError:
+      description: 'Code: SERVICE_ERROR. An unexpected failure in this service.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ModelFailed:
+      description: 'Codes: MODEL_ERROR when the provider answered with an error, BAD_MODEL_OUTPUT when its answer failed the shape check, PAGE_READ_FAILED when no page image could be read.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ModelTimeout:
+      description: 'Code: MODEL_TIMEOUT. The provider did not answer in time.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 problem details. `code` becomes `ai_run.error_code`.
+      required: [title, status, code]
+      properties:
+        type: {type: string, format: uri-reference, default: about:blank}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code:
+          type: string
+          enum: [SERVICE_KEY_INVALID, INVALID_REQUEST, SERVICE_ERROR, MODEL_ERROR, BAD_MODEL_OUTPUT, MODEL_TIMEOUT, PAGE_READ_FAILED]
+    Confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Raw score from 0 to 1. Thresholds are applied by the Claims API, never here (BR-03).
+    Bbox:
+      type: object
+      description: A region of a page, normalised to the page size (0 to 1).
+      required: [x, y, w, h]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        w: {type: number, minimum: 0, maximum: 1}
+        h: {type: number, minimum: 0, maximum: 1}
+    ModelRef:
+      type: object
+      required: [name, version]
+      properties:
+        name: {type: string, maxLength: 80}
+        version: {type: string, maxLength: 40}
+    TaskRequest:
+      type: object
+      required: [runId, model]
+      properties:
+        runId: {type: string, format: uuid, description: 'The ai_run id, for tracing. The service does not store it.'}
+        model:
+          description: The model to use, from Claims API configuration. The service does not choose it.
+          $ref: '#/components/schemas/ModelRef'
+    TaskResponse:
+      type: object
+      required: [runId, model]
+      properties:
+        runId: {type: string, format: uuid}
+        model:
+          description: The model actually used; stored on the run.
+          $ref: '#/components/schemas/ModelRef'
+    PageRef:
+      type: object
+      required: [pageId, imageKey]
+      properties:
+        pageId: {type: string, format: uuid}
+        imageKey: {type: string, maxLength: 500, description: Object-storage key of the page image. The service reads it with read-only credentials.}
+    PageFailure:
+      type: object
+      description: A page that could not be read. The rest of the run still counts; the Claims API sets that page's AI status to FAILED (manual mode).
+      required: [pageId, code]
+      properties:
+        pageId: {type: string, format: uuid}
+        code:
+          type: string
+          enum: [PAGE_READ_FAILED, MODEL_ERROR, BAD_MODEL_OUTPUT]
+    PageType:
+      type: string
+      description: UNCLASSIFIED is not listed, because only the Claims API marks a page Unclassified.
+      enum: [INVOICE, RECEIPT, PRESCRIPTION, VISIT_SUMMARY, LAB_RESULT, OTHER]
+    FieldKey:
+      type: string
+      enum: [insured_name, national_id, policy_number, provider_name, provider_tax_code, service_date, invoice_number, invoice_total, line_description, line_quantity, line_unit_price, line_amount, diagnosis, medication]
+    FlagType:
+      type: string
+      enum: [MEDICATION_DIAGNOSIS, SERVICE_DIAGNOSIS, LAB_DIAGNOSIS, QUANTITY]
+    PageCheckRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [pages]
+          properties:
+            pages:
+              type: array
+              minItems: 1
+              maxItems: 30
+              items:
+                $ref: '#/components/schemas/PageRef'
+    PageCheckResult:
+      type: object
+      required: [pageId, pageType, typeConfidence, qualityScore]
+      properties:
+        pageId: {type: string, format: uuid}
+        pageType: {$ref: '#/components/schemas/PageType'}
+        typeConfidence: {$ref: '#/components/schemas/Confidence'}
+        qualityScore: {$ref: '#/components/schemas/Confidence'}
+    PageCheckResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [pages, failedPages]
+          properties:
+            pages:
+              type: array
+              items:
+                $ref: '#/components/schemas/PageCheckResult'
+            failedPages:
+              type: array
+              items:
+                $ref: '#/components/schemas/PageFailure'
+    TypedPageRef:
+      allOf:
+        - $ref: '#/components/schemas/PageRef'
+        - type: object
+          required: [pageType]
+          properties:
+            pageType:
+              description: The type in use, so the service reads the right fields. Empty for an Unclassified page.
+              oneOf:
+                - $ref: '#/components/schemas/PageType'
+                - type: 'null'
+    ExtractionDocument:
+      type: object
+      required: [documentId, pages]
+      properties:
+        documentId: {type: string, format: uuid}
+        pages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TypedPageRef'
+    FieldExtractionRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [documents, fieldCatalogue]
+          properties:
+            documents:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/ExtractionDocument'
+            fieldCatalogue:
+              type: array
+              description: The fields to look for.
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/FieldKey'
+    FieldSuggestion:
+      type: object
+      description: Value, source and confidence. `value`, `pageId` and `bbox` are null when the field was not found (BR-02).
+      required: [fieldKey, itemNo, value, confidence, pageId, bbox]
+      properties:
+        fieldKey: {$ref: '#/components/schemas/FieldKey'}
+        itemNo: {type: integer, minimum: 0, description: '0 is the document header; n is expense line or prescription item n.'}
+        value: {type: [string, 'null'], description: 'Raw text as read. The Claims API parses money and dates.'}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+        pageId: {type: [string, 'null'], format: uuid}
+        bbox:
+          oneOf:
+            - $ref: '#/components/schemas/Bbox'
+            - type: 'null'
+    ExtractionDocumentResult:
+      type: object
+      required: [documentId, fields]
+      properties:
+        documentId: {type: string, format: uuid}
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldSuggestion'
+    FieldExtractionResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [documents, failedPages]
+          properties:
+            documents:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExtractionDocumentResult'
+            failedPages:
+              type: array
+              items:
+                $ref: '#/components/schemas/PageFailure'
+    PageRereadRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [documentId, page, fieldCatalogue]
+          properties:
+            documentId: {type: string, format: uuid}
+            page: {$ref: '#/components/schemas/TypedPageRef'}
+            fieldCatalogue:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/FieldKey'
+    PageRereadResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [documentId, fields]
+          properties:
+            documentId: {type: string, format: uuid}
+            fields:
+              type: array
+              items:
+                $ref: '#/components/schemas/FieldSuggestion'
+    MappingLine:
+      type: object
+      required: [lineId, description]
+      properties:
+        lineId: {type: string, format: uuid}
+        description: {type: string, description: Line text as printed.}
+    MappingCategory:
+      type: object
+      required: [code, name]
+      properties:
+        code: {type: string, maxLength: 40}
+        name: {type: string}
+        description: {type: string}
+    BenefitMappingRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [lines, categories]
+          properties:
+            lines:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/MappingLine'
+            categories:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/MappingCategory'
+    LineMapping:
+      type: object
+      required: [lineId, categoryCode, confidence]
+      properties:
+        lineId: {type: string, format: uuid}
+        categoryCode: {type: string, maxLength: 40}
+        confidence: {$ref: '#/components/schemas/Confidence'}
+    BenefitMappingResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [mappings]
+          properties:
+            mappings:
+              type: array
+              items:
+                $ref: '#/components/schemas/LineMapping'
+    ClinicalLine:
+      type: object
+      required: [lineId, description, categoryCode]
+      properties:
+        lineId: {type: string, format: uuid}
+        description: {type: string}
+        categoryCode: {type: string, maxLength: 40}
+        quantity: {type: number}
+    ClinicalCheckRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [diagnosis, lines]
+          properties:
+            diagnosis: {type: string, description: 'The accepted diagnosis, for example J02.9 acute pharyngitis.'}
+            lines:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/ClinicalLine'
+    ClinicalSignal:
+      type: object
+      required: [lineId, flagType, relevanceScore, reason]
+      properties:
+        lineId: {type: string, format: uuid}
+        flagType: {$ref: '#/components/schemas/FlagType'}
+        relevanceScore: {$ref: '#/components/schemas/Confidence'}
+        reason: {type: string, maxLength: 500, description: 'One sentence in neutral wording; never "fraud".'}
+    ClinicalCheckResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [signals]
+          properties:
+            signals:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClinicalSignal'
+    SummaryFact:
+      type: object
+      description: One item the draft may cite. The Claims API sends only accepted facts, rule codes, overrides and kept flags.
+      required: [id, kind, text]
+      properties:
+        id: {type: string, description: An id the Claims API chose for this request. Citations must use it.}
+        kind:
+          type: string
+          enum: [FIELD, PAGE, RULE, OVERRIDE, FLAG, CALCULATION]
+        text: {type: string, description: 'The fact in words, for example "EX-04: cosmetic products are not covered".'}
+    SummaryDraftRequest:
+      allOf:
+        - $ref: '#/components/schemas/TaskRequest'
+        - type: object
+          required: [facts]
+          properties:
+            facts:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/SummaryFact'
+    SummaryDraftSentence:
+      type: object
+      required: [text, citations]
+      properties:
+        text: {type: string}
+        citations:
+          type: array
+          description: Ids of facts from the request.
+          items:
+            type: string
+    SummaryDraftResponse:
+      allOf:
+        - $ref: '#/components/schemas/TaskResponse'
+        - type: object
+          required: [sentences]
+          properties:
+            sentences:
+              type: array
+              items:
+                $ref: '#/components/schemas/SummaryDraftSentence'

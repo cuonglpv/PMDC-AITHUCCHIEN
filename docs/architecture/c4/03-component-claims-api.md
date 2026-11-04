@@ -18,7 +18,7 @@ flowchart TB
 
     subgraph api["Claims API [Container]"]
         http["HTTP API<br/><i>[Component: ASP.NET Core]</i><br/>Routes, request validation,<br/>error mapping"]
-        access["Access Control<br/><i>[Component: ASP.NET Core Authorization]</i><br/>Sign-in, roles, claim scope"]
+        access["Access Control<br/><i>[Component: ASP.NET Core Authorization]</i><br/>Sign-in, tokens, roles, claim scope"]
 
         subgraph work["Claim work components"]
             intake["Claim Intake<br/><i>[Component: C#]</i><br/>Member search, registration,<br/>upload rules, submit"]
@@ -132,11 +132,11 @@ flowchart TB
 | Component | Owns | Does not own | Stories and rules |
 |---|---|---|---|
 | HTTP API | Transport, request validation, mapping `ck_` and `ux_` constraint names to error messages | SQL and business decisions | All |
-| Access Control | Sign-in, one role per account, claim scope for every read | UI visibility | US01, BR-11 |
+| Access Control | Sign-in, access and refresh tokens, one role per account, claim scope for every read | UI visibility | US01, BR-11 |
 | Claim Intake | Member search, claim registration, file type, size and page limits, submit | Reading documents | US02, US03 |
 | Claim Lifecycle | Allowed status changes, review and approval queues, self-assignment, priority | What a reviewer verifies | US23, BR-09 |
 | Evidence | Accepting, correcting and entering field values, reclassifying pages, requesting a page re-read | Applying thresholds to AI output | US06, BR-02 |
-| Validation | Required documents, identity and date consistency, invoice arithmetic, duplicate detection, alerts | Clinical judgement, which is AI-03 | US07, US08, BR-07, BR-08 |
+| Validation | Required documents, identity and date consistency, invoice arithmetic, claimed total against the lines, duplicate detection, alerts | Clinical judgement, which is AI-03 | US07, US08, BR-07, BR-08 |
 | Adjudication | Confirming mappings, line overrides, numbered calculation revisions and re-runs | Evaluating rules, which is the Rule Engine | US10 to US13, US16, BR-07 |
 | Rule Engine | Eligibility, waiting periods, exclusions, reimbursement rate, limits, payable amount and formula | Reading documents, guessing missing values, any database, clock or network access | US11, US12, SYS-01, BR-04, BR-05 |
 | Risk Flags | Dismissing or keeping AI signals, with a reason | Producing the signal, or changing any amount | US09 (Should), US14 (Should), BR-07, BR-08 |
@@ -157,7 +157,7 @@ flowchart TB
 4. **Thresholds live in the AI Job Runner.** It reads them from application config and stores the resulting level on each value, so changing a threshold does not rewrite history (BR-03).
 5. **Status changes go through Claim Lifecycle.** A database trigger checks the same lifecycle as a second line of defence.
 6. **The database repeats the critical rules.** Maker–checker, a source for every accepted value and the override cap are also constraints (D2, D6, D8 in the [data model](../../06-data-model.md#1-design-decisions)). A code bug fails loudly instead of storing a wrong decision.
-7. **Every read of claim data is audited,** not only every change (BR-12). Claim work components call Audit Log after Access Control has allowed the read.
+7. **Every read of claim data is audited,** not only every change (BR-12). Claim work components call Audit Log after Access Control has allowed the read. Status polling is the one exception, because its response carries no claim content.
 
 ## How AI jobs run
 
@@ -167,4 +167,4 @@ A call that fails or times out marks the run `FAILED` with an `error_code`, and 
 
 **Previous:** [C2: Container](02-container.md) · **See also:** [C3: Document AI Service](03-component-document-ai.md) · **Up:** [C4 overview](README.md)
 
-**Sources of truth:** [Use cases](../../03-use-cases.md), [INVEST requirements](../../08-invest-requirements.md), [Information architecture](../../04-information-architecture.md#screen-to-api-mapping), [claimlens.dbml](../../diagrams/claimlens.dbml).
+**Sources of truth:** [Use cases](../../03-use-cases.md), [INVEST requirements](../../08-invest-requirements.md), [Information architecture](../../04-information-architecture.md#screen-to-api-mapping), [claimlens.dbml](../../diagrams/claimlens.dbml), [API contract](../../07-api-contract.md).
