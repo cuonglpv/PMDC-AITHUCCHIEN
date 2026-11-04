@@ -1,0 +1,26 @@
+{
+  "name": "claimlens-repo-tools",
+  "private": true,
+  "description": "Pins the tools that work across the repository, and the end-to-end tests. Each application keeps its own dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "contract:lint": "redocly lint docs/api/claims-api.yaml docs/api/document-ai.yaml",
+    "contract:generate": "node tools/contract/generate.mjs",
+    "contract:check": "node tools/contract/generate.mjs --check",
+    "schema:check": "node tools/schema/check-drift.mjs",
+    "e2e": "playwright test --config e2e/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@dbml/cli": "11.0.1",
+    "@electric-sql/pglite": "0.5.15",
+    "@playwright/test": "1.64.1",
+    "@redocly/cli": "2.73.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "yaml": "2.9.1"
+  }
+}

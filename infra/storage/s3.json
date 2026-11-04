@@ -1,0 +1,24 @@
+{
+  "identities": [
+    {
+      "name": "claims-api",
+      "credentials": [
+        {
+          "accessKey": "local-claims-api",
+          "secretKey": "local-claims-api-secret"
+        }
+      ],
+      "actions": ["Admin:claimlens", "Read:claimlens", "Write:claimlens", "List:claimlens", "Tagging:claimlens"]
+    },
+    {
+      "name": "document-ai",
+      "credentials": [
+        {
+          "accessKey": "local-document-ai",
+          "secretKey": "local-document-ai-secret"
+        }
+      ],
+      "actions": ["Read:claimlens/pages/*"]
+    }
+  ]
+}

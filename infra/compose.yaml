@@ -1,0 +1,126 @@
+# Daily work: the applications run on the host, everything else here. Open http://localhost:8088.
+#   docker compose -f infra/compose.yaml up -d postgres storage converter proxy-dev
+#
+# Whole stack in containers, also on http://localhost:8088:
+#   docker compose -f infra/compose.yaml --profile full up -d --build
+name: claimlens
+
+x-claims-api-env: &claims-api-env
+  ASPNETCORE_ENVIRONMENT: Production
+  ConnectionStrings__Owner: Host=postgres;Database=${POSTGRES_DB:-claimlens};Username=${POSTGRES_USER:-claimlens_owner};Password=${POSTGRES_PASSWORD:-local-dev-only}
+  ConnectionStrings__Database: Host=postgres;Database=${POSTGRES_DB:-claimlens};Username=claimlens_app;Password=${APP_DB_PASSWORD:-local-app-only}
+  Auth__SigningKey: ${AUTH_SIGNING_KEY:-local-development-signing-key-not-for-any-real-use}
+  Auth__AllowedOrigins__0: http://localhost:8088
+  Seed__DevPassword: ${SEED_DEV_PASSWORD:-local-dev-password}
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-claimlens_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-claimlens}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  storage:
+    image: chrislusf/seaweedfs:4.52
+    command: >-
+      server -dir=/data -volume.max=20 -s3 -s3.port=8333
+      -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "8333:8333"
+    volumes:
+      - storage-data:/data
+      - ./storage/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # LibreOffice runs here. It parses uploaded files, so it keeps none and holds no credentials.
+  converter:
+    image: gotenberg/gotenberg:8.39.0
+    command: ["gotenberg", "--api-timeout=60s", "--libreoffice-restart-after=50"]
+    ports:
+      - "3100:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  proxy-dev:
+    image: caddy:2
+    profiles: [dev]
+    environment:
+      WEB_UPSTREAM: host.docker.internal:3000
+      CLAIMS_API_UPSTREAM: host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8088:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  migrate:
+    profiles: [full]
+    build:
+      context: ..
+      dockerfile: apps/claims-api/Dockerfile
+    image: claimlens/claims-api:local
+    entrypoint: ["sh", "-c", "dotnet ClaimLens.Api.dll migrate && dotnet ClaimLens.Api.dll seed"]
+    environment: *claims-api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  claims-api:
+    profiles: [full]
+    image: claimlens/claims-api:local
+    environment: *claims-api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  document-ai:
+    profiles: [full]
+    build: ../apps/document-ai
+    image: claimlens/document-ai:local
+    environment:
+      DOCUMENT_AI_SERVICE_KEY: ${DOCUMENT_AI_SERVICE_KEY:-local-service-key}
+      DOCUMENT_AI_GATEWAY: fake
+      DOCUMENT_AI_STORAGE_ENDPOINT: http://storage:8333
+      DOCUMENT_AI_STORAGE_ACCESS_KEY: local-document-ai
+      DOCUMENT_AI_STORAGE_SECRET_KEY: local-document-ai-secret
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  web:
+    profiles: [full]
+    build: ../apps/web
+    image: claimlens/web:local
+
+  proxy:
+    image: caddy:2
+    profiles: [full]
+    environment:
+      WEB_UPSTREAM: web:3000
+      CLAIMS_API_UPSTREAM: claims-api:8080
+    ports:
+      - "8088:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - web
+      - claims-api
+
+volumes:
+  postgres-data:
+  storage-data:

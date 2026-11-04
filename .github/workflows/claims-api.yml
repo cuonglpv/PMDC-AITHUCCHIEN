@@ -1,0 +1,22 @@
+name: claims-api
+
+on:
+  pull_request:
+    paths: ["apps/claims-api/**", "db/**", "fixtures/**", "docs/api/claims-api.yaml", "docs/07-api-contract.md", ".github/workflows/claims-api.yml"]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/claims-api
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: apps/claims-api/global.json
+      - run: dotnet build ClaimLens.slnx --configuration Release
+      # The API tests start PostgreSQL with Testcontainers; the runner has Docker.
+      - run: dotnet test --solution ClaimLens.slnx --configuration Release --no-build

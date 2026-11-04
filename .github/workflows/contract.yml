@@ -1,0 +1,25 @@
+name: contract
+
+on:
+  pull_request:
+    paths: ["docs/api/**", "docs/diagrams/claimlens.dbml", "docs/07-api-contract.md", "db/migrations/**", "tools/**", "apps/**/*.g.cs", "apps/web/src/lib/api/schema.d.ts", "apps/document-ai/src/document_ai/contracts/**", ".github/workflows/contract.yml"]
+  push:
+    branches: [main]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@v6
+      - run: npm ci --no-audit --no-fund
+      - name: The contracts are valid
+        run: npm run contract:lint
+      - name: Generated files are current
+        run: npm run contract:check
+      - name: Migrations contain everything in the DBML
+        run: npm run schema:check
