@@ -167,6 +167,10 @@ function pydanticModels(work) {
     '--quiet',
     '--python',
     '3.12',
+    // The generator formats with whichever ruff it finds, and only warns if there is none. Pinning it here makes the
+    // output the same on every machine; this must match the ruff version in apps/document-ai/pyproject.toml.
+    '--with',
+    'ruff==0.17.3',
     '--from',
     'datamodel-code-generator==0.89.0',
     'datamodel-codegen',
