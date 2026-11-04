@@ -52,8 +52,8 @@ flowchart TB
     class web,api,db,storage,keyContainer,keyStore container
     class ai,keyAi aiBox
     class provider,keyExternal external
-    style claimlens fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
-    style key fill:#fff,stroke:#bbb
+    style claimlens fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
+    style key fill:transparent,stroke:#888
 ```
 
 The roles are one box here because they all reach ClaimLens the same way. What each role may do is enforced inside the Claims API and shown in [C1](01-system-context.md#users).

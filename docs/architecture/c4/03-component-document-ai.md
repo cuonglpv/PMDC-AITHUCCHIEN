@@ -60,8 +60,8 @@ flowchart TB
     class tasks,check,extract,mapping,clinical,summary,pages,gateway,keyComponent aiBox
     class api,storage,keyNeighbour neighbour
     class provider,keyExternal external
-    style service fill:#faf8ff,stroke:#7c3aed,stroke-dasharray:5 5
-    style key fill:#fff,stroke:#bbb
+    style service fill:transparent,stroke:#7c3aed,stroke-dasharray:5 5
+    style key fill:transparent,stroke:#888
 ```
 
 ## Component catalogue

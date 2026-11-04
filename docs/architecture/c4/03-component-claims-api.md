@@ -9,40 +9,47 @@
 ```mermaid
 ---
 title: Component diagram for the Claims API, business components
+config:
+  flowchart:
+    wrappingWidth: 320
 ---
-flowchart LR
+flowchart TB
     web["Staff Web App<br/><i>[Container: Next.js, React]</i>"]
 
     subgraph api["Claims API [Container]"]
-        http["HTTP API<br/><i>[Component: ASP.NET Core]</i><br/>Routes, request validation, error mapping"]
+        http["HTTP API<br/><i>[Component: ASP.NET Core]</i><br/>Routes, request validation,<br/>error mapping"]
         access["Access Control<br/><i>[Component: ASP.NET Core Authorization]</i><br/>Sign-in, roles, claim scope"]
 
         subgraph work["Claim work components"]
-            intake["Claim Intake<br/><i>[Component: C#]</i><br/>Member search, registration, upload rules, submit"]
-            lifecycle["Claim Lifecycle<br/><i>[Component: C#]</i><br/>Status changes, queues, assignment, priority"]
-            evidence["Evidence<br/><i>[Component: C#]</i><br/>Accept, correct, reclassify, page re-read"]
-            validation["Validation<br/><i>[Component: C#]</i><br/>Completeness, consistency, duplicates, alerts"]
-            adjudication["Adjudication<br/><i>[Component: C#]</i><br/>Mappings, overrides, calculation revisions"]
+            intake["Claim Intake<br/><i>[Component: C#]</i><br/>Member search, registration,<br/>upload rules, submit"]
+            lifecycle["Claim Lifecycle<br/><i>[Component: C#]</i><br/>Status changes, queues,<br/>assignment, priority"]
+            evidence["Evidence<br/><i>[Component: C#]</i><br/>Accept, correct, reclassify,<br/>page re-read"]
+            validation["Validation<br/><i>[Component: C#]</i><br/>Completeness, consistency,<br/>duplicates, alerts"]
+            adjudication["Adjudication<br/><i>[Component: C#]</i><br/>Mappings, overrides,<br/>calculation revisions"]
             risk["Risk Flags<br/><i>[Component: C#]</i><br/>Dismiss or keep AI signals"]
-            decision["Decision<br/><i>[Component: C#]</i><br/>Recommendation, attestation, approval, balance"]
+            decision["Decision<br/><i>[Component: C#]</i><br/>Recommendation, attestation,<br/>approval, balance"]
         end
 
         rulesets["Rule Set Management<br/><i>[Component: C#]</i><br/>Drafts, publishing, test runs"]
-        insights["AI Quality and Timeline<br/><i>[Component: C#]</i><br/>Read-only metrics, export, claim history"]
-        engine["Rule Engine<br/><i>[Component: C# library, no I/O]</i><br/>Evaluates lines and calculates payable"]
+        insights["AI Quality and Timeline<br/><i>[Component: C#]</i><br/>Read-only metrics, export,<br/>claim history"]
+        engine["Rule Engine<br/><i>[Component: C# library, no I/O]</i><br/>Evaluates lines and<br/>calculates payable"]
     end
 
     web -- "Calls API operations<br/>[HTTPS, JSON and multipart]" --> http
-    http -- "Checks the caller on every request" --> access
-    http -- "Dispatches claim operations" --> work
-    http -- "Dispatches rule-set operations" --> rulesets
-    http -- "Dispatches dashboard and timeline queries" --> insights
-    evidence -- "Re-runs checks after a correction" --> validation
-    validation -- "Re-runs the calculation" --> adjudication
-    adjudication -- "Evaluates lines against a rule-set version" --> engine
-    rulesets -- "Test-runs a draft on sample claims" --> engine
+    http -- "Checks the caller<br/>on every request" --> access
+    http -- "Dispatches claim<br/>operations" --> work
+    http -- "Dispatches rule-set<br/>operations" --> rulesets
+    http -- "Dispatches dashboard<br/>and timeline queries" --> insights
+    evidence -- "Re-runs checks<br/>after a correction" --> validation
+    validation -- "Re-runs the<br/>calculation" --> adjudication
+    adjudication -- "Evaluates lines against<br/>a rule-set version" --> engine
+    rulesets -- "Test-runs a draft<br/>on sample claims" --> engine
+    intake ~~~ lifecycle
+    risk ~~~ decision
+    access ~~~ insights
 
     subgraph key["Key"]
+        direction LR
         keyComponent["Component"]
         keyEngine["Rule Engine"]
         keyNeighbour["Neighbouring container"]
@@ -54,9 +61,9 @@ flowchart LR
     class http,access,intake,lifecycle,evidence,validation,adjudication,risk,decision,rulesets,insights,keyComponent component
     class engine,keyEngine ruleEngine
     class web,keyNeighbour neighbour
-    style api fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
-    style work fill:#eef2fb,stroke:#9db5e8
-    style key fill:#fff,stroke:#bbb
+    style api fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
+    style work fill:transparent,stroke:#9db5e8
+    style key fill:transparent,stroke:#888
 ```
 
 "Claim work components" is only a grouping: an arrow to it applies to each component inside.
@@ -68,8 +75,11 @@ These components do the work that every business component shares, and hold all 
 ```mermaid
 ---
 title: Component diagram for the Claims API, supporting components
+config:
+  flowchart:
+    wrappingWidth: 320
 ---
-flowchart LR
+flowchart TB
     subgraph api["Claims API [Container]"]
         business["Business components<br/><i>[Components: C#]</i><br/>Everything in the diagram above"]
         prep["Document Preparation<br/><i>[Component: LibreOffice headless, PDFium]</i><br/>Renditions, page images, thumbnails"]
@@ -99,6 +109,7 @@ flowchart LR
     files -- "Reads and writes<br/>[S3 API, HTTPS]" --> storage
 
     subgraph key["Key"]
+        direction LR
         keyComponent["Component"]
         keyAi["AI container"]
         keyNeighbour["Neighbouring container"]
@@ -110,8 +121,8 @@ flowchart LR
     class business,prep,jobs,audit,persistence,files,keyComponent component
     class ai,keyAi aiBox
     class db,storage,keyNeighbour neighbour
-    style api fill:#f8fafc,stroke:#1a56db,stroke-dasharray:5 5
-    style key fill:#fff,stroke:#bbb
+    style api fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
+    style key fill:transparent,stroke:#888
 ```
 
 ## Component catalogue

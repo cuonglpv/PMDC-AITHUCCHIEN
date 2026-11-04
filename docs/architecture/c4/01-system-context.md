@@ -37,7 +37,7 @@ flowchart TB
     class intake,reviewer,approver,admin,keyPerson person
     class claimlens,keySystem system
     class provider,keyExternal external
-    style key fill:#fff,stroke:#bbb
+    style key fill:transparent,stroke:#888
 ```
 
 ## System boundary
