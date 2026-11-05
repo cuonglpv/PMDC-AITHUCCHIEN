@@ -1,0 +1,13 @@
+P:System.DateTime.Now;The engine has no clock: pass the date in the input (C3, rule 1).
+P:System.DateTime.UtcNow;The engine has no clock: pass the date in the input (C3, rule 1).
+P:System.DateTime.Today;The engine has no clock: pass the date in the input (C3, rule 1).
+P:System.DateTimeOffset.Now;The engine has no clock: pass the date in the input (C3, rule 1).
+P:System.DateTimeOffset.UtcNow;The engine has no clock: pass the date in the input (C3, rule 1).
+T:System.TimeProvider;The engine has no clock: pass the date in the input (C3, rule 1).
+T:System.Random;The same input must always give the same result (US11).
+M:System.Guid.NewGuid;The same input must always give the same result (US11).
+T:System.IO.File;The engine has no I/O (C3, rule 1).
+T:System.IO.Directory;The engine has no I/O (C3, rule 1).
+T:System.IO.FileStream;The engine has no I/O (C3, rule 1).
+T:System.Net.Http.HttpClient;The engine has no I/O (C3, rule 1).
+T:System.Environment;The engine has no I/O (C3, rule 1).

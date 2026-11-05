@@ -77,7 +77,7 @@ flowchart TB
 | Clinical Signals | AI-03, `CLINICAL_CHECK` | Signal type, relevance score and reason per line | Raise a flag, set its severity or call anything fraud; the Claims API creates the flag and sets the severity from the score | US09 (Should) |
 | Summary Draft | AI-04, `SUMMARY_DRAFT` | Sentences with citations to the items it was given | Use facts beyond those items, or submit anything | US15 (Should) |
 | Page Reader | AI-01 tasks | Page images | Write to storage | US04, US05 |
-| Model Gateway | All | Checked model output | Choose the model; the request names it | All |
+| Model Gateway | All | Checked model output | Choose the pipeline; the request names it, and the gateway only resolves that name | All |
 
 ## Rules that shape the structure
 
@@ -87,6 +87,7 @@ flowchart TB
 4. **Every value has a source.** A field without a page and bounding box cannot be accepted (BR-02), so Field Extraction returns the source with each value.
 5. **Bad model output is a failed call.** Model Gateway checks each response against the expected shape. Failures reach the Claims API as an error, and the claim follows the normal [fallback](02-container.md#when-a-container-is-down). A single page that cannot be read is reported in the response, and only that page falls back.
 6. **One way out to the provider.** Keeping the provider behind Model Gateway limits a change of provider to one component, and gives one place to control what data leaves ClaimLens.
+7. **`model` names a pipeline, not one provider model.** Reading a value with its region most likely takes OCR and a language model together, and `ai_run` records one name. `field-extractor v2.4` stands for a set of provider models plus a prompt version, so the dashboard's version filter also separates prompt changes.
 
 **Previous:** [C2: Container](02-container.md) · **See also:** [C3: Claims API](03-component-claims-api.md) · **Up:** [C4 overview](README.md)
 

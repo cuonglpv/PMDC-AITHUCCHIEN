@@ -82,16 +82,17 @@ config:
 flowchart TB
     subgraph api["Claims API [Container]"]
         business["Business components<br/><i>[Components: C#]</i><br/>Everything in the diagram above"]
-        prep["Document Preparation<br/><i>[Component: LibreOffice headless, PDFium]</i><br/>Renditions, page images, thumbnails"]
+        prep["Document Preparation<br/><i>[Component: .NET BackgroundService, PDFium]</i><br/>Renditions, page images, thumbnails"]
         jobs["AI Job Runner<br/><i>[Component: .NET BackgroundService]</i><br/>Runs queued AI tasks, applies thresholds,<br/>triggers the fallback"]
         audit["Audit Log<br/><i>[Component: C#]</i><br/>Insert-only event trail"]
-        persistence["Persistence<br/><i>[Component: EF Core, Npgsql]</i><br/>Repositories and transactions"]
+        persistence["Persistence<br/><i>[Component: EF Core, Npgsql]</i><br/>DbContext, mappings and transactions"]
         files["Document Store<br/><i>[Component: AWS SDK for S3]</i><br/>Reads and writes objects by key"]
     end
 
     ai["Document AI Service<br/><i>[Container: Python, FastAPI]</i>"]
     db[("Database<br/><i>[Container: PostgreSQL]</i>")]
     storage[("Object Storage<br/><i>[Container: S3-compatible]</i>")]
+    converter["Document Converter<br/><i>[Container: Gotenberg, LibreOffice]</i>"]
 
     business -- "Claim Intake prepares uploaded files" --> prep
     business -- "Queues AI tasks" --> jobs
@@ -103,6 +104,7 @@ flowchart TB
     audit -- "Inserts events" --> persistence
     business -- "Reads files for the viewer" --> files
     prep -- "Writes renditions and page images" --> files
+    prep -- "Sends DOCX and XLSX files, receives a PDF<br/>[HTTP, multipart]" --> converter
     jobs -- "Stores raw AI responses" --> files
     jobs -- "Requests one AI task, receives suggestions<br/>[HTTPS, JSON]" --> ai
     persistence -- "Reads and writes<br/>[SQL over TLS]" --> db
@@ -120,7 +122,7 @@ flowchart TB
     classDef neighbour fill:#dbe6fb,color:#123c99,stroke:#1a56db
     class business,prep,jobs,audit,persistence,files,keyComponent component
     class ai,keyAi aiBox
-    class db,storage,keyNeighbour neighbour
+    class db,storage,converter,keyNeighbour neighbour
     style api fill:transparent,stroke:#1a56db,stroke-dasharray:5 5
     style key fill:transparent,stroke:#888
 ```
@@ -143,10 +145,10 @@ flowchart TB
 | Decision | Recommendation and attestation, maker–checker, outcome against amount, balance re-check and update | Calculating the payable | US15 (Should), US17, US18, BR-01, BR-06, BR-10, BR-13 |
 | Rule Set Management | Draft versions, publishing with an effective date, test runs on `sample_claim` | Reading real claims | US19, US20 (Should), BR-04, BR-11 |
 | AI Quality and Timeline | AI quality metrics, XLSX export, claim timeline | Changing any data | US21 (Should), US22, BR-11 |
-| Document Preparation | DOCX and XLSX renditions, page split, page images, thumbnails, conversion failures | Anything AI | US03 |
+| Document Preparation | Getting DOCX and XLSX renditions from the Document Converter, page split, page images, thumbnails, conversion failures | Anything AI | US03 |
 | AI Job Runner | Picking up `QUEUED` runs, calling the Document AI Service, storing raw output, applying BR-03 levels, marking `FAILED` on an error or timeout | The AI work itself, or deciding what a person accepts | US04, US05, US09, US10, US15, BR-03 |
 | Audit Log | Insert-only events with actor, time, before and after values | Primary business data | US22, BR-12 |
-| Persistence | Repositories, transactions, row locks for the balance check | HTTP and permissions | All |
+| Persistence | DbContext, mappings, transactions, row locks for the balance check | HTTP and permissions | All |
 | Document Store | Generated keys, reading and writing objects | Business metadata and permissions | US03 |
 
 ## Rules that shape the structure
@@ -164,6 +166,10 @@ flowchart TB
 The `ai_run` table is the queue. A component inserts a row with status `QUEUED`, including the model name and version from application config, which is why the model version is known before the call. The AI Job Runner claims rows with `FOR UPDATE SKIP LOCKED`, so several API instances can share the queue without taking the same job.
 
 A call that fails or times out marks the run `FAILED` with an `error_code`, and that status is what triggers the manual fallback. A run left in `RUNNING` after a crash is treated the same way once its timeout passes.
+
+## How file conversion runs
+
+`uploadDocument` stores the original and answers with a `document` row in `CONVERTING`. A background worker in Document Preparation claims those rows with `FOR UPDATE SKIP LOCKED` and keeps the lock during the conversion, so a crash frees the row and the next pass tries again. Pages and the move to `READY` commit together, and `READY` queues the `PAGE_CHECK` run. If the Document Converter fails or times out, a DOCX or XLSX file moves to `REJECTED` with the reason (US03). A file's type is checked by its first bytes before anything else, because LibreOffice turns any bytes into a PDF rather than failing.
 
 **Previous:** [C2: Container](02-container.md) · **See also:** [C3: Document AI Service](03-component-document-ai.md) · **Up:** [C4 overview](README.md)
 

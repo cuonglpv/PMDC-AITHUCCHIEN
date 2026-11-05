@@ -2,7 +2,7 @@
 
 > Design status: TARGET MVP
 >
-> Database: PostgreSQL 14 or later. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (21 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins.
+> Database: PostgreSQL 14 or later. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (21 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins. What actually runs is `db/migrations`, kept in step with the DBML as described in [Code structure](10-code-structure.md#7-database).
 
 The schema is built so that the database itself, not only the application, can check the product rule **AI reads, the Rule Engine calculates, people decide**. The latest AI output is kept next to the value people use, rule results next to human overrides, and the most important business rules (BR-01 to BR-13 in [Use cases](03-use-cases.md#business-rules-referenced-by-use-cases)) are written as constraints. All 11 use cases are covered by the 21 tables; no use case had to be removed.
 
@@ -25,7 +25,7 @@ The schema is built so that the database itself, not only the application, can c
 
 ## 2. Conventions
 
-- **Keys.** Tables use `uuid` keys (safe in `/claims/:id` URLs, can be created by the AI service), except `benefit_category`, keyed by a readable code, and `audit_event`, keyed by a `bigint` identity for ordering.
+- **Keys.** Tables use `uuid` keys (safe in `/claims/:id` URLs), except `benefit_category`, keyed by a readable code, and `audit_event`, keyed by a `bigint` identity for ordering.
 - **Money** is `bigint` VND with no decimals. **Rates** are integer basis points: `rate_bp = 8000` means the insurer pays 80% and the insured co-pays 20%.
 - **Confidence** is `numeric(4,3)` between 0 and 1. **Bounding boxes** are `jsonb` `{x, y, w, h}` normalised to the page (0 to 1), so they survive re-rendering at another size.
 - **Time** is always `timestamptz`; dates the business uses (service date, effective-from) are `date`.
@@ -568,7 +568,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | BR-08 Alert versus risk flag | Deterministic checks → `alert` (including `DUPLICATE_INVOICE`: same `invoice_number` and `provider_tax_code` in another claim, or the normalised `provider_name` when the document has no tax code); AI signals → `risk_flag`, which no calculation table references. |
 | BR-09 Queue priority | Approval queue: the latest revision's payable against the configured high-value threshold, `OPEN` or `KEPT` `HIGH` flags, then `submitted_at`. Review queue: the same with `claimed_total` in place of the payable and `status_changed_at` for age. |
 | BR-10 Balance consumed on approval, re-checked | `policy.balance_version`; `calculation_revision.balance_version`; `recommendation.balance_version_checked`; `ck_policy_consumed`. |
-| BR-11 Who sees claim data | `claim.registered_by`, `claim.assignee_id` and the staff role drive row-level security; the API returns reduced columns for the Available list; synthetic `sample_claim` for the Administrator. |
+| BR-11 Who sees claim data | `claim.registered_by`, `claim.assignee_id` and the staff role drive the claim scope the Claims API checks on every request (Q11); the API returns reduced columns for the Available list; synthetic `sample_claim` for the Administrator. |
 | BR-12 Immutable audit | `audit_event`, insert-only. |
 | BR-13 Outcome by amount | `proposed_outcome` and `ck_recommendation_mismatch_reason`; `ck_decision_br13_approved`, `_partial`, `_rejected`. `recommended_payable` and `final_payable` are set by the system, never sent by the client. |
 
@@ -579,7 +579,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | Table | Rows |
 |---|---|
 | `policy` | `PL-2026-00731` on `GOLD-OP`; `opening_consumed` and `consumed_amount` 4,200,000; `balance_version` 1. |
-| `rule_set_version`, `benefit_rule` | v3, effective 01/01/2026: `COV-01`, `COV-03`, `COV-04`, `COV-05`, `EX-04`, `COINS-80` (`rate_bp` 8000), `LIM-ANNUAL` (5,000,000), `LIM-VISIT` (2,000,000, assumed). |
+| `rule_set_version`, `benefit_rule` | v3, effective 01/01/2026: `ELIG-01`, `WAIT-30`, `COV-01` to `COV-05`, `EX-04`, `COINS-80` (`rate_bp` 8000), `LIM-ANNUAL` (5,000,000), `LIM-VISIT` (2,000,000, assumed). |
 | `document`, `document_page` | 4 files, 5 pages (invoice p1–p2, receipt, prescription, visit summary). |
 | `claim_field` | Invoice `HN-0045821`, seller tax code `0101234567`, insured name, line fields, diagnosis `J02.9` (AI below 0.70, entered by the reviewer). |
 | `expense_line` | Lines 300,000 · 250,000 · 150,000 · 300,000 · 400,000; line 4 mapped to `COSMETIC` at 0.81 and confirmed by the reviewer. |
@@ -602,9 +602,10 @@ These go in the migration next to the DDL exported from the DBML.
 | Published rule sets are frozen | Trigger blocks updates to a `PUBLISHED` version and its `benefit_rule` rows, and requires `effective_from` later than the current published version. Publishing also checks that every active category has one `COVERAGE` or `EXCLUSION` rule. |
 | Approval and usage stay in step | The decision and the `policy` update run in one transaction with the policy row locked; a trigger can assert `consumed_amount = opening_consumed + sum(final_payable)` of approved recommendations. |
 | Audit is insert-only | `revoke update, delete on audit_event from claimlens_app;` optionally a hash chain over `id` order. |
-| BR-11 visibility | Row-level security on `claim` and its child tables: Intake Officer where `registered_by = me`, Claims Reviewer where `assignee_id = me`, Senior Approver all, Administrator none. On `claim` only, a Claims Reviewer also reads unassigned rows in `NEEDS_VERIFICATION` or `READY_FOR_REVIEW`, so the Available list works; the API returns only the columns BR-11 allows there. |
+| BR-11 visibility | Checked by the Claims API on every request, not in the database, for the MVP (Q11): Intake Officer where `registered_by = me`, Claims Reviewer where `assignee_id = me`, Senior Approver all, Administrator none. A Claims Reviewer also lists unassigned claims in `NEEDS_VERIFICATION` or `READY_FOR_REVIEW`, so the Available list works; the API returns only the columns BR-11 allows there. |
 | Line values follow their fields | `expense_line` amounts and descriptions are written in the same transaction as the `claim_field` change that feeds them. |
-| Vietnamese name search | `create extension pg_trgm; create extension unaccent;` and a GIN index on `unaccent(full_name)`. |
+| Vietnamese name search | `create extension pg_trgm; create extension unaccent;` and a GIN index on an immutable wrapper, because `unaccent` cannot be used in an index directly: `create function immutable_unaccent(text) returns text language sql immutable parallel safe as $$ select public.unaccent('public.unaccent', $1) $$; create index ix_member_name_trgm on member using gin (immutable_unaccent(full_name) gin_trgm_ops);`. Searches must call the wrapper too. |
+| Claim number | `create sequence claim_number_seq;` Claim Intake builds `CLM-{year}-{six digits from the sequence}`, with the year in Vietnam time. One sequence, never reset. Gaps are allowed, so the number is unique but does not count claims. |
 
 To get the DDL, paste the DBML into [dbdiagram.io](https://dbdiagram.io) and export PostgreSQL, or run:
 
@@ -626,5 +627,7 @@ npx -p @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres -o claimlens.s
 | Q8 | Receipts may carry no seller tax code, and invoice numbers may restart each year under a new invoice series (e.g. `1C26THN`). | The duplicate key is `invoice_number` + `provider_tax_code`, falling back to the normalised `provider_name`. The invoice series is not stored; a repeat number from another year raises a Blocking alert that the reviewer dismisses with a reason. Add an `invoice_series` field if that happens often. |
 | Q9 | Who labels golden-set risk flags as true or false positives? | A Senior Approver during golden-set runs, stored in `risk_flag.eval_label`. |
 | Q10 | How long are documents and audit events kept? | Not modelled; documents follow the storage lifecycle, `audit_event` can be partitioned by month. |
+| Q12 | How is the amount after the reimbursement rate rounded? | Down to a whole dong, so the insurer never pays above the stated rate. The golden case has no remainder. |
+| Q11 | Should row-level security repeat the claim scope in the MVP? | Not in the MVP. Tested as first designed, it hid other claims' fields from the reviewer's duplicate lookup (US08) and every claim from the job runner, which has no user. It can follow later, with a second database role for system work and a session setting on every connection. The MVP holds only synthetic or de-identified data. |
 
 **Related:** [Use cases](03-use-cases.md) · [User stories](08-invest-requirements.md) · [Information architecture](04-information-architecture.md) · [DBML](diagrams/claimlens.dbml)

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ClaimLens.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClaimLens.RuleEngine\ClaimLens.RuleEngine.csproj" />
+  </ItemGroup>
+
+  <!-- The SQL lives in db/. It is embedded so `migrate` and `seed` need nothing but this binary. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\..\db\migrations\*.sql" LogicalName="migrations.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\..\..\db\seed\reference\*.sql" LogicalName="seed.reference.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\..\..\db\seed\dev\*.sql" LogicalName="seed.dev.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

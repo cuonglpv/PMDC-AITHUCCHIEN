@@ -21,7 +21,7 @@ info:
     - `audit`: `write` records the change, `read` records the access (BR-12), `none` writes nothing.
 servers:
   - url: /api/v1
-    description: Served from the same site as the Staff Web App, because the refresh token cookie is SameSite=Strict.
+    description: Served from the same origin as the Staff Web App, behind a reverse proxy. The refresh token cookie is SameSite=Strict, so the two must share a site.
 security:
   - bearerAuth: []
 tags:

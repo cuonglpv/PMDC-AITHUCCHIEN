@@ -1,0 +1,15 @@
+# One origin for the Staff Web App and the Claims API (docs/10-code-structure.md, S13).
+# Development and deployment run the same routing, only the upstreams differ.
+:80 {
+	request_body {
+		max_size 25MB
+	}
+
+	handle /api/* {
+		reverse_proxy {$CLAIMS_API_UPSTREAM}
+	}
+
+	handle {
+		reverse_proxy {$WEB_UPSTREAM}
+	}
+}

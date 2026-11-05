@@ -353,7 +353,7 @@ Table member [headercolor: #3C4043] {
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
-    full_name [name: 'ix_member_full_name', note: 'In SQL, use a pg_trgm GIN index on unaccent(full_name) for Vietnamese name search']
+    full_name [name: 'ix_member_full_name', note: 'In SQL, use a pg_trgm GIN index on an immutable wrapper of unaccent(full_name) for Vietnamese name search']
   }
   Note: 'The insured person. Seeded; searched in step 1 of New claim (US02).'
 }

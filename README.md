@@ -273,7 +273,7 @@ The `.html` files in [docs/ui](docs/ui/) are the source of these screenshots and
 
 ## 3. Architecture and technology direction
 
-ClaimLens is made of five containers. The browser talks only to the Claims API, and only the Claims API writes to the database, so AI can suggest values but never accept its own output.
+ClaimLens is made of six containers. The browser talks only to the Claims API, and only the Claims API writes to the database, so AI can suggest values but never accept its own output.
 
 ```text
 Staff Web App         Next.js (React)
@@ -281,6 +281,7 @@ Claims API            ASP.NET Core, with the Rule Engine and the AI job runner i
 Document AI Service   Python (FastAPI), stateless: OCR, page classification, extraction, mapping, drafts
 Database              PostgreSQL (claims, versioned rule sets, calculation revisions, audit events)
 Object Storage        S3-compatible (original files, renditions, page images, raw AI responses)
+Document Converter    Gotenberg with LibreOffice: turns DOCX and XLSX files into PDF, keeps nothing
 ```
 
 OCR and language models come from an external AI Model Provider, still to be chosen.
@@ -297,6 +298,29 @@ The design, the ER diagrams (Mermaid) and the reasons behind each table are in [
 
 There are two contracts in OpenAPI 3.1: [claims-api.yaml](docs/api/claims-api.yaml) for the 59 operations between the web app and the Claims API, and [document-ai.yaml](docs/api/document-ai.yaml) for the 6 AI tasks between the Claims API and the Document AI Service. The rules behind them are in [API contract](docs/07-api-contract.md): sign-in with access and refresh tokens, what runs in the request and what goes through the AI queue, error codes, and which role may call each operation.
 
+### 3.3 Code structure
+
+One repository, with one folder per container and one folder per component inside each service:
+
+```text
+apps/web            Staff Web App: routes, features, design system, generated API types
+apps/claims-api     ClaimLens.Api with feature folders, and ClaimLens.RuleEngine, which references nothing
+apps/document-ai    Task API, one module per AI task, and the Model Gateway
+db                  SQL migrations and seed data
+fixtures/golden     The seven golden scenarios, shared by every test suite
+e2e                 Browser tests against the whole stack
+tools               Generators and the check that keeps the database in step with the DBML
+infra               Local stack, reverse proxy, converter image
+```
+
+Every decision and what was rejected, the full folder trees, the route table, how each rule is enforced, the checks run before choosing and what is built so far are in [Code structure](docs/10-code-structure.md).
+
+To run the whole stack in Docker, then open `http://localhost:8088` in Chrome or Edge. The seeded accounts are in [db/seed/dev](db/seed/dev/020_staff.sql) and their local password in [infra/.env.example](infra/.env.example):
+
+```bash
+docker compose -f infra/compose.yaml --profile full up -d --build
+```
+
 ## Documentation
 
 - **Research:** [Product research](01_Product_Research.xmind), [Feature map](02_Feature_Map.xmind).
@@ -305,6 +329,7 @@ There are two contracts in OpenAPI 3.1: [claims-api.yaml](docs/api/claims-api.ya
 - **Architecture:** [C4 model](docs/architecture/c4/README.md).
 - **Data:** [Data model and ER diagrams](docs/06-data-model.md), [DBML schema](docs/diagrams/claimlens.dbml).
 - **API:** [API contract](docs/07-api-contract.md), [Claims API (OpenAPI)](docs/api/claims-api.yaml), [Document AI Service (OpenAPI)](docs/api/document-ai.yaml).
+- **Code:** [Code structure](docs/10-code-structure.md).
 - **UI/UX:** [Information architecture](docs/04-information-architecture.md), [UI brief](docs/05-ui-brief-stitch.md), [DESIGN.md](docs/DESIGN.md), [Stitch prompts](docs/stitch-prompts.md), [screens](docs/ui/).
 
 ## Project progress
@@ -324,7 +349,8 @@ There are two contracts in OpenAPI 3.1: [claims-api.yaml](docs/api/claims-api.ya
 - [x] Design the C4 System Context, Container and Component views
 - [x] Design the PostgreSQL schema and ER diagram
 - [x] Write the API contract in OpenAPI 3.1
-- [ ] Design the frontend and backend folder structures
+- [x] Design the frontend and backend folder structures
+- [x] Scaffold the repository, the database, the Rule Engine, CI and the sign-in slice (US01)
 - [ ] Design class diagrams and sequence diagrams
 - [ ] Build the backend, Rule Engine and Document AI service
 - [ ] Build the frontend and connect it to the API

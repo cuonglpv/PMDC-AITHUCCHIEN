@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClaimLens.Api/ClaimLens.Api.csproj" />
+    <Project Path="src/ClaimLens.RuleEngine/ClaimLens.RuleEngine.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClaimLens.Api.Tests/ClaimLens.Api.Tests.csproj" />
+    <Project Path="tests/ClaimLens.RuleEngine.Tests/ClaimLens.RuleEngine.Tests.csproj" />
+  </Folder>
+</Solution>
