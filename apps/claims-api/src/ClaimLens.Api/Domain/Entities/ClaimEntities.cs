@@ -121,3 +121,60 @@ public sealed class AiRun
     public DateTimeOffset? FinishedAt { get; set; }
     public string? RawOutputKey { get; set; }
 }
+
+/// <summary>
+/// One field slot per document, field and item (`ux_claim_field_slot`). The value in use sits beside the AI's
+/// suggestion: `ai_*` keeps what the AI read, even below 0.70, and the `value_*` columns hold only what is in use
+/// (US05). <c>ck_claim_field_source_required</c> makes an accepted value carry its source (BR-02).
+/// </summary>
+public sealed class ClaimField
+{
+    public Guid Id { get; set; }
+    public Guid ClaimId { get; set; }
+    public Guid DocumentId { get; set; }
+    public FieldKey FieldKey { get; set; }
+
+    /// <summary>0 is the document header; n is expense line or prescription item n.</summary>
+    public short ItemNo { get; set; }
+
+    public Guid? ExpenseLineId { get; set; }
+    public FieldStatus Status { get; set; }
+    public string? ValueText { get; set; }
+    public long? ValueAmount { get; set; }
+    public DateOnly? ValueDate { get; set; }
+    public Guid? SourcePageId { get; set; }
+
+    /// <summary>`{x, y, w, h}` as JSON, normalised to the page.</summary>
+    public string? SourceBbox { get; set; }
+
+    public Guid? AiRunId { get; set; }
+
+    /// <summary>The raw AI value. Kept even below 0.70, and never shown then (US05).</summary>
+    public string? AiValue { get; set; }
+
+    public decimal? AiConfidence { get; set; }
+    public ConfidenceLevel? AiLevel { get; set; }
+    public Guid? AiPageId { get; set; }
+    public string? AiBbox { get; set; }
+    public Guid? ResolvedBy { get; set; }
+    public DateTimeOffset? ResolvedAt { get; set; }
+    public int RowVersion { get; set; }
+}
+
+/// <summary>
+/// An expense line read from an invoice. Its values are the accepted line fields, written in the same transaction as
+/// the fields that feed them (docs/06-data-model.md, section 10). Columns are added as the features that use them arrive.
+/// </summary>
+public sealed class ExpenseLine
+{
+    public Guid Id { get; set; }
+    public Guid ClaimId { get; set; }
+    public Guid DocumentId { get; set; }
+    public short LineNo { get; set; }
+    public string? Description { get; set; }
+    public decimal? Quantity { get; set; }
+    public long? UnitPrice { get; set; }
+    public long? Amount { get; set; }
+    public LineOrigin Origin { get; set; }
+    public MappingStatus MappingStatus { get; set; }
+}

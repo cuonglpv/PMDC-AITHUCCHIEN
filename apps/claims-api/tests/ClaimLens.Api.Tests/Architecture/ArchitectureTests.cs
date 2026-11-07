@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ClaimLens.Api.AiJobs;
 using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Features.Lifecycle;
 using ClaimLens.Api.Http;
@@ -72,6 +73,69 @@ public partial class ArchitectureTests
             .GetResult();
 
         Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+    }
+
+    private const string AiJobsNamespace = "ClaimLens.Api.AiJobs";
+
+    /// <summary>C3 rule 4: the BR-03 thresholds are read only by the AI Job Runner.</summary>
+    [Fact]
+    public void Thresholds_are_read_only_inside_AiJobs()
+    {
+        var result = Types.InAssembly(Api)
+            .That().DoNotResideInNamespace(AiJobsNamespace)
+            .ShouldNot().HaveDependencyOnAny(typeof(Thresholds).FullName!, typeof(ThresholdsOptions).FullName!)
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+    }
+
+    /// <summary>C3: only the AI Job Runner calls the Document AI Service.</summary>
+    [Fact]
+    public void Only_AiJobs_calls_the_Document_AI_service()
+    {
+        var result = Types.InAssembly(Api)
+            .That().DoNotResideInNamespace(AiJobsNamespace)
+            .ShouldNot().HaveDependencyOnAny(
+                typeof(IDocumentAiClient).FullName!,
+                typeof(DocumentAiClient).FullName!,
+                typeof(PageCheckRequest).FullName!,
+                typeof(FieldExtractionRequest).FullName!)
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+    }
+
+    /// <summary>
+    /// C3 rule 4, by what the code does: a confidence level is the result of applying a threshold, so only AiJobs sets
+    /// one. Read from the compiled code like the status rule below.
+    /// </summary>
+    [Fact]
+    public void Only_AiJobs_sets_a_confidence_level()
+    {
+        using var module = ModuleDefinition.ReadModule(Api.Location);
+        string[] owners = [typeof(ClaimField).FullName!, typeof(DocumentPage).FullName!, typeof(ExpenseLine).FullName!];
+
+        var offenders = module.GetTypes()
+            .Where(type => !OuterNamespace(type).StartsWith(AiJobsNamespace, StringComparison.Ordinal))
+            .SelectMany(type => type.Methods.Where(method => method.HasBody).Select(method => (type, method)))
+            .Where(pair => pair.method.Body.Instructions.Any(instruction =>
+                instruction.Operand is MethodReference { Name: "set_AiLevel" or "set_AiTypeLevel" } called
+                && owners.Contains(called.DeclaringType.FullName)))
+            .Select(pair => $"{pair.type.FullName}.{pair.method.Name}")
+            .ToList();
+
+        Assert.Empty(offenders);
+    }
+
+    private static string OuterNamespace(TypeDefinition type)
+    {
+        var outer = type;
+        while (outer.DeclaringType is not null)
+        {
+            outer = outer.DeclaringType;
+        }
+
+        return outer.Namespace;
     }
 
     /// <summary>

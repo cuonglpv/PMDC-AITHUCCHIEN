@@ -1,9 +1,11 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ClaimLens.Api.AiJobs;
 using ClaimLens.Api.DocumentPreparation;
 using ClaimLens.Api.DocumentStore;
 using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
+using ClaimLens.Api.Tests.AiJobs;
 using ClaimLens.Api.Tests.Contract;
 using ClaimLens.Api.Tests.Documents;
 using Microsoft.AspNetCore.Hosting;
@@ -38,6 +40,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Gotenberg for every test but the one integration class that runs it.</summary>
     public FakeConverter Converter { get; } = new();
 
+    /// <summary>The Document AI Service for every test.</summary>
+    public FakeDocumentAi Ai { get; } = new();
+
     public string OwnerConnection => database.GetConnectionString();
 
     public string AppConnection =>
@@ -69,9 +74,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Storage:AccessKey", "test");
         builder.UseSetting("Storage:SecretKey", "test");
         builder.UseSetting("Converter:BaseUrl", "http://converter.test");
+        builder.UseSetting("Ai:BaseUrl", "http://document-ai.test");
+        builder.UseSetting("Ai:ServiceKey", "test-service-key");
 
         // Tests prepare documents themselves, with PrepareDocumentsAsync, so they know when it has happened.
         builder.UseSetting("Workers:DocumentPreparation:Enabled", "false");
+
+        // The same for AI runs, with RunAiJobsAsync.
+        builder.UseSetting("Workers:AiJobs:Enabled", "false");
 
         builder.ConfigureTestServices(services =>
         {
@@ -81,6 +91,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IDocumentStore>(Store);
             services.RemoveAll<IDocumentConverter>();
             services.AddSingleton<IDocumentConverter>(Converter);
+            services.RemoveAll<IDocumentAiClient>();
+            services.AddSingleton<IDocumentAiClient>(Ai);
         });
     }
 
@@ -98,6 +110,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
             handled++;
         }
+    }
+
+    /// <summary>
+    /// Runs the AI Job Runner until no run is waiting, as the worker would. A run waiting out a failure is left for a
+    /// later call. Returns how many passes handled a run.
+    /// </summary>
+    public async Task<int> RunAiJobsAsync(IServiceProvider? services = null)
+    {
+        for (var handled = 0; handled < 500; handled++)
+        {
+            await using var scope = (services ?? Services).CreateAsyncScope();
+            if (!await scope.ServiceProvider.GetRequiredService<AiRunProcessor>().RunNextAsync(TestContext.Current.CancellationToken))
+            {
+                return handled;
+            }
+        }
+
+        throw new InvalidOperationException("The AI Job Runner did not run out of work.");
     }
 
     /// <summary>Every response through this client is checked against claims-api.yaml.</summary>
@@ -130,7 +160,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await using var connection = new NpgsqlConnection(OwnerConnection);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using var command = new NpgsqlCommand(sql, connection);
-        return (T?)await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+        var value = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+        return value is DBNull ? default : (T?)value;
+    }
+
+    /// <summary>The first column of every row.</summary>
+    public async Task<List<T>> Column<T>(string sql)
+    {
+        await using var connection = new NpgsqlConnection(OwnerConnection);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var values = new List<T>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            values.Add(reader.GetFieldValue<T>(0));
+        }
+
+        return values;
     }
 
     public sealed record SessionBody(string AccessToken, string TokenType, int ExpiresIn);

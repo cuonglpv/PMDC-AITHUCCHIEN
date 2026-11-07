@@ -36,7 +36,6 @@ public static class Startup
         AddValidated<ConverterOptions, ConverterOptionsValidator>(builder, "Converter");
         AddValidated<LimitsOptions, LimitsOptionsValidator>(builder, "Limits");
         AddValidated<WorkersOptions, WorkersOptionsValidator>(builder, "Workers");
-        AddValidated<AiOptions, AiOptionsValidator>(builder, "Ai");
         AddValidated<QueueOptions, QueueOptionsValidator>(builder, "Queue");
 
         services.AddDbContext<ClaimLensDbContext>(options =>
@@ -52,7 +51,9 @@ public static class Startup
         services.AddScoped<RefreshTokenStore>();
 
         services.AddSingleton<QueuePriority>();
-        services.AddSingleton<AiJobQueue>();
+
+        // AI Job Runner (US04, US05): the only place that calls the Document AI Service and applies thresholds.
+        builder.AddAiJobs();
 
         // Document Store and Document Preparation (US03).
         services.AddSingleton<IDocumentStore, S3DocumentStore>();
@@ -145,7 +146,7 @@ public static class Startup
     }
 
     /// <summary>Each section is checked when the API starts, so a wrong value stops it instead of the first request.</summary>
-    private static void AddValidated<TOptions, TValidator>(WebApplicationBuilder builder, string section)
+    internal static void AddValidated<TOptions, TValidator>(WebApplicationBuilder builder, string section)
         where TOptions : class
         where TValidator : class, IValidateOptions<TOptions>
     {

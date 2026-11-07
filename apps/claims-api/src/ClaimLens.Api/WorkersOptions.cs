@@ -4,11 +4,13 @@ namespace ClaimLens.Api;
 
 /// <summary>
 /// The `Workers` section: each background worker can be switched off, so tests drive it directly
-/// (docs/10-code-structure.md, section 4). The AI Job Runner joins this section when it is built.
+/// (docs/10-code-structure.md, section 4).
 /// </summary>
 public sealed class WorkersOptions
 {
     public WorkerSettings DocumentPreparation { get; set; } = new();
+
+    public WorkerSettings AiJobs { get; set; } = new();
 }
 
 public sealed class WorkerSettings
@@ -21,8 +23,8 @@ public sealed class WorkerSettings
     public int ConcurrentRuns { get; set; } = 1;
 
     /// <summary>
-    /// Document Preparation only: how many times a file is tried when something other than the file fails, such as the
-    /// converter or storage being down, before the file is rejected.
+    /// How many times an item is tried when something other than the item fails, such as the converter, storage or the
+    /// Document AI Service being down, before the worker gives up: a file is rejected, an ai_run is FAILED.
     /// </summary>
     public int MaxAttempts { get; set; } = 5;
 
@@ -36,6 +38,7 @@ public sealed class WorkersOptionsValidator : IValidateOptions<WorkersOptions>
     {
         var failures = new List<string>();
         Check("DocumentPreparation", options.DocumentPreparation, failures);
+        Check("AiJobs", options.AiJobs, failures);
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

@@ -36,6 +36,13 @@ public static class ClaimStatusMachine
         claim.SubmittedAt = now;
     }
 
+    /// <summary>
+    /// US05: extraction finished, or failed and the claim goes on by hand. READY_FOR_REVIEW only when every required
+    /// field is resolved and no page is left Unclassified (docs/06-data-model.md, section 7); NEEDS_VERIFICATION otherwise.
+    /// </summary>
+    public static void FinishExtraction(Claim claim, bool readyForReview, DateTimeOffset now) =>
+        Move(claim, readyForReview ? ClaimStatus.ReadyForReview : ClaimStatus.NeedsVerification, now);
+
     private static void Move(Claim claim, ClaimStatus to, DateTimeOffset now)
     {
         if (!CanMove(claim.Status, to))
