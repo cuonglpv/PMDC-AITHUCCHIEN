@@ -1738,7 +1738,9 @@ paths:
       operationId: publishPlanVersion
       tags: [Policy]
       summary: Publish a draft
-      description: The effective date must be later than the current published version's, and every active category must be covered or excluded. A published version is immutable.
+      description: >-
+        The effective date must be today or later in Vietnam time, and later than the current published version's. Every active
+        category must be covered or excluded, and every rule ordered after the kinds that apply before it. A published version is immutable.
       x-claimlens: {roles: {ADMINISTRATOR: any}, release: must, stories: [US19], rules: [BR-04, BR-12], audit: write}
       requestBody:
         required: true
@@ -1764,7 +1766,7 @@ paths:
           description: 'Code: RULE_SET_NOT_DRAFT.'
         '422':
           $ref: '#/components/responses/Unprocessable'
-          description: 'Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED.'
+          description: 'Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED, RULE_INVALID.'
   /plans/{planId}/versions/{versionId}/discard:
     parameters:
       - $ref: '#/components/parameters/PlanId'
@@ -3550,7 +3552,11 @@ components:
         categoryCode: {type: string, maxLength: 40}
         clauseText: {type: string, minLength: 1}
         clauseRef: {type: string, maxLength: 40}
-        applyOrder: {type: integer}
+        applyOrder:
+          type: integer
+          description: >-
+            Rules apply by kind: ELIGIBILITY, WAITING_PERIOD, EXCLUSION, COVERAGE, then COINSURANCE and LIMIT. This orders rules of one kind,
+            and must be above every rule of a kind that applies before it, or the save is refused with RULE_INVALID.
         rateBp: {type: integer, minimum: 0, maximum: 10000}
         limitAmount: {type: integer, format: int64, minimum: 1}
         limitScope: {$ref: '#/components/schemas/LimitScope'}

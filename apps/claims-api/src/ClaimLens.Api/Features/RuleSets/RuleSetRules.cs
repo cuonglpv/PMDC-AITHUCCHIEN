@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Http;
 using ClaimLens.RuleEngine;
@@ -19,9 +20,23 @@ public sealed record RuleInput(
 /// <summary>The result of checking a list of rules: one error code, with one entry per problem.</summary>
 public sealed record RuleProblems(string Code, string Title, IReadOnlyList<FieldError> Errors);
 
+/// <summary>What the order check needs to know of a rule.</summary>
+public sealed record OrderedRule(string Code, RuleType Type, int Order);
+
+/// <summary>A rule placed before a rule of a kind that applies first: its index in the list, and why.</summary>
+public sealed record OrderProblem(int Index, string RuleCode, string Message);
+
 public static class RuleSetRules
 {
     public const string EligibilityCode = "ELIG-01";
+
+    /// <summary>
+    /// The order of the system rule, the same as in the seeded rule sets (db/seed/dev/030_plans_and_rules.sql). The seeded
+    /// GOLD-OP v3 is published, so its rules are frozen; the API follows the seed rather than the other way round (F-01b).
+    /// </summary>
+    public const short EligibilityOrder = 10;
+
+    public const string OrderTitle = "Each kind of rule applies in a fixed order";
 
     private static readonly Dictionary<string, RuleType> EditableTypes = new(StringComparer.Ordinal)
     {
@@ -47,16 +62,17 @@ public static class RuleSetRules
             RuleCode = EligibilityCode,
             RuleType = RuleType.Eligibility,
             ClauseText = "The policy must be in force on the service date.",
-            ApplyOrder = 0,
+            ApplyOrder = EligibilityOrder,
         };
 
     /// <summary>
     /// Checks in the order a person would fix them: the shape of each rule, the values its type needs, its category,
-    /// then repeats. Each stage reports all of its problems, so a list is not fixed one error at a time.
+    /// repeats, then the order of application. Each stage reports all of its problems, so a list is not fixed one error at a time.
+    /// <paramref name="system"/> is the version's eligibility rule, which the list does not contain.
     /// </summary>
-    public static RuleProblems? Check(IReadOnlyList<RuleInput> rules, IReadOnlySet<string> activeCategories, string reservedCode)
+    public static RuleProblems? Check(IReadOnlyList<RuleInput> rules, IReadOnlySet<string> activeCategories, OrderedRule system)
     {
-        var shape = CheckShape(rules, reservedCode);
+        var shape = CheckShape(rules, system.Code);
         if (shape.Count > 0)
         {
             return new RuleProblems(ErrorCodes.ValidationFailed, "Check the highlighted fields", shape);
@@ -75,10 +91,70 @@ public static class RuleSetRules
         }
 
         var repeats = CheckRepeats(rules);
-        return repeats.Count > 0
-            ? new RuleProblems(ErrorCodes.ValidationFailed, "Check the highlighted fields", repeats)
-            : null;
+        if (repeats.Count > 0)
+        {
+            return new RuleProblems(ErrorCodes.ValidationFailed, "Check the highlighted fields", repeats);
+        }
+
+        var ordered = rules
+            .Select(rule => new OrderedRule(rule.RuleCode!.Trim(), EditableTypes[rule.RuleType!], rule.ApplyOrder!.Value))
+            .Append(system)
+            .ToList();
+        var order = OutOfOrder(ordered)
+            .Select(problem => new FieldError($"rules[{problem.Index}].applyOrder", "OUT_OF_ORDER", problem.Message))
+            .ToList();
+        return order.Count > 0 ? new RuleProblems(ErrorCodes.RuleInvalid, OrderTitle, order) : null;
     }
+
+    /// <summary>
+    /// The engine applies rules by kind (<see cref="RulePrecedence"/>), and apply order only orders rules of one kind (F-01).
+    /// So each rule must be ordered above every rule of a kind that applies before it; otherwise the editor would show an
+    /// order the rules do not apply in. A rule that is not names the highest of those, which its order must pass.
+    /// </summary>
+    public static List<OrderProblem> OutOfOrder(IReadOnlyList<OrderedRule> rules)
+    {
+        var problems = new List<OrderProblem>();
+
+        for (var index = 0; index < rules.Count; index++)
+        {
+            var rule = rules[index];
+            var bound = rules
+                .Where(other => RulePrecedence.Of(other.Type) < RulePrecedence.Of(rule.Type))
+                .OrderByDescending(other => other.Order)
+                .ThenBy(other => other.Code, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            if (bound is not null && rule.Order <= bound.Order)
+            {
+                problems.Add(new OrderProblem(
+                    index,
+                    rule.Code,
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"{Subject(rule.Type)} applies after {Kinds(bound.Type)}, so its order must be above {bound.Order} ({bound.Code}).")));
+            }
+        }
+
+        return problems;
+    }
+
+    private static string Subject(RuleType type) => type switch
+    {
+        RuleType.WaitingPeriod => "A waiting period",
+        RuleType.Exclusion => "An exclusion",
+        RuleType.Coverage => "A coverage rule",
+        RuleType.Coinsurance => "The reimbursement rate",
+        _ => "A limit",
+    };
+
+    private static string Kinds(RuleType type) => type switch
+    {
+        RuleType.Eligibility => "the eligibility rule",
+        RuleType.WaitingPeriod => "waiting periods",
+        RuleType.Exclusion => "exclusions",
+        RuleType.Coverage => "coverage rules",
+        _ => "the reimbursement rate",
+    };
 
     /// <summary>Keeps only the values a rule's type uses, so a type changed in the editor leaves nothing behind.</summary>
     public static BenefitRule ToEntity(RuleInput input, Guid versionId)

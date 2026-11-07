@@ -172,7 +172,8 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 
 ### US19 — Configure and publish rule set
 - **Given** a draft version, **when** configuring, **then** covered categories, exclusions, waiting periods, reimbursement rate and per-visit/annual limits can be set, each with a rule code and clause text.
-- **Given** a draft, **when** publishing, **then** an effective-from date later than the current version's is required.
+- **Given** a draft, **when** publishing, **then** an effective-from date of today or later (Vietnam time) and later than the current version's is required, and a refused date names the earliest one accepted.
+- **Given** a rule whose order of application puts it before a kind that applies first (eligibility, waiting periods, exclusions, coverage, then rate and limits), **when** saving or publishing, **then** it is refused and the rule is named; whatever the stored order, the Rule Engine applies rules by kind, so a coverage rule never pays a line that eligibility or a waiting period excludes.
 - **Given** a published version, **then** it cannot be edited, only superseded by a new version.
 
 ### US20 — Test rule set

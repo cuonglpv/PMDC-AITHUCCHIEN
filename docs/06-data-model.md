@@ -146,6 +146,7 @@ erDiagram
         policy_status status
         date coverage_start "One policy covers one policy year"
         date coverage_end
+        date terminated_on "Set when not ACTIVE; ELIG-01 excludes service dates from this day (Q-A)"
         date first_enrolled_on
         bigint opening_consumed "Annual usage before ClaimLens (seed), VND"
         bigint consumed_amount

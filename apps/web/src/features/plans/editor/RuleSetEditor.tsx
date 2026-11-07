@@ -11,7 +11,7 @@ import { useSession } from "@/features/auth/use-session";
 import { api } from "@/lib/api/client";
 import { ApiProblem, unwrap } from "@/lib/api/problem";
 import type { components } from "@/lib/api/schema";
-import { formatDate } from "@/lib/format";
+import { formatDate, todayInVietnam } from "@/lib/format";
 import { planKeys, useCategories, usePlans, useVersion } from "../queries";
 import { VersionStatus } from "../VersionStatus";
 import { RuleTable } from "./RuleTable";
@@ -187,7 +187,12 @@ function EditorBody({
         </div>
       )}
 
-      <div role="tablist" aria-label="Rule kinds" className="mt-6 flex border-b border-line">
+      <p className="mt-4 max-w-3xl text-[13px] text-on-surface-muted">
+        Rules apply by kind: eligibility, waiting periods, exclusions, coverage, then the reimbursement rate and limits.
+        Order sets the order within a kind, and must be above every kind that applies before it.
+      </p>
+
+      <div role="tablist" aria-label="Rule kinds" className="mt-4 flex border-b border-line">
         {TABS.map((item) => {
           const count = rows.filter((row) => row.ruleType === item.type).length;
           const hasError = rows.some((row) => row.ruleType === item.type && byRow.has(row.key));
@@ -306,6 +311,8 @@ function PublishDialog({
   onPublished: () => Promise<void>;
 }) {
   const [effectiveFrom, setEffectiveFrom] = useState("");
+  // A version cannot take effect in the past (Q-B). The API decides; this keeps earlier days out of the date picker.
+  const today = todayInVietnam();
 
   const publish = useMutation({
     mutationFn: () =>
@@ -319,7 +326,8 @@ function PublishDialog({
   });
 
   const problem = publish.error instanceof ApiProblem ? publish.error : null;
-  const messages = problem?.errors.map((error) => error.message) ?? [];
+  const dateError = problem?.errors.find((error) => error.field === "effectiveFrom")?.message;
+  const messages = problem?.errors.filter((error) => error.field !== "effectiveFrom").map((error) => error.message) ?? [];
 
   return (
     <Dialog
@@ -328,7 +336,9 @@ function PublishDialog({
       title={`Publish v${version.versionNo}`}
       description="Claims with a service date from this day use this version. A published version cannot be changed."
     >
+      {/* The browser's own check would stop a typed past date silently; the API's answer is shown next to the date. */}
       <form
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           publish.mutate();
@@ -341,13 +351,19 @@ function PublishDialog({
           id="effective-from"
           type="date"
           required
-          className="mt-1 h-9 w-full rounded-sm border border-control-border bg-surface px-2 text-[13px]"
+          min={today}
+          className="mt-1 h-9 w-full rounded-sm border border-control-border bg-surface px-2 text-[13px] aria-invalid:border-danger"
           value={effectiveFrom}
-          aria-invalid={problem ? true : undefined}
-          aria-describedby={problem ? "publish-error" : undefined}
+          aria-invalid={dateError ? true : undefined}
+          aria-describedby={dateError ? "effective-from-error" : undefined}
           onChange={(event) => setEffectiveFrom(event.target.value)}
         />
-        {publish.isError && (
+        {dateError && (
+          <p id="effective-from-error" role="alert" className="mt-1 text-xs text-danger">
+            {dateError}
+          </p>
+        )}
+        {publish.isError && !dateError && (
           <div id="publish-error" role="alert" className="mt-3 text-[13px] text-danger">
             <p className="font-medium">{problem?.problem?.title ?? "The version could not be published. Please try again."}</p>
             {messages.map((message) => (

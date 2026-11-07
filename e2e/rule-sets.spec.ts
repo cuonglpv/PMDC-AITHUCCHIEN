@@ -12,6 +12,14 @@ async function signIn(page: Page, email: string) {
   await expect(page).not.toHaveURL(/sign-in/);
 }
 
+/** Today in Vietnam, where the API keeps business dates, as the date input wants it and as the app shows it. */
+function todayInVietnam() {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" })
+    .formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return { iso: `${part("year")}-${part("month")}-${part("day")}`, shown: `${part("day")}/${part("month")}/${part("year")}` };
+}
+
 async function openGoldPlan(page: Page) {
   await page.goto("/plans");
   await page.getByRole("link", { name: "GOLD-OP" }).click();
@@ -69,13 +77,17 @@ test.describe("Benefit rule sets (US19)", () => {
     await expect(page.getByText("Unsaved changes")).toBeVisible();
   });
 
-  test("publishing names a date that is not later than the current version", async ({ page }) => {
+  test("publishing refuses a date in the past and names the earliest it accepts", async ({ page }) => {
+    const today = todayInVietnam();
     await page.getByRole("button", { name: "New draft from v3" }).click();
     await page.getByRole("button", { name: "Publish" }).click();
-    await page.getByLabel("Effective from").fill("2026-01-01");
+    const date = page.getByLabel("Effective from");
+    await expect(date).toHaveAttribute("min", today.iso);
+    await date.fill("2026-01-01");
     await page.getByRole("dialog").getByRole("button", { name: /Publish v\d+/ }).click();
 
-    await expect(page.getByText("It must be later than 01/01/2026.")).toBeVisible();
+    await expect(page.getByText(`It must be today, ${today.shown}, or later.`)).toBeVisible();
+    await expect(date).toHaveAttribute("aria-invalid", "true");
   });
 
   test("the editor meets WCAG AA", async ({ page }) => {

@@ -163,8 +163,8 @@ A claim outside the caller's scope gives 403 by id, as UC11 requires. `getClaimB
 | `DECISION_NOT_ALLOWED` | 422 | The action does not match the payable | `ck_decision_br13_*`, BR-13 |
 | `DECISION_REASON_REQUIRED` | 422 | A rejection needs a reason code | `ck_decision_br13_rejected` |
 | `DECISION_COMMENT_REQUIRED` | 422 | A rejection with a payable above 0 needs a comment | BR-13 |
-| `RULE_INVALID` | 422 | A rule is missing the values of its type | `ck_rule_*` |
-| `EFFECTIVE_DATE_NOT_LATER` | 422 | Must be later than the current version | US19 |
+| `RULE_INVALID` | 422 | A rule is missing the values of its type, or is ordered before a kind that applies first | `ck_rule_*`, US19 |
+| `EFFECTIVE_DATE_NOT_LATER` | 422 | Must be today or later in Vietnam, and later than the current version | US19 |
 | `CATEGORY_NOT_CONFIGURED` | 422 | An active category has no rule | Data model Q7 |
 
 The database repeats the critical rules, so the Claims API checks first and maps a `ck_` or `ux_` failure to the same code. A constraint failure with no mapping is a bug and gives 500.

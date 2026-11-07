@@ -64,6 +64,7 @@ internal static class GoldenFile
         DateOnly FirstEnrolledOn,
         DateOnly CoverageStart,
         DateOnly CoverageEnd,
+        DateOnly? TerminatedOn,
         long ConsumedBefore,
         IReadOnlyList<EngineLine> Lines);
 

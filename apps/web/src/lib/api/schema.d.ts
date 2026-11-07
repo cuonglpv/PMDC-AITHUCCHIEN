@@ -1011,7 +1011,7 @@ export interface paths {
         put?: never;
         /**
          * Publish a draft
-         * @description The effective date must be later than the current published version's, and every active category must be covered or excluded. A published version is immutable.
+         * @description The effective date must be today or later in Vietnam time, and later than the current published version's. Every active category must be covered or excluded, and every rule ordered after the kinds that apply before it. A published version is immutable.
          */
         post: operations["publishPlanVersion"];
         delete?: never;
@@ -2244,6 +2244,7 @@ export interface components {
             categoryCode?: string;
             clauseText: string;
             clauseRef?: string;
+            /** @description Rules apply by kind: ELIGIBILITY, WAITING_PERIOD, EXCLUSION, COVERAGE, then COINSURANCE and LIMIT. This orders rules of one kind, and must be above every rule of a kind that applies before it, or the save is refused with RULE_INVALID. */
             applyOrder: number;
             rateBp?: number;
             /** Format: int64 */
@@ -4409,7 +4410,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Code: RULE_SET_NOT_DRAFT. */
             409: components["responses"]["Conflict"];
-            /** @description Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED. */
+            /** @description Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED, RULE_INVALID. */
             422: components["responses"]["Unprocessable"];
         };
     };

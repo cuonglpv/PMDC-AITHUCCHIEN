@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { session } from "@/lib/api/session";
 import type { components } from "@/lib/api/schema";
 import type { StaffRole } from "@/lib/api/types";
@@ -34,7 +34,7 @@ const version = (overrides: Partial<Detail>): Detail => ({
   publishedBy: admin,
   publishedAt: "2026-01-01T00:00:00Z",
   rules: [
-    { id: "e", ruleCode: "ELIG-01", ruleType: "ELIGIBILITY", categoryCode: null, clauseText: "In force.", clauseRef: null, applyOrder: 0, rateBp: null, limitAmount: null, limitScope: null, waitingDays: null },
+    { id: "e", ruleCode: "ELIG-01", ruleType: "ELIGIBILITY", categoryCode: null, clauseText: "In force.", clauseRef: null, applyOrder: 10, rateBp: null, limitAmount: null, limitScope: null, waitingDays: null },
     { id: "c", ruleCode: "COV-01", ruleType: "COVERAGE", categoryCode: "CONSULTATION", clauseText: "Covered.", clauseRef: "3.1", applyOrder: 40, rateBp: null, limitAmount: null, limitScope: null, waitingDays: null },
     { id: "r", ruleCode: "COINS-80", ruleType: "COINSURANCE", categoryCode: null, clauseText: "80%.", clauseRef: null, applyOrder: 50, rateBp: 8000, limitAmount: null, limitScope: null, waitingDays: null },
   ],
@@ -114,6 +114,13 @@ describe("Rule set editor (SCR-42)", () => {
     expect(await screen.findByText(/A published version cannot be changed/)).toBeTruthy();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+  });
+
+  it("says that rules apply by kind and the order only counts within a kind", async () => {
+    server.use(http.get(`${API}/plans/${PLAN}/versions/${V3}`, () => HttpResponse.json(version({}))));
+    renderAs("CLAIMS_REVIEWER", <RuleSetEditor planId={PLAN} versionId={V3} />);
+
+    expect(await screen.findByText(/Rules apply by kind: eligibility, waiting periods, exclusions, coverage/)).toBeTruthy();
   });
 
   it("hides the system eligibility rule and counts the rest per tab", async () => {
@@ -236,5 +243,48 @@ describe("Rule set editor (SCR-42)", () => {
 
     expect(await screen.findByText("It must be later than 01/01/2026.")).toBeTruthy();
     expect(dates).toEqual(["2026-01-01"]);
+  });
+
+  describe("on 01/03/2026 in Vietnam", () => {
+    beforeEach(() => {
+      // 18:00 UTC on 28 February is already 1 March in Vietnam. Only the date is faked, so timers still run.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-02-28T18:00:00Z"));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("offers no effective date before today and shows a refusal next to the date", async () => {
+      server.use(
+        http.get(`${API}/plans/${PLAN}/versions/${DRAFT}`, () =>
+          HttpResponse.json(version({ id: DRAFT, versionNo: 4, status: "DRAFT", effectiveFrom: null, publishedBy: null, publishedAt: null })),
+        ),
+        http.post(`${API}/plans/${PLAN}/versions/${DRAFT}/publish`, () =>
+          HttpResponse.json(
+            {
+              title: "The effective date cannot be in the past",
+              status: 422,
+              code: "EFFECTIVE_DATE_NOT_LATER",
+              requestId: "t",
+              errors: [{ field: "effectiveFrom", code: "BEFORE_TODAY", message: "It must be today, 01/03/2026, or later." }],
+            },
+            { status: 422, headers: { "Content-Type": "application/problem+json" } },
+          ),
+        ),
+      );
+      renderAs("ADMINISTRATOR", <RuleSetEditor planId={PLAN} versionId={DRAFT} />);
+      const user = userEvent.setup();
+
+      await user.click(await screen.findByRole("button", { name: "Publish" }));
+      const date = await screen.findByLabelText("Effective from");
+      expect(date.getAttribute("min")).toBe("2026-03-01");
+
+      // Typed rather than picked, a past date still reaches the API, which says what it accepts.
+      await user.type(date, "2026-02-01");
+      await user.click(screen.getByRole("button", { name: "Publish v4" }));
+
+      const message = await screen.findByText("It must be today, 01/03/2026, or later.");
+      expect(date.getAttribute("aria-invalid")).toBe("true");
+      expect(date.getAttribute("aria-describedby")).toBe(message.id);
+    });
   });
 });
