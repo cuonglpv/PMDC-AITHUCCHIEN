@@ -221,7 +221,8 @@ Settings without a UI (06, section 2) live in `appsettings.json` and environment
 
 | Section | Holds |
 |---|---|
-| `Auth` | Token lifetimes, signing key, allowed origins |
+| `Auth` | Token lifetimes, signing key (at least 32 bytes), allowed origins, issuer and audience; checked when the API starts |
+| `Proxy` | `KnownProxies` and `KnownNetworks` allowed to set `X-Forwarded-For`. With neither set, forwarded headers are ignored |
 | `Thresholds` | BR-03 thresholds, quality and clinical thresholds |
 | `Ai` | Base URL, service key, pipeline name and version per task, timeout per task |
 | `Converter`, `Storage` | Base URL, timeout, bucket and credentials |
@@ -564,7 +565,7 @@ Two slices work end to end: US01 sign-in and US19 rule sets.
 | Document AI Service | All six routes with the fake gateway |
 | Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor. Other homes are placeholders |
 
-US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 0 and has no tab. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
+US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 10, the value the seeded rule sets use, and has no tab. Rules apply by kind (eligibility, waiting periods, exclusions, coverage, then the rate and limits), and a save or publish that orders a rule before a kind that applies first is refused with `RULE_INVALID`. A version is published with an effective date of today or later in Vietnam time. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
 
 Next, in the order the stories depend on each other: US02 and US03 intake with Document Preparation, the AI Job Runner with US04 and US05, then the claim workspace.
 
