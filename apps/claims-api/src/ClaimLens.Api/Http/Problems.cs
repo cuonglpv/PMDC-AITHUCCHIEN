@@ -16,6 +16,12 @@ public static class ErrorCodes
     public const string NotFound = "NOT_FOUND";
     public const string ValidationFailed = "VALIDATION_FAILED";
     public const string ClaimStateConflict = "CLAIM_STATE_CONFLICT";
+    public const string DraftAlreadyExists = "DRAFT_ALREADY_EXISTS";
+    public const string RuleSetNotDraft = "RULE_SET_NOT_DRAFT";
+    public const string RuleInvalid = "RULE_INVALID";
+    public const string UnknownCategory = "UNKNOWN_CATEGORY";
+    public const string EffectiveDateNotLater = "EFFECTIVE_DATE_NOT_LATER";
+    public const string CategoryNotConfigured = "CATEGORY_NOT_CONFIGURED";
 }
 
 public sealed record FieldError(string Field, string Code, string Message);

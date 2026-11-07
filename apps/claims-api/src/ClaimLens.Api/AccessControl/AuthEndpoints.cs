@@ -1,4 +1,3 @@
-using System.Text.Json;
 using ClaimLens.Api.Audit;
 using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Domain.Enums;
@@ -38,7 +37,7 @@ public static class AuthEndpoints
         SignInThrottle throttle,
         TimeProvider clock)
     {
-        var request = await ReadLoginAsync(context);
+        var request = await Requests.ReadJsonAsync<LoginRequest>(context);
         var invalid = Validate(request);
         if (invalid.Count > 0)
         {
@@ -130,28 +129,12 @@ public static class AuthEndpoints
             : Results.Ok(ToUser(staff));
     }
 
-    private static async Task<LoginRequest?> ReadLoginAsync(HttpContext context)
-    {
-        try
-        {
-            return await context.Request.ReadFromJsonAsync<LoginRequest>(context.RequestAborted);
-        }
-        catch (Exception error) when (error is JsonException or InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
     private static List<FieldError> Validate(LoginRequest? request)
     {
         var errors = new List<FieldError>();
         if (string.IsNullOrWhiteSpace(request?.Email))
         {
             errors.Add(new FieldError("email", "REQUIRED", "Enter your email."));
-        }
-        else if (request.Email.Length > 254)
-        {
-            errors.Add(new FieldError("email", "TOO_LONG", "This email is too long."));
         }
 
         if (string.IsNullOrEmpty(request?.Password))

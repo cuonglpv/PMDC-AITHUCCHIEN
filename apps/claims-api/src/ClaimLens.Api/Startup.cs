@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ClaimLens.Api.AccessControl;
 using ClaimLens.Api.Domain.Enums;
+using ClaimLens.Api.Features.RuleSets;
 using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -86,6 +87,7 @@ public static class Startup
 
         var api = app.MapGroup("/api/v1");
         api.MapAuth();
+        api.MapRuleSets();
         NotBuiltEndpoints.MapRemaining(api, app);
     }
 
