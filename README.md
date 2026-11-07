@@ -307,10 +307,10 @@ apps/web            Staff Web App: routes, features, design system, generated AP
 apps/claims-api     ClaimLens.Api with feature folders, and ClaimLens.RuleEngine, which references nothing
 apps/document-ai    Task API, one module per AI task, and the Model Gateway
 db                  SQL migrations and seed data
-fixtures/golden     The seven golden scenarios, shared by every test suite
+fixtures/golden     The seven golden scenarios, shared by every test suite (two exist so far; the rest arrive with the intake slice, US02/US03, and the extraction slice, US04/US05)
 e2e                 Browser tests against the whole stack
 tools               Generators and the check that keeps the database in step with the DBML
-infra               Local stack, reverse proxy, converter image
+infra               Local stack and reverse proxy (the converter is the stock Gotenberg image in compose)
 ```
 
 Every decision and what was rejected, the full folder trees, the route table, how each rule is enforced, the checks run before choosing and what is built so far are in [Code structure](docs/10-code-structure.md).
@@ -344,14 +344,14 @@ docker compose -f infra/compose.yaml --profile full up -d --build
 - [x] Design the information architecture, screen inventory, task flows and UI states
 - [x] Write the design system (DESIGN.md) and Stitch prompts
 - [x] Build the UI prototype for the 7 priority screens (generated in Stitch, then corrected by hand in HTML)
-- [ ] Render-check the PlantUML use case diagram
-- [ ] Write non-functional requirements
+- [ ] Render-check the PlantUML use case diagram (not rendered since 31/10; closes when the diagram is rendered and checked)
+- [ ] Write non-functional requirements (closes before the first deployment)
 - [x] Design the C4 System Context, Container and Component views
 - [x] Design the PostgreSQL schema and ER diagram
 - [x] Write the API contract in OpenAPI 3.1
 - [x] Design the frontend and backend folder structures
 - [x] Scaffold the repository, the database, the Rule Engine, CI and the sign-in slice (US01)
 - [x] Build benefit rule sets: drafts, editor and publishing (US19)
-- [ ] Design class diagrams and sequence diagrams
+- [ ] Design class diagrams and sequence diagrams (written per slice; closes when the last slice ships)
 - [ ] Build the backend, Rule Engine and Document AI service
 - [ ] Build the frontend and connect it to the API

@@ -2,7 +2,7 @@
 
 > Design status: TARGET MVP
 >
-> Audience: developers, reviewers and maintainers. Nothing here is built yet; these documents describe the system the MVP will implement.
+> Audience: developers, reviewers and maintainers. US01 sign-in and US19 benefit rule sets are built; these documents describe the system the MVP will implement. See [section 14 of Code structure](../../10-code-structure.md#14-what-is-built) for what exists.
 
 The documents go from the outside in. Each level zooms into one box of the level above, and every box states its name, type, technology (from the Container level down) and responsibility.
 
