@@ -88,6 +88,8 @@ describe("Intake home (SCR-10)", () => {
   it("offers New claim", async () => {
     renderPage();
     expect(screen.getAllByRole("link", { name: /New claim/ })[0]!.getAttribute("href")).toBe("/intake/new");
+    // Let the drafts request finish inside this test, so it cannot be counted by the next one.
+    await screen.findByRole("row", { name: /CLM-2026-000184/ });
   });
 
   it("opens My submissions from ?tab=submitted, with each claim's status", async () => {
