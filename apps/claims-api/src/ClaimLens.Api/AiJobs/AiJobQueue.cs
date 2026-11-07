@@ -6,8 +6,7 @@ using Microsoft.Extensions.Options;
 namespace ClaimLens.Api.AiJobs;
 
 /// <summary>
-/// Queues AI work as `ai_run` rows in QUEUED, in the caller's transaction. The AI Job Runner that claims them is not
-/// built yet (Slice 2), so this slice only queues.
+/// Queues AI work as `ai_run` rows in QUEUED, in the caller's transaction. The AI Job Runner claims them.
 /// </summary>
 public sealed class AiJobQueue(IOptions<AiOptions> options, TimeProvider clock)
 {

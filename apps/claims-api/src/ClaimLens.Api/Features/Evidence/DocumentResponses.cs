@@ -55,6 +55,16 @@ public static class DocumentResponses
         return await ToResponsesAsync(db, documents, pages, cancel);
     }
 
+    /// <summary>One page, as reclassifyPage answers it.</summary>
+    public static async Task<DocumentPageResponse> PageAsync(ClaimLensDbContext db, DocumentPage page, CancellationToken cancel)
+    {
+        var staff = await db.StaffAccounts.AsNoTracking()
+            .Where(account => account.Id == page.PageTypeSetBy)
+            .Select(account => new StaffRef(account.Id, account.FullName, account.Initials))
+            .ToDictionaryAsync(account => account.Id, cancel);
+        return ToResponse(page, staff);
+    }
+
     public static async Task<DocumentResponse> OneAsync(ClaimLensDbContext db, Document document, CancellationToken cancel) =>
         (await ToResponsesAsync(db, [document], [], cancel))[0];
 

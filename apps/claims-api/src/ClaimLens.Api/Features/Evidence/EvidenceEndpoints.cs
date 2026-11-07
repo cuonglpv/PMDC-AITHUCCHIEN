@@ -6,5 +6,6 @@ public static class EvidenceEndpoints
     {
         api.MapGet("/claims/{claimId}/documents", ListDocuments.Handle).WithName("listDocuments");
         api.MapGet("/claims/{claimId}/pages/{pageId}/image", GetPage.Handle).WithName("getPage");
+        api.MapPut("/claims/{claimId}/pages/{pageId}/type", ReclassifyPage.Handle).WithName("reclassifyPage");
     }
 }
