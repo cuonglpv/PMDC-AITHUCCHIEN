@@ -44,12 +44,3 @@ public sealed class AuditEvent
     public string? RequestId { get; set; }
     public IPAddress? IpAddress { get; set; }
 }
-
-/// <summary>The claim columns the access checks need. The other columns arrive with Claim Intake and Claim Lifecycle.</summary>
-public sealed class Claim
-{
-    public Guid Id { get; set; }
-    public ClaimStatus Status { get; set; }
-    public Guid RegisteredBy { get; set; }
-    public Guid? AssigneeId { get; set; }
-}

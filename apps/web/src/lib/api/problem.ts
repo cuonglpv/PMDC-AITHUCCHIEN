@@ -18,6 +18,14 @@ export class ApiProblem extends Error {
   }
 }
 
+/** For an operation that answers 204 No Content: resolves with nothing, or throws the problem. */
+export async function expectNoContent(call: Promise<{ error?: unknown; response: Response }>): Promise<void> {
+  const { error, response } = await call;
+  if (!response.ok) {
+    throw new ApiProblem(response.status, (error as Problem | undefined) ?? null);
+  }
+}
+
 /** Turns an openapi-fetch result into its data, or throws the problem, so TanStack Query sees a failure. */
 export async function unwrap<T>(call: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
   const { data, error, response } = await call;

@@ -158,4 +158,9 @@ public sealed class OperationPolicyMiddleware(RequestDelegate next)
 public sealed record ClaimAccess(Guid ClaimId, ClaimStatus Status, Guid RegisteredBy, Guid? AssigneeId)
 {
     public const string ItemKey = "ClaimLens.ClaimAccess";
+
+    /// <summary>The claim the middleware checked. Only for operations with a claimId in the route.</summary>
+    public static ClaimAccess Of(HttpContext context) =>
+        context.Items[ItemKey] as ClaimAccess
+        ?? throw new InvalidOperationException("This operation has no claim the policy middleware checked.");
 }

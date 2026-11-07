@@ -1,5 +1,10 @@
-import { HomePlaceholder } from "@/features/shell/HomePlaceholder";
+import { Suspense } from "react";
+import { IntakeHomePage } from "@/features/intake/IntakeHomePage";
 
 export default function IntakeHome() {
-  return <HomePlaceholder title="Intake" screen="SCR-10" stories="US02, US03" />;
+  return (
+    <Suspense>
+      <IntakeHomePage />
+    </Suspense>
+  );
 }

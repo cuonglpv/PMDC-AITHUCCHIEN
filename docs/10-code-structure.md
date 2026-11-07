@@ -18,12 +18,12 @@ PMDC-AITHUCCHIEN/
 │   ├── migrations/             # Forward-only SQL, applied in name order
 │   └── seed/                   # reference/ for every environment, dev/ for local and test
 ├── fixtures/
-│   └── golden/                 # The seven golden scenarios, shared by every test suite (only excluded-line and limit-capped exist, with Rule Engine expectations; the rest arrive with the intake slice, US02/US03, and AI responses with the extraction slice, US04/US05)
+│   └── golden/                 # The seven golden scenarios, shared by every test suite (clean has its documents; excluded-line and limit-capped hold Rule Engine expectations; AI responses arrive with the extraction slice, US04/US05)
 ├── e2e/                        # Playwright, runs against the whole stack
 ├── tools/
 │   ├── contract/               # Generates the role matrix and OperationPolicies
 │   ├── schema/                 # Compares the DBML with a migrated database
-│   └── golden/                 # Planned: generates the synthetic golden documents (arrives with the intake slice, US02/US03)
+│   └── golden/                 # Generates the synthetic golden documents: npm run golden:generate
 ├── infra/
 │   ├── compose.yaml
 │   ├── .env.example
@@ -135,7 +135,7 @@ apps/claims-api/
         ├── Contract/           # Checks real responses against claims-api.yaml
         ├── Authorization/      # One case per operation, role and scope
         ├── Architecture/       # The rules in the table below
-        └── Golden/             # Planned, arrives with the intake slice (US02/US03); AI-on cases with the extraction slice (US04/US05)
+        └── Golden/             # Planned, arrives with the extraction slice (US04/US05), when scenarios can run with AI on and off
 ```
 
 Every feature folder has the same shape. One endpoints file maps the routes, and each operation has one file holding its request, response and handler:
@@ -230,7 +230,7 @@ Settings without a UI (06, section 2) live in `appsettings.json` and environment
 | `Queue` | BR-09 high-value threshold |
 | `Validation` | Required document types |
 | `Release` | `IncludeShould` |
-| `Workers` | On or off, poll interval, concurrent runs |
+| `Workers` | On or off, poll interval, concurrent runs; for Document Preparation also `MaxAttempts` and `RetryDelaySeconds`, how a file whose converter or storage call fails waits (doubling, at most 15 minutes) while the files behind it go ahead, and when it is rejected |
 
 ## 5. Staff Web App
 
@@ -424,7 +424,7 @@ Generated files are committed, so a build needs no generator. CI generates them 
 | Contract, Claims API | `ClaimLens.Api.Tests/Contract` | JsonSchema.Net | Every response any test sees matches the YAML: the check sits in the test client |
 | Authorization | `ClaimLens.Api.Tests/Authorization` | Cases from `x-claimlens` | Every role on every operation (Definition of Done) |
 | Architecture | `ClaimLens.Api.Tests/Architecture` | NetArchTest | The rules in section 4 |
-| Golden | `ClaimLens.Api.Tests/Golden` (planned, arrives with the intake slice, US02/US03) | `fixtures/golden` | Definition of Done, with AI on and AI off |
+| Golden | `ClaimLens.Api.Tests/Golden` (planned, arrives with the extraction slice, US04/US05; the intake slice tests the clean packet in `Integration/` and `e2e/intake.spec.ts`) | `fixtures/golden` | Definition of Done, with AI on and AI off |
 | Document AI | `apps/document-ai/tests` | pytest, Schemathesis | Tasks and contract; no provider is called |
 | Web | Next to the code | Vitest, Testing Library, MSW | UI states |
 | End to end | `e2e/` | Playwright, axe | The three task flows, the keyboard path, WCAG AA |
@@ -443,7 +443,7 @@ fixtures/golden/
     └── expected.json           # Statuses, alerts, flags, line results, payable
 ```
 
-Today only `excluded-line/` and `limit-capped/` exist, holding Rule Engine expectations only. `documents/` arrives with the intake slice (US02/US03) and `ai-responses/` with the extraction slice (US04/US05). `tools/golden` (planned, not created yet) will generate `documents/` from HTML with headless Chrome. Each scenario's files should stay small enough to commit directly, without Git LFS.
+Today `clean/documents/` holds the golden packet (5 files, 6 pages), `blurry/documents/` one blurred receipt for US04, `invalid/` a file whose name lies about its type, and `excluded-line/` and `limit-capped/` the Rule Engine expectations. `ai-responses/` arrives with the extraction slice (US04/US05). `tools/golden/generate.mjs` makes the documents from HTML with Playwright's Chromium and writes the DOCX and XLSX files itself, with no dependency; two runs on one machine give the same bytes, and another machine's fonts change them. Each file stays small enough to commit directly, without Git LFS ([fixtures/golden/README.md](../fixtures/golden/README.md)).
 
 ## 11. Should stories
 
@@ -555,19 +555,21 @@ Latest stable on 04/11/2026. Lock files pin the exact version when each part is 
 
 ## 14. What is built
 
-Two slices work end to end: US01 sign-in and US19 rule sets.
+Three slices work end to end: US01 sign-in, US19 rule sets and Slice 1 intake (US02, US03).
 
 | Part | State |
 |---|---|
 | `infra/`, `db/`, generators, CI | Done |
 | `ClaimLens.RuleEngine` | Done: US11 and US12 on the golden numbers |
-| Claims API | Sign-in and the 8 Must operations of Rule Set Management, with the role, scope, status and audit rules of all 59 operations. The other 47 answer 501 until their features are built |
+| Claims API | Sign-in, the 8 Must operations of Rule Set Management, and the 12 of intake: `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `submitClaim`, `listDocuments`, `getPage`, `getClaim`, `getClaimStatus` and `listClaims` for `MY_DRAFTS` and `MY_SUBMISSIONS`. Document Store on S3, Document Preparation with Gotenberg, PDFium and SkiaSharp, and `ClaimStatusMachine`. The role, scope, status and audit rules of all 59 operations run; the other 35 answer 501 until their features are built, and so do the reviewer's and approver's queue views |
 | Document AI Service | All six routes with the fake gateway |
-| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor. Other homes are placeholders |
+| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor, SCR-10 to SCR-13 intake. The reviewer's and approver's homes are placeholders |
 
 US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 10, the value the seeded rule sets use, and has no tab. Rules apply by kind (eligibility, waiting periods, exclusions, coverage, then the rate and limits), and a save or publish that orders a rule before a kind that applies first is refused with `RULE_INVALID`. A version is published with an effective date of today or later in Vietnam time. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
 
-Next, in the order the stories depend on each other: US02 and US03 intake with Document Preparation, the AI Job Runner with US04 and US05, then the claim workspace.
+Slice 1 queues a `PAGE_CHECK` run for each ready file and a `FIELD_EXTRACTION` run on submission, but nothing runs them yet: pages show "Waiting for AI check" and a submitted claim stays `PROCESSING` until the AI Job Runner arrives. Its flow is in [seq-01-intake](diagrams/seq-01-intake.md).
+
+Next, in the order the stories depend on each other: the AI Job Runner with US04 and US05, then the review queue and the claim workspace.
 
 ## Still open
 

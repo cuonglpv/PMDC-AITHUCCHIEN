@@ -155,8 +155,8 @@ public class ClaimScopeTests(ApiFactory api)
     private sealed record MiddlewareResponse(int Status, string? ContentType, long? ContentLength, string Body);
 
     /// <summary>
-    /// No read handler exists yet, so this runs the real ErrorMiddleware and OperationPolicyMiddleware around a stand-in
-    /// handler that writes claim data, as getClaim will.
+    /// Runs the real ErrorMiddleware and OperationPolicyMiddleware around a stand-in handler that writes claim data, as
+    /// getClaim does, so a test can make the handler or the audit insert fail at will.
     /// </summary>
     private async Task<MiddlewareResponse> InvokeMiddleware(OperationPolicy policy, Guid claim, int handlerStatus, bool auditFails = false)
     {

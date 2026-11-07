@@ -581,7 +581,7 @@ What must be true in the tables before a claim can enter each status. The move i
 |---|---|
 | `policy` | `PL-2026-00731` on `GOLD-OP`; `opening_consumed` and `consumed_amount` 4,200,000; `balance_version` 1. |
 | `rule_set_version`, `benefit_rule` | v3, effective 01/01/2026: `ELIG-01`, `WAIT-30`, `COV-01` to `COV-05`, `EX-04`, `COINS-80` (`rate_bp` 8000), `LIM-ANNUAL` (5,000,000), `LIM-VISIT` (2,000,000, assumed). |
-| `document`, `document_page` | 4 files, 5 pages (invoice p1–p2, receipt, prescription, visit summary). |
+| `document`, `document_page` | 5 files, 6 pages (invoice p1–p2, receipt, prescription, itemised bill, visit summary), as in `fixtures/golden/clean/documents`. |
 | `claim_field` | Invoice `HN-0045821`, seller tax code `0101234567`, insured name, line fields, diagnosis `J02.9` (AI below 0.70, entered by the reviewer). |
 | `expense_line` | Lines 300,000 · 250,000 · 150,000 · 300,000 · 400,000; line 4 mapped to `COSMETIC` at 0.81 and confirmed by the reviewer. |
 | `calculation_revision` #2 | Eligible 1,100,000; after rate 880,000; remaining = min(2,000,000; 5,000,000 − 4,200,000) = 800,000; payable 800,000; projected after 0. Formula: 1,400,000 → `EX-04` −300,000 → `COINS-80` −220,000 → `LIM-ANNUAL` −80,000 → 800,000. |

@@ -169,4 +169,19 @@ Ba task chạy song song trên ba nhánh, rồi được review lại và kiểm
 
 Kiểm trên bản gộp B → A → C (không conflict): C# 342/342, Web 101/101 + ESLint + `tsc`, `contract:check`, `schema:check` đều pass. E2E: session A báo 17/17 pass trên nhánh A với Docker stack đầy đủ; bản gộp chạy e2e trên CI của PR.
 
+## 8. Slice 1 — audit trước khi merge (07/11/2026)
+
+Slice 1 (US02, US03) được làm trong ba session song song: backend, web, golden documents. Trước khi merge, cả ba nhánh được review diff và chạy trên bản gộp, gồm cả full stack với các file golden.
+
+| ID | Mức | Phát hiện | Kết quả |
+|---|---|---|---|
+| S1-01 | **Major** (đã chứng minh bằng test) | Worker Document Preparation luôn lấy file `CONVERTING` cũ nhất. Một file lỗi lặp lại (converter hoặc storage sập) bị thử lại mãi và chặn mọi file phía sau, vì chỉ chạy một luồng. Ảnh không bị kiểm kích thước trước khi giải nén, nên một JPEG 20 MB có độ phân giải cực lớn có thể làm hết bộ nhớ. | Đã sửa: file lỗi chờ theo thời gian tăng gấp đôi trong khi các file khác chạy tiếp, quá `MaxAttempts` thì `REJECTED` kèm lý do; ảnh trên 50 megapixel được giải nén thu nhỏ hoặc bị từ chối. |
+| S1-02 | Minor | Ba response chưa có trong contract: `deleteDocument` 409 `UPLOAD_IN_PROGRESS`, `uploadDocument` 415 khi không có file, `getPolicySummary` 422. | Đã thêm vào `claims-api.yaml`. |
+| S1-03 | Minor | `getPage` trả `Cache-Control: private`, nên trình duyệt có thể giữ ảnh hồ sơ y tế trên đĩa sau khi đăng xuất. | Đổi thành `private, no-store`, cả trong contract. |
+| S1-04 | Minor | File lớn hơn 25 MB bị proxy chặn với 413 không có body, nên web hiện lỗi chung chung và còn nút Retry. | Trình duyệt từ chối trước khi gửi khi file trên 20 MB hoặc sai đuôi; mọi 413 đọc là `FILE_TOO_LARGE`, không có Retry. |
+| S1-05 | Tạm thời | Chưa có runner AI, nên trang hiện "Waiting for AI check" mãi và SCR-13 poll mỗi 3 giây. | Hết khi xong Slice 2. |
+| S1-06 | Docs | `docs/06` §9 ghi 4 file / 5 trang; `docs/10` và README ghi `tools/golden` chưa có. | Đã sửa cùng PR của slice. |
+
+Chạy trên full stack Docker từ bản gộp: tìm "Nguyen Van An" không dấu ra đúng người và số dư 800.000 ₫, CCCD bị che; 5 file golden đều lên `Ready`, đủ 6 trang; ảnh biên lai chụp ngang (EXIF orientation 6) ra trang đứng; file giả DOCX bị từ chối; xoá một file thì đánh lại số trang; submit xong claim `PROCESSING` và nằm trong My submissions; axe không có vi phạm WCAG AA. Luồng này giờ là `e2e/intake.spec.ts`.
+
 **Liên quan:** [Audit yêu cầu](09-audit-report.md) · [Code structure](10-code-structure.md) · [User stories](08-invest-requirements.md) · [API contract](07-api-contract.md)

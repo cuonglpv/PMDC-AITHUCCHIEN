@@ -210,6 +210,9 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+          description: 'Code: VALIDATION_FAILED. `serviceDate` is not a date in YYYY-MM-DD form.'
   /claims:
     get:
       operationId: listClaims
@@ -652,6 +655,9 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+          description: >-
+            Code: UNSUPPORTED_FILE_TYPE. The file is not JPG, PNG, PDF, DOCX or XLSX by its first bytes, is empty, or the body
+            is not multipart/form-data with a `file` part.
   /claims/{claimId}/documents/{documentId}:
     parameters:
       - $ref: '#/components/parameters/ClaimId'
@@ -673,7 +679,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-          description: 'Code: CLAIM_STATE_CONFLICT.'
+          description: 'Codes: CLAIM_STATE_CONFLICT, UPLOAD_IN_PROGRESS (the file is being converted at this moment; try again when it is ready).'
   /claims/{claimId}/pages/{pageId}/image:
     parameters:
       - $ref: '#/components/parameters/ClaimId'
@@ -684,7 +690,7 @@ paths:
       summary: Get a page image
       description: >-
         Page images always pass through the API, so each read is checked and audited. Bearer tokens cannot be attached to an
-        `<img>` tag, so the web app fetches the image and shows it through a blob URL. Answers with `Cache-Control: private`.
+        `<img>` tag, so the web app fetches the image and shows it through a blob URL. Answers with `Cache-Control: private, no-store`, so the image stays out of shared caches and the browser's disk cache.
       x-claimlens: {roles: {INTAKE_OFFICER: registered, CLAIMS_REVIEWER: assigned, SENIOR_APPROVER: all}, release: must, stories: [US03, US05, US06], rules: [BR-02, BR-11, BR-12], audit: read}
       parameters:
         - name: variant
