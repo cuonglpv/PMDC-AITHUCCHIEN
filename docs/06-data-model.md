@@ -2,7 +2,7 @@
 
 > Design status: TARGET MVP
 >
-> Database: PostgreSQL 14 or later. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (21 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins. What actually runs is `db/migrations`, kept in step with the DBML as described in [Code structure](10-code-structure.md#7-database).
+> Database: PostgreSQL 18. Source of truth: [claimlens.dbml](diagrams/claimlens.dbml) (21 tables). The Mermaid diagrams below are drawn from the same DBML; if the two ever differ, the DBML wins. What actually runs is `db/migrations`, kept in step with the DBML as described in [Code structure](10-code-structure.md#7-database).
 
 The schema is built so that the database itself, not only the application, can check the product rule **AI reads, the Rule Engine calculates, people decide**. The latest AI output is kept next to the value people use, rule results next to human overrides, and the most important business rules (BR-01 to BR-13 in [Use cases](03-use-cases.md#business-rules-referenced-by-use-cases)) are written as constraints. All 11 use cases are covered by the 21 tables; no use case had to be removed.
 
@@ -628,7 +628,7 @@ npx -p @dbml/cli dbml2sql docs/diagrams/claimlens.dbml --postgres -o claimlens.s
 | Q8 | Receipts may carry no seller tax code, and invoice numbers may restart each year under a new invoice series (e.g. `1C26THN`). | The duplicate key is `invoice_number` + `provider_tax_code`, falling back to the normalised `provider_name`. The invoice series is not stored; a repeat number from another year raises a Blocking alert that the reviewer dismisses with a reason. Add an `invoice_series` field if that happens often. |
 | Q9 | Who labels golden-set risk flags as true or false positives? | A Senior Approver during golden-set runs, stored in `risk_flag.eval_label`. |
 | Q10 | How long are documents and audit events kept? | Not modelled; documents follow the storage lifecycle, `audit_event` can be partitioned by month. |
-| Q12 | How is the amount after the reimbursement rate rounded? | Down to a whole dong, so the insurer never pays above the stated rate. The golden case has no remainder. |
 | Q11 | Should row-level security repeat the claim scope in the MVP? | Not in the MVP. Tested as first designed, it hid other claims' fields from the reviewer's duplicate lookup (US08) and every claim from the job runner, which has no user. It can follow later, with a second database role for system work and a session setting on every connection. The MVP holds only synthetic or de-identified data. |
+| Q12 | How is the amount after the reimbursement rate rounded? | Down to a whole dong, so the insurer never pays above the stated rate. The golden case has no remainder. |
 
 **Related:** [Use cases](03-use-cases.md) · [User stories](08-invest-requirements.md) · [Information architecture](04-information-architecture.md) · [DBML](diagrams/claimlens.dbml)
