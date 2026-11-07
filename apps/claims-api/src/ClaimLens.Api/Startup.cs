@@ -3,7 +3,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ClaimLens.Api.AccessControl;
+using ClaimLens.Api.AiJobs;
 using ClaimLens.Api.Domain.Enums;
+using ClaimLens.Api.DocumentPreparation;
+using ClaimLens.Api.DocumentStore;
+using ClaimLens.Api.Features.Evidence;
+using ClaimLens.Api.Features.Intake;
+using ClaimLens.Api.Features.Lifecycle;
 using ClaimLens.Api.Features.RuleSets;
 using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
@@ -26,6 +32,12 @@ public static class Startup
         services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection("Auth")).ValidateOnStart();
         services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
         services.Configure<ReleaseOptions>(builder.Configuration.GetSection("Release"));
+        AddValidated<StorageOptions, StorageOptionsValidator>(builder, "Storage");
+        AddValidated<ConverterOptions, ConverterOptionsValidator>(builder, "Converter");
+        AddValidated<LimitsOptions, LimitsOptionsValidator>(builder, "Limits");
+        AddValidated<WorkersOptions, WorkersOptionsValidator>(builder, "Workers");
+        AddValidated<AiOptions, AiOptionsValidator>(builder, "Ai");
+        AddValidated<QueueOptions, QueueOptionsValidator>(builder, "Queue");
 
         services.AddDbContext<ClaimLensDbContext>(options =>
             options.UseNpgsql(
@@ -38,6 +50,26 @@ public static class Startup
         services.AddSingleton<TokenService>();
         services.AddSingleton<SignInThrottle>();
         services.AddScoped<RefreshTokenStore>();
+
+        services.AddSingleton<QueuePriority>();
+        services.AddSingleton<AiJobQueue>();
+
+        // Document Store and Document Preparation (US03).
+        services.AddSingleton<IDocumentStore, S3DocumentStore>();
+        services.AddHostedService<BucketSetup>();
+        services
+            .AddHttpClient<IDocumentConverter, ConverterClient>()
+            .ConfigureHttpClient((provider, http) =>
+            {
+                var converter = provider.GetRequiredService<IOptions<ConverterOptions>>().Value;
+                http.BaseAddress = new Uri(converter.BaseUrl.TrimEnd('/') + "/");
+                http.Timeout = TimeSpan.FromSeconds(converter.TimeoutSeconds);
+            });
+        services.AddSingleton<PageRenderer>();
+        services.AddSingleton<PreparationSignal>();
+        services.AddSingleton<PreparationAttempts>();
+        services.AddScoped<DocumentPreparer>();
+        services.AddHostedService<DocumentPreparationWorker>();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -105,8 +137,20 @@ public static class Startup
 
         var api = app.MapGroup("/api/v1");
         api.MapAuth();
+        api.MapIntake();
+        api.MapLifecycle();
+        api.MapEvidence();
         api.MapRuleSets();
         NotBuiltEndpoints.MapRemaining(api, app);
+    }
+
+    /// <summary>Each section is checked when the API starts, so a wrong value stops it instead of the first request.</summary>
+    private static void AddValidated<TOptions, TValidator>(WebApplicationBuilder builder, string section)
+        where TOptions : class
+        where TValidator : class, IValidateOptions<TOptions>
+    {
+        builder.Services.AddOptions<TOptions>().Bind(builder.Configuration.GetSection(section)).ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<TOptions>, TValidator>();
     }
 
     public static void ConfigureJson(JsonSerializerOptions json)

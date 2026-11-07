@@ -347,7 +347,7 @@ export interface paths {
         };
         /**
          * Get a page image
-         * @description Page images always pass through the API, so each read is checked and audited. Bearer tokens cannot be attached to an `<img>` tag, so the web app fetches the image and shows it through a blob URL. Answers with `Cache-Control: private`.
+         * @description Page images always pass through the API, so each read is checked and audited. Bearer tokens cannot be attached to an `<img>` tag, so the web app fetches the image and shows it through a blob URL. Answers with `Cache-Control: private, no-store`, so the image stays out of shared caches and the browser's disk cache.
          */
         get: operations["getPage"];
         put?: never;
@@ -2694,6 +2694,8 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description Code: VALIDATION_FAILED. `serviceDate` is not a date in YYYY-MM-DD form. */
+            422: components["responses"]["Unprocessable"];
         };
     };
     listClaims: {
@@ -3143,6 +3145,7 @@ export interface operations {
             /** @description Code: CLAIM_STATE_CONFLICT. */
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
+            /** @description Code: UNSUPPORTED_FILE_TYPE. The file is not JPG, PNG, PDF, DOCX or XLSX by its first bytes, is empty, or the body is not multipart/form-data with a `file` part. */
             415: components["responses"]["UnsupportedMediaType"];
         };
     };
@@ -3170,7 +3173,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            /** @description Code: CLAIM_STATE_CONFLICT. */
+            /** @description Codes: CLAIM_STATE_CONFLICT, UPLOAD_IN_PROGRESS (the file is being converted at this moment; try again when it is ready). */
             409: components["responses"]["Conflict"];
         };
     };

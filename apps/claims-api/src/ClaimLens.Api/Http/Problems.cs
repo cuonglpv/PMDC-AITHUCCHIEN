@@ -15,7 +15,13 @@ public static class ErrorCodes
     public const string MakerChecker = "MAKER_CHECKER";
     public const string NotFound = "NOT_FOUND";
     public const string ValidationFailed = "VALIDATION_FAILED";
+    public const string FileTooLarge = "FILE_TOO_LARGE";
+    public const string UnsupportedFileType = "UNSUPPORTED_FILE_TYPE";
+    public const string PolicyMemberMismatch = "POLICY_MEMBER_MISMATCH";
     public const string ClaimStateConflict = "CLAIM_STATE_CONFLICT";
+    public const string VersionConflict = "VERSION_CONFLICT";
+    public const string UploadInProgress = "UPLOAD_IN_PROGRESS";
+    public const string NoReadyDocument = "NO_READY_DOCUMENT";
     public const string DraftAlreadyExists = "DRAFT_ALREADY_EXISTS";
     public const string RuleSetNotDraft = "RULE_SET_NOT_DRAFT";
     public const string RuleInvalid = "RULE_INVALID";
@@ -37,7 +43,8 @@ public static class Problems
         int status,
         string code,
         string title,
-        IReadOnlyList<FieldError>? errors = null)
+        IReadOnlyList<FieldError>? errors = null,
+        object? details = null)
     {
         var body = new Dictionary<string, object?>
         {
@@ -53,8 +60,21 @@ public static class Problems
             body["errors"] = errors;
         }
 
+        if (details is not null)
+        {
+            body["details"] = details;
+        }
+
         return Results.Json(body, JsonOptions, ContentType, status);
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>The API's JSON rules, so values in `details` read as they do in a success body.</summary>
+    private static readonly JsonSerializerOptions JsonOptions = CreateJson();
+
+    private static JsonSerializerOptions CreateJson()
+    {
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        Startup.ConfigureJson(json);
+        return json;
+    }
 }
