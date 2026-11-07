@@ -27,6 +27,8 @@ public sealed class TokenService(IOptions<AuthOptions> options, TimeProvider clo
                 new System.Security.Claims.Claim(StaffPrincipal.SubjectClaim, staff.Id.ToString()),
                 new System.Security.Claims.Claim(StaffPrincipal.RoleClaim, StaffPrincipal.ToCode(staff.Role)),
             ]),
+            Issuer = options.Value.Issuer,
+            Audience = options.Value.Audience,
             IssuedAt = now,
             NotBefore = now,
             Expires = now.AddSeconds(AccessTokenSeconds),

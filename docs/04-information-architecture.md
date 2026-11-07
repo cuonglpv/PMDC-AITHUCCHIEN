@@ -141,7 +141,7 @@ The Claim workspace is where ~80 % of reviewer time is spent. It is a **three-zo
 | `SCR-38` | Override line | Drawer | Reviewer | US16 |
 | `SCR-39` | Decision confirmation (approve / partially approve / reject / return) | Modal | Approver | US18 |
 | `SCR-41` | Benefit plans & versions | Page | Administrator; Reviewer, Approver (read) | US19 |
-| `SCR-42` | Rule set editor | Page with tabs | Administrator | US19 |
+| `SCR-42` | Rule set editor | Page with tabs | Administrator (edit), Reviewer and Approver (read) | US19 |
 | `SCR-43` | Rule set test run (synthetic sample claims) | Page | Administrator | US20 |
 | `SCR-50` | AI quality dashboard | Page | Approver | US21 |
 | `SCR-70` | Profile | Page | all | — (shell only; change password out of MVP) |

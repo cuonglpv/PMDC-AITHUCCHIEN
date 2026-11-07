@@ -1,10 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using ClaimLens.Api.Domain.Enums;
 using ClaimLens.Api.Http;
+using ClaimLens.Api.Persistence;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace ClaimLens.Api.Tests.Authorization;
@@ -99,9 +105,10 @@ public class ClaimScopeTests(ApiFactory api)
         var claim = await NewClaimInReview();
         var policy = OperationPolicies.Find("getClaim")!;
 
-        var status = await InvokeMiddleware(policy, claim, handlerStatus: StatusCodes.Status200OK);
+        var response = await InvokeMiddleware(policy, claim, handlerStatus: StatusCodes.Status200OK);
 
-        Assert.Equal(StatusCodes.Status200OK, status);
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        Assert.Equal(ClaimData, response.Body);
         Assert.Equal(1, await api.Scalar<long>($"select count(*) from audit_event where event_type = 'CLAIM_VIEWED' and claim_id = '{claim}'"));
     }
 
@@ -117,6 +124,22 @@ public class ClaimScopeTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task A_read_whose_audit_event_cannot_be_saved_sends_an_error_and_no_claim_data()
+    {
+        var claim = await NewClaimInReview();
+        var policy = OperationPolicies.Find("getClaim")!;
+
+        var response = await InvokeMiddleware(policy, claim, handlerStatus: StatusCodes.Status200OK, auditFails: true);
+
+        Assert.DoesNotContain("Hồng Ngọc", response.Body, StringComparison.Ordinal);
+        Assert.Equal(StatusCodes.Status500InternalServerError, response.Status);
+        Assert.Equal(Problems.ContentType, response.ContentType);
+        Assert.Contains("\"code\":\"INTERNAL_ERROR\"", response.Body, StringComparison.Ordinal);
+        Assert.True(response.ContentLength is null || response.ContentLength == Encoding.UTF8.GetByteCount(response.Body));
+        Assert.Equal(0, await api.Scalar<long>($"select count(*) from audit_event where claim_id = '{claim}'"));
+    }
+
+    [Fact]
     public async Task Polling_status_is_the_one_claim_read_that_writes_no_event()
     {
         var claim = await NewClaimInReview();
@@ -127,11 +150,21 @@ public class ClaimScopeTests(ApiFactory api)
         Assert.Equal(0, await api.Scalar<long>($"select count(*) from audit_event where claim_id = '{claim}'"));
     }
 
-    /// <summary>No read handler exists yet, so this runs the real middleware with a stand-in for the handler.</summary>
-    private async Task<int> InvokeMiddleware(OperationPolicy policy, Guid claim, int handlerStatus)
+    private const string ClaimData = """{"providerName":"Hồng Ngọc","claimedTotal":1400000}""";
+
+    private sealed record MiddlewareResponse(int Status, string? ContentType, long? ContentLength, string Body);
+
+    /// <summary>
+    /// No read handler exists yet, so this runs the real ErrorMiddleware and OperationPolicyMiddleware around a stand-in
+    /// handler that writes claim data, as getClaim will.
+    /// </summary>
+    private async Task<MiddlewareResponse> InvokeMiddleware(OperationPolicy policy, Guid claim, int handlerStatus, bool auditFails = false)
     {
         await using var scope = api.Services.CreateAsyncScope();
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var server = new ServerResponse();
+        context.Features.Set<IHttpResponseFeature>(server);
+        context.Features.Set<IHttpResponseBodyFeature>(new StreamResponseBodyFeature(server.Sent));
         context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
             [
                 new System.Security.Claims.Claim("sub", Staff.ReviewerId),
@@ -141,16 +174,58 @@ public class ClaimScopeTests(ApiFactory api)
         context.Request.RouteValues["claimId"] = claim.ToString();
         context.SetEndpoint(new Endpoint(null, new EndpointMetadataCollection(new EndpointNameMetadata(policy.OperationId)), policy.OperationId));
 
-        var middleware = new OperationPolicyMiddleware(inner =>
+        await using var db = auditFails
+            ? new ClaimLensDbContext(new DbContextOptionsBuilder<ClaimLensDbContext>()
+                .UseNpgsql(api.AppConnection, EnumMapping.MapAll)
+                .AddInterceptors(new RefuseSaves())
+                .Options)
+            : scope.ServiceProvider.GetRequiredService<ClaimLensDbContext>();
+
+        var bytes = Encoding.UTF8.GetBytes(ClaimData);
+        var policyMiddleware = new OperationPolicyMiddleware(async inner =>
         {
             inner.Response.StatusCode = handlerStatus;
-            return Task.CompletedTask;
+            if (handlerStatus == StatusCodes.Status200OK)
+            {
+                inner.Response.ContentType = "application/json";
+                inner.Response.ContentLength = bytes.Length;
+                await inner.Response.Body.WriteAsync(bytes);
+            }
         });
-        await middleware.InvokeAsync(
-            context,
-            scope.ServiceProvider.GetRequiredService<ClaimLens.Api.Persistence.ClaimLensDbContext>(),
-            scope.ServiceProvider.GetRequiredService<IOptions<ReleaseOptions>>());
-        return context.Response.StatusCode;
+        var release = scope.ServiceProvider.GetRequiredService<IOptions<ReleaseOptions>>();
+        var errors = new ErrorMiddleware(inner => policyMiddleware.InvokeAsync(inner, db, release), NullLogger<ErrorMiddleware>.Instance);
+
+        try
+        {
+            await errors.InvokeAsync(context);
+        }
+        catch (Exception) when (server.HasStarted)
+        {
+            // A real server would now drop the connection, but whatever was sent has reached the caller.
+        }
+
+        return new MiddlewareResponse(
+            context.Response.StatusCode,
+            context.Response.ContentType,
+            context.Response.ContentLength,
+            Encoding.UTF8.GetString(server.Sent.ToArray()));
+    }
+
+    /// <summary>Like Kestrel: once a byte has gone out, the status and headers are sent and can no longer change.</summary>
+    private sealed class ServerResponse : HttpResponseFeature
+    {
+        public MemoryStream Sent { get; } = new();
+
+        public override bool HasStarted => Sent.Length > 0;
+    }
+
+    private sealed class RefuseSaves : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException("The audit insert failed.");
     }
 
     private async Task<HttpResponseMessage> Call(string email, OperationPolicy policy, Guid claim) =>

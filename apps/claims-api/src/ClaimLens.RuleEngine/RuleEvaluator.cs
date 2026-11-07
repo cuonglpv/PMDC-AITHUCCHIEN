@@ -11,7 +11,8 @@ namespace ClaimLens.RuleEngine;
 public static class RuleEvaluator
 {
     /// <summary>Stored on each calculation revision. Raise it whenever a change could alter a result.</summary>
-    public const string EngineVersion = "1.0.0";
+    /// <remarks>1.1.0: rule kinds apply in a fixed precedence (F-01), and a policy is not in force from its terminated_on.</remarks>
+    public const string EngineVersion = "1.1.0";
 
     private const int FullRateBp = 10_000;
 
@@ -19,8 +20,10 @@ public static class RuleEvaluator
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        // The kind decides first, so a coverage rule ordered before eligibility cannot pay a line the policy does not cover.
         var rules = input.Rules
-            .OrderBy(rule => rule.ApplyOrder)
+            .OrderBy(rule => RulePrecedence.Of(rule.Type))
+            .ThenBy(rule => rule.ApplyOrder)
             .ThenBy(rule => rule.RuleCode, StringComparer.Ordinal)
             .ToList();
 
@@ -96,7 +99,8 @@ public static class RuleEvaluator
     }
 
     /// <summary>
-    /// The first rule in apply order that decides the line wins. No rule kind pays part of a line,
+    /// The first rule that decides the line wins, in the order of <see cref="RulePrecedence"/> and then apply order:
+    /// eligibility, waiting periods, exclusions, coverage. No rule kind pays part of a line,
     /// so PartiallyCovered comes only from a reviewer's override.
     /// </summary>
     private static (LineResult Result, long Covered, RuleInput Rule) DecideLine(
@@ -128,9 +132,11 @@ public static class RuleEvaluator
         throw new RuleSetIncompleteException(line.CategoryCode);
     }
 
+    /// <summary>A lapsed or terminated policy stops being in force on its terminated_on, not at the end of its year.</summary>
     private static bool IsInForce(EvaluationInput input) =>
         (input.CoverageStart is null || input.ServiceDate >= input.CoverageStart)
-        && (input.CoverageEnd is null || input.ServiceDate <= input.CoverageEnd);
+        && (input.CoverageEnd is null || input.ServiceDate <= input.CoverageEnd)
+        && (input.TerminatedOn is null || input.ServiceDate < input.TerminatedOn);
 
     private static bool IsWaiting(RuleInput rule, EvaluationInput input) =>
         input.ServiceDate < input.FirstEnrolledOn.AddDays(rule.WaitingDays ?? 0);

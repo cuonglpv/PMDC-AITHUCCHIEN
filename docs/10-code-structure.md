@@ -2,7 +2,7 @@
 
 > Design status: TARGET MVP
 >
-> Purpose: say where every piece of code lives, why it lives there, and what keeps it there. Nothing here is built yet.
+> Purpose: say where every piece of code lives, why it lives there, and what keeps it there. US01 sign-in and US19 benefit rule sets are built; the rest is the target. [Section 14](#14-what-is-built) lists what exists.
 
 The structure follows the [C4 model](architecture/c4/README.md): one folder per container, and one folder per component inside the Claims API and the Document AI Service. The contracts in [docs/api](api/) and the schema in [claimlens.dbml](diagrams/claimlens.dbml) stay where they are. Code is generated from them or tested against them.
 
@@ -18,12 +18,12 @@ PMDC-AITHUCCHIEN/
 │   ├── migrations/             # Forward-only SQL, applied in name order
 │   └── seed/                   # reference/ for every environment, dev/ for local and test
 ├── fixtures/
-│   └── golden/                 # The seven golden scenarios, shared by every test suite
+│   └── golden/                 # The seven golden scenarios, shared by every test suite (only excluded-line and limit-capped exist, with Rule Engine expectations; the rest arrive with the intake slice, US02/US03, and AI responses with the extraction slice, US04/US05)
 ├── e2e/                        # Playwright, runs against the whole stack
 ├── tools/
 │   ├── contract/               # Generates the role matrix and OperationPolicies
 │   ├── schema/                 # Compares the DBML with a migrated database
-│   └── golden/                 # Generates the synthetic golden documents (arrives with those documents)
+│   └── golden/                 # Planned: generates the synthetic golden documents (arrives with the intake slice, US02/US03)
 ├── infra/
 │   ├── compose.yaml
 │   ├── .env.example
@@ -69,7 +69,7 @@ PMDC-AITHUCCHIEN/
 | Claims API | `apps/claims-api` | `claims-api` | `ClaimLens.Api` |
 | Rule Engine | `apps/claims-api/src/ClaimLens.RuleEngine` | | `ClaimLens.RuleEngine` |
 | Document AI Service | `apps/document-ai` | `document-ai` | `document_ai` |
-| Document Converter | `infra/converter` | `converter` | |
+| Document Converter | None; the stock `gotenberg/gotenberg:8.39.0` image in `infra/compose.yaml` | `converter` | |
 | Database | `db` | `postgres` | |
 | Object Storage | | `storage` | |
 
@@ -135,7 +135,7 @@ apps/claims-api/
         ├── Contract/           # Checks real responses against claims-api.yaml
         ├── Authorization/      # One case per operation, role and scope
         ├── Architecture/       # The rules in the table below
-        └── Golden/             # Scenarios, with AI on and AI off
+        └── Golden/             # Planned, arrives with the intake slice (US02/US03); AI-on cases with the extraction slice (US04/US05)
 ```
 
 Every feature folder has the same shape. One endpoints file maps the routes, and each operation has one file holding its request, response and handler:
@@ -221,7 +221,8 @@ Settings without a UI (06, section 2) live in `appsettings.json` and environment
 
 | Section | Holds |
 |---|---|
-| `Auth` | Token lifetimes, signing key, allowed origins |
+| `Auth` | Token lifetimes, signing key (at least 32 bytes), allowed origins, issuer and audience; checked when the API starts |
+| `Proxy` | `KnownProxies` and `KnownNetworks` allowed to set `X-Forwarded-For`. With neither set, forwarded headers are ignored |
 | `Thresholds` | BR-03 thresholds, quality and clinical thresholds |
 | `Ai` | Base URL, service key, pipeline name and version per task, timeout per task |
 | `Converter`, `Storage` | Base URL, timeout, bucket and credentials |
@@ -305,7 +306,7 @@ Tests sit next to the code they test, as `*.test.tsx`.
 | `/plans` | SCR-41 | Admin, Reviewer, Approver | |
 | `/plans/:id` | | Admin, Reviewer, Approver | Redirects to `versions` |
 | `/plans/:id/versions` | SCR-41 | Admin, Reviewer, Approver | |
-| `/plans/:id/versions/:versionId` | SCR-42 | Admin | `versionId` is the UUID; the screen shows `v3` |
+| `/plans/:id/versions/:versionId` | SCR-42 | Administrator (edit), Reviewer and Approver (read) | `versionId` is the UUID; the screen shows `v3` |
 | `/plans/:id/versions/:versionId/test` | SCR-43 | Admin | Should |
 | `/insights/ai-quality` | SCR-50 | Approver | Should |
 | `/profile` | SCR-70 | All | |
@@ -381,7 +382,7 @@ db/
 | Database roles | Migrations run as the owner, and the app connects as `claimlens_app`. |
 | Changing the schema | Update the DBML and add a numbered migration. A migration that has been applied is never edited. |
 | Keeping them in step | `npm run schema:check` builds one empty database from the migrations and one from the DBML export, and fails if a column, enum, constraint or index in the DBML is missing or different. It needs no server. |
-| EF Core | One configuration per table in `Persistence/Configurations`, written by hand. `dotnet ef migrations` is not used. |
+| EF Core | Mapping is written by hand and sits inline in `Persistence/ClaimLensDbContext.cs`, which is enough for the tables built so far. It will be split into one configuration per table in `Persistence/Configurations` when the file becomes hard to read as more tables arrive. `dotnet ef migrations` is not used. |
 | Enums | Native PostgreSQL enums, generated into C# from the DBML. A test compares all 36 with `pg_enum`. |
 | Seed staff | Two reviewers, to test `CLAIM_ALREADY_ASSIGNED`, and two approvers. `seed` hashes `Seed:DevPassword` at run time, so no hash is in the repository, and it refuses to run without that setting. |
 
@@ -423,7 +424,7 @@ Generated files are committed, so a build needs no generator. CI generates them 
 | Contract, Claims API | `ClaimLens.Api.Tests/Contract` | JsonSchema.Net | Every response any test sees matches the YAML: the check sits in the test client |
 | Authorization | `ClaimLens.Api.Tests/Authorization` | Cases from `x-claimlens` | Every role on every operation (Definition of Done) |
 | Architecture | `ClaimLens.Api.Tests/Architecture` | NetArchTest | The rules in section 4 |
-| Golden | `ClaimLens.Api.Tests/Golden` | `fixtures/golden` | Definition of Done, with AI on and AI off |
+| Golden | `ClaimLens.Api.Tests/Golden` (planned, arrives with the intake slice, US02/US03) | `fixtures/golden` | Definition of Done, with AI on and AI off |
 | Document AI | `apps/document-ai/tests` | pytest, Schemathesis | Tasks and contract; no provider is called |
 | Web | Next to the code | Vitest, Testing Library, MSW | UI states |
 | End to end | `e2e/` | Playwright, axe | The three task flows, the keyboard path, WCAG AA |
@@ -442,7 +443,7 @@ fixtures/golden/
     └── expected.json           # Statuses, alerts, flags, line results, payable
 ```
 
-`tools/golden` generates `documents/` from HTML with headless Chrome. Each scenario's files should stay small enough to commit directly, without Git LFS.
+Today only `excluded-line/` and `limit-capped/` exist, holding Rule Engine expectations only. `documents/` arrives with the intake slice (US02/US03) and `ai-responses/` with the extraction slice (US04/US05). `tools/golden` (planned, not created yet) will generate `documents/` from HTML with headless Chrome. Each scenario's files should stay small enough to commit directly, without Git LFS.
 
 ## 11. Should stories
 
@@ -547,7 +548,7 @@ Latest stable on 04/11/2026. Lock files pin the exact version when each part is 
 
 | Part | Versions |
 |---|---|
-| Web | Next.js 16.4, React 19.3, Tailwind 4.3, TypeScript 5.9 (not 7), TanStack Query 5.105, TanStack Table 9.3, React Hook Form 7.91, Zod 4.6, openapi-fetch 0.17, `@base-ui/react` 1.9, Vitest 5.1, MSW 3.0, Playwright 1.64 |
+| Web | Next.js 16.4, React 19.3, Tailwind 4.3, TypeScript 5.9 (not 7), TanStack Query 5.105, TanStack Table 9.3 (not in `package.json` yet; added with the review queue), React Hook Form 7.91, Zod 4.6, openapi-fetch 0.17, `@base-ui/react` 1.9, Vitest 5.1, MSW 3.0, Playwright 1.64 |
 | Claims API | .NET 10, Npgsql EF Core 10.0, dbup-postgresql 7.0, PDFtoImage 5.4, AWSSDK.S3 4.0, Testcontainers 4.16, xUnit v3 4.0, NetArchTest 1.3, JsonSchema.Net 9.6 |
 | Document AI | Python 3.12, FastAPI 0.162, Pydantic 2.14, boto3 1.43, httpx 0.28, pytest 9.2, Schemathesis 4.33, datamodel-code-generator 0.89 |
 | Services | PostgreSQL 18, Gotenberg 8.39, SeaweedFS 4.52 |
@@ -564,7 +565,7 @@ Two slices work end to end: US01 sign-in and US19 rule sets.
 | Document AI Service | All six routes with the fake gateway |
 | Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor. Other homes are placeholders |
 
-US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 0 and has no tab. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
+US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 10, the value the seeded rule sets use, and has no tab. Rules apply by kind (eligibility, waiting periods, exclusions, coverage, then the rate and limits), and a save or publish that orders a rule before a kind that applies first is refused with `RULE_INVALID`. A version is published with an effective date of today or later in Vietnam time. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
 
 Next, in the order the stories depend on each other: US02 and US03 intake with Document Preparation, the AI Job Runner with US04 and US05, then the claim workspace.
 

@@ -22,9 +22,127 @@ public class RuleEvaluatorTests
     [Fact]
     public void A_sample_claim_has_no_policy_so_eligibility_passes()
     {
-        var result = RuleEvaluator.Evaluate(Golden with { CoverageStart = null, CoverageEnd = null, ServiceDate = new DateOnly(2031, 1, 5) });
+        var result = RuleEvaluator.Evaluate(Golden with
+        {
+            CoverageStart = null,
+            CoverageEnd = null,
+            TerminatedOn = null,
+            ServiceDate = new DateOnly(2031, 1, 5),
+        });
 
         Assert.Equal(1_100_000, result.EligibleTotal);
+    }
+
+    [Theory]
+    [InlineData("2026-10-12", LineResult.Excluded, "ELIG-01")]
+    [InlineData("2026-09-01", LineResult.Excluded, "ELIG-01")]
+    [InlineData("2026-10-13", LineResult.Covered, "COV-01")]
+    public void A_policy_is_not_in_force_on_or_after_the_day_it_ends(string terminatedOn, LineResult expected, string ruleCode)
+    {
+        var input = Golden with { TerminatedOn = DateOnly.Parse(terminatedOn, System.Globalization.CultureInfo.InvariantCulture) };
+
+        var line = RuleEvaluator.Evaluate(input).Lines[0];
+
+        Assert.Equal(expected, line.EngineResult);
+        Assert.Equal(ruleCode, line.EngineRuleCode);
+    }
+
+    // docs/11-audit-and-roadmap.md, F-01: a coverage rule ordered first used to pay a line outside the policy year.
+    [Fact]
+    public void A_coverage_ordered_before_eligibility_cannot_pay_outside_the_policy_year()
+    {
+        var input = new EvaluationInput(
+            ServiceDate: new DateOnly(2027, 2, 1),
+            FirstEnrolledOn: new DateOnly(2026, 1, 1),
+            CoverageStart: new DateOnly(2026, 1, 1),
+            CoverageEnd: new DateOnly(2026, 12, 31),
+            TerminatedOn: null,
+            ConsumedBefore: 0,
+            Lines: [new LineInput(Guid.Empty, 1, "CONSULTATION", 300_000)],
+            Rules:
+            [
+                new RuleInput(Guid.Empty, "ELIG-01", RuleType.Eligibility, 0),
+                new RuleInput(Guid.Empty, "COV-01", RuleType.Coverage, -5, "CONSULTATION"),
+            ]);
+
+        var result = RuleEvaluator.Evaluate(input);
+
+        Assert.Equal(LineResult.Excluded, result.Lines[0].EngineResult);
+        Assert.Equal("ELIG-01", result.Lines[0].EngineRuleCode);
+        Assert.Equal(0, result.PayableAmount);
+    }
+
+    // F-01, second case: a coverage rule ordered before a waiting period used to pay a line still in the wait.
+    [Fact]
+    public void A_coverage_ordered_before_a_waiting_period_cannot_pay_during_the_wait()
+    {
+        var input = new EvaluationInput(
+            ServiceDate: new DateOnly(2026, 10, 12),
+            FirstEnrolledOn: new DateOnly(2026, 10, 1),
+            CoverageStart: new DateOnly(2026, 10, 1),
+            CoverageEnd: new DateOnly(2027, 9, 30),
+            TerminatedOn: null,
+            ConsumedBefore: 0,
+            Lines: [new LineInput(Guid.Empty, 1, "CONSULTATION", 300_000)],
+            Rules:
+            [
+                new RuleInput(Guid.Empty, "COV-01", RuleType.Coverage, 15, "CONSULTATION"),
+                new RuleInput(Guid.Empty, "WAIT-30", RuleType.WaitingPeriod, 20, WaitingDays: 30),
+            ]);
+
+        var result = RuleEvaluator.Evaluate(input);
+
+        Assert.Equal(LineResult.Excluded, result.Lines[0].EngineResult);
+        Assert.Equal("WAIT-30", result.Lines[0].EngineRuleCode);
+        Assert.Equal(0, result.PayableAmount);
+    }
+
+    [Fact]
+    public void An_exclusion_ordered_first_still_cites_eligibility_when_the_policy_is_not_in_force()
+    {
+        var rules = Golden.Rules.Select(rule => rule.RuleCode == "EX-04" ? rule with { ApplyOrder = -10 } : rule).ToList();
+
+        var result = RuleEvaluator.Evaluate(Golden with { Rules = rules, ServiceDate = new DateOnly(2027, 1, 5) });
+
+        Assert.Equal("ELIG-01", result.Lines[3].EngineRuleCode);
+    }
+
+    [Theory]
+    [InlineData("in force")]
+    [InlineData("outside the policy year")]
+    [InlineData("in the waiting period")]
+    [InlineData("terminated")]
+    public void Apply_order_across_kinds_changes_nothing(string situation)
+    {
+        var input = situation switch
+        {
+            "outside the policy year" => Golden with { ServiceDate = new DateOnly(2027, 1, 5) },
+            "in the waiting period" => Golden with { FirstEnrolledOn = new DateOnly(2026, 10, 1) },
+            "terminated" => Golden with { TerminatedOn = new DateOnly(2026, 10, 1) },
+            _ => Golden,
+        };
+        var expected = RuleEvaluator.Evaluate(input);
+        var reversed = input.Rules.Select(rule => rule with { ApplyOrder = 100 - rule.ApplyOrder }).ToList();
+
+        var result = RuleEvaluator.Evaluate(input with { Rules = reversed });
+
+        Assert.Equal(expected.Lines, result.Lines);
+        Assert.Equal(expected.Formula, result.Formula);
+        Assert.Equal(expected.PayableAmount, result.PayableAmount);
+    }
+
+    [Fact]
+    public void Within_a_kind_apply_order_decides_which_rule_is_cited()
+    {
+        var rules = Golden.Rules
+            .Append(new RuleInput(Guid.Empty, "WAIT-90", RuleType.WaitingPeriod, 15, "CONSULTATION", WaitingDays: 90))
+            .ToList();
+        var input = Golden with { Rules = rules, FirstEnrolledOn = new DateOnly(2026, 10, 1) };
+
+        var result = RuleEvaluator.Evaluate(input);
+
+        Assert.Equal("WAIT-90", result.Lines[0].EngineRuleCode);
+        Assert.Equal("WAIT-30", result.Lines[1].EngineRuleCode);
     }
 
     [Theory]

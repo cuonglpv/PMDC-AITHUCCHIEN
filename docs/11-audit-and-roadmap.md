@@ -147,4 +147,26 @@ Tổng Must còn lại: 8 + 13 + 8 + 8 + 26 + 11 = **74 điểm**. Slice 4b lớ
 5. E2E Playwright + axe cho luồng của slice.
 6. Cập nhật `docs/10` mục 14 và README "Project progress" trong cùng PR.
 
+## 7. Kết quả xử lý (07/11/2026)
+
+Ba task chạy song song trên ba nhánh, rồi được review lại và kiểm trên bản gộp B → A → C.
+
+| ID | Kết quả | Thay đổi chính |
+|---|---|---|
+| F-01 | Đã sửa | Engine quyết định từng dòng theo loại rule (eligibility → waiting period → exclusion → coverage), `apply_order` chỉ xếp trong cùng loại; `EngineVersion` 1.1.0. Lưu và publish từ chối thứ tự trái với thứ bậc đó (422 `RULE_INVALID` tại `rules[i].applyOrder`), để cột Order trong editor luôn đúng với cách rule được áp. Hai kịch bản ở mục 3.1 thành test. |
+| F-01b | Đã sửa, khác đề xuất | `ELIG-01` dùng order **10** theo seed, không phải 0: GOLD-OP v3 đã publish nên trigger đóng băng rule của nó, không script seed nào đổi được mà không lách guard. |
+| F-02 | Đã sửa | Chỉ bật forwarded headers khi có `Proxy:KnownProxies` hoặc `Proxy:KnownNetworks`. Profile `full` cố định mạng `10.201.88.0/24` và Caddy ở `10.201.88.10`. Chưa thử trên Docker Engine Linux. |
+| F-03 | Đã sửa | Body của thao tác `audit: read` nằm trong bộ đệm tới khi audit lưu xong. Test mới giả lập server đã gửi byte ra ngoài, ép insert audit lỗi: client nhận 500 `INTERNAL_ERROR`, không có dữ liệu. |
+| F-04 | Đã sửa | `0007`: default privileges cho bảng và sequence tạo sau; thu hồi quyền trên sequence của `schema_migration` và trên `schema_seed`. |
+| F-05 | Đã sửa | `0007`: version sinh ra là `DRAFT`, chỉ chuyển sang `PUBLISHED` hoặc `DISCARDED`; `DISCARDED` bị đóng băng (`ck_rule_set_status_transition` → `RULE_SET_NOT_DRAFT`). |
+| F-06 | Đã sửa | 500 trả `application/problem+json` với `INTERNAL_ERROR` và `requestId`; thêm mã vào contract. |
+| F-07 | Đã sửa | `AuthOptions` kiểm lúc khởi động (key ≥ 32 byte, origin, issuer, audience); token có và được kiểm `iss`, `aud`. |
+| F-08 | Đã sửa | `SignInThrottle` dọn cửa sổ hết hạn tối đa mỗi phút một lần. |
+| Q-A | Đã làm | `policy.terminated_on` + `ck_policy_terminated_on` (migration `0008`, DBML); `EvaluationInput.TerminatedOn`; `ELIG-01` coi policy hết hiệu lực từ ngày đó. |
+| Q-B | Đã làm | Publish từ chối ngày trước hôm nay (giờ Việt Nam), thông báo nêu ngày sớm nhất được nhận; hộp publish có `min` = hôm nay. DB không lặp lại kiểm tra này vì chỉ API có đồng hồ nghiệp vụ. |
+| D-01 … D-07 | Đã sửa | README, `docs/04`, `docs/06`, `docs/10`, `docs/architecture/c4/README.md`. |
+| D-09 (mới) | Đã sửa | Phát hiện khi review: `docs/10` §14 còn ghi `ELIG-01` order 0, bảng Configuration thiếu `Proxy` và issuer/audience của `Auth`. |
+
+Kiểm trên bản gộp B → A → C (không conflict): C# 342/342, Web 101/101 + ESLint + `tsc`, `contract:check`, `schema:check` đều pass. E2E: session A báo 17/17 pass trên nhánh A với Docker stack đầy đủ; bản gộp chạy e2e trên CI của PR.
+
 **Liên quan:** [Audit yêu cầu](09-audit-report.md) · [Code structure](10-code-structure.md) · [User stories](08-invest-requirements.md) · [API contract](07-api-contract.md)

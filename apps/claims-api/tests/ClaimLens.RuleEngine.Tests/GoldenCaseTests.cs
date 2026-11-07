@@ -72,6 +72,7 @@ public class GoldenCaseTests
             file.FirstEnrolledOn,
             file.CoverageStart,
             file.CoverageEnd,
+            file.TerminatedOn,
             file.ConsumedBefore,
             file.Lines
                 .Select(line => new LineInput(GoldenFile.IdFor($"line-{line.LineNo}"), line.LineNo, line.CategoryCode, line.ClaimedAmount))

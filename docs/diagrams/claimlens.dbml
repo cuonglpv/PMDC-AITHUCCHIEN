@@ -374,6 +374,7 @@ Table policy [headercolor: #3C4043] {
   status policy_status [not null]
   coverage_start date [not null, note: 'One policy covers one policy year']
   coverage_end date [not null]
+  terminated_on date [note: 'First day a LAPSED or TERMINATED policy is not in force; null while ACTIVE (Q-A)']
   first_enrolled_on date [not null, note: 'Start of waiting periods; earlier than coverage_start after a renewal']
   opening_consumed bigint [not null, default: 0, note: 'Annual usage before ClaimLens (seed), VND']
   consumed_amount bigint [not null, default: 0, note: 'opening_consumed + final payable of every approved claim (BR-10)']
@@ -388,6 +389,7 @@ Table policy [headercolor: #3C4043] {
     `coverage_end > coverage_start` [name: 'ck_policy_period']
     `first_enrolled_on <= coverage_start` [name: 'ck_policy_enrolment']
     `opening_consumed >= 0 and consumed_amount >= opening_consumed` [name: 'ck_policy_consumed']
+    `(status = 'ACTIVE') = (terminated_on is null)` [name: 'ck_policy_terminated_on']
   }
   Note: '''
   One insured person and one policy year per policy, so the annual outpatient balance lives here.

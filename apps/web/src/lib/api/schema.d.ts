@@ -1011,7 +1011,7 @@ export interface paths {
         put?: never;
         /**
          * Publish a draft
-         * @description The effective date must be later than the current published version's, and every active category must be covered or excluded. A published version is immutable.
+         * @description The effective date must be today or later in Vietnam time, and later than the current published version's. Every active category must be covered or excluded, and every rule ordered after the kinds that apply before it. A published version is immutable.
          */
         post: operations["publishPlanVersion"];
         delete?: never;
@@ -1252,7 +1252,7 @@ export interface components {
          * @description Stable error codes; the meaning of each is in 07-api-contract.md.
          * @enum {string}
          */
-        ErrorCode: "INVALID_CREDENTIALS" | "REFRESH_TOKEN_INVALID" | "AUTH_REQUIRED" | "ORIGIN_NOT_ALLOWED" | "TOO_MANY_ATTEMPTS" | "FORBIDDEN_ROLE" | "CLAIM_OUT_OF_SCOPE" | "MAKER_CHECKER" | "NOT_FOUND" | "VALIDATION_FAILED" | "FILE_TOO_LARGE" | "UNSUPPORTED_FILE_TYPE" | "POLICY_MEMBER_MISMATCH" | "CLAIM_STATE_CONFLICT" | "VERSION_CONFLICT" | "UPLOAD_IN_PROGRESS" | "NO_READY_DOCUMENT" | "CLAIM_ALREADY_ASSIGNED" | "SOURCE_REQUIRED" | "FIELD_HAS_NO_AI_VALUE" | "ALERT_NOT_OPEN" | "ALERT_NOT_DISMISSIBLE" | "FLAG_NOT_OPEN" | "BLOCKING_ALERT_OPEN" | "MAPPING_UNCONFIRMED" | "LINE_AMOUNT_MISSING" | "NO_EFFECTIVE_RULE_SET" | "NO_CALCULATION_REVISION" | "NO_ACTIVE_OVERRIDE" | "UNKNOWN_CATEGORY" | "OVERRIDE_EXCEEDS_LINE" | "OVERRIDE_AMOUNT_MISMATCH" | "REVISION_OUTDATED" | "REVISION_STALE" | "ATTESTATION_OUTDATED" | "SUMMARY_REQUIRED" | "OUTCOME_NOT_ALLOWED" | "OUTCOME_REASON_REQUIRED" | "DECISION_NOT_ALLOWED" | "DECISION_REASON_REQUIRED" | "DECISION_COMMENT_REQUIRED" | "BALANCE_CHANGED" | "DRAFT_ALREADY_EXISTS" | "RULE_SET_NOT_DRAFT" | "RULE_INVALID" | "EFFECTIVE_DATE_NOT_LATER" | "CATEGORY_NOT_CONFIGURED";
+        ErrorCode: "INVALID_CREDENTIALS" | "REFRESH_TOKEN_INVALID" | "AUTH_REQUIRED" | "ORIGIN_NOT_ALLOWED" | "TOO_MANY_ATTEMPTS" | "FORBIDDEN_ROLE" | "CLAIM_OUT_OF_SCOPE" | "MAKER_CHECKER" | "NOT_FOUND" | "VALIDATION_FAILED" | "FILE_TOO_LARGE" | "UNSUPPORTED_FILE_TYPE" | "POLICY_MEMBER_MISMATCH" | "CLAIM_STATE_CONFLICT" | "VERSION_CONFLICT" | "UPLOAD_IN_PROGRESS" | "NO_READY_DOCUMENT" | "CLAIM_ALREADY_ASSIGNED" | "SOURCE_REQUIRED" | "FIELD_HAS_NO_AI_VALUE" | "ALERT_NOT_OPEN" | "ALERT_NOT_DISMISSIBLE" | "FLAG_NOT_OPEN" | "BLOCKING_ALERT_OPEN" | "MAPPING_UNCONFIRMED" | "LINE_AMOUNT_MISSING" | "NO_EFFECTIVE_RULE_SET" | "NO_CALCULATION_REVISION" | "NO_ACTIVE_OVERRIDE" | "UNKNOWN_CATEGORY" | "OVERRIDE_EXCEEDS_LINE" | "OVERRIDE_AMOUNT_MISMATCH" | "REVISION_OUTDATED" | "REVISION_STALE" | "ATTESTATION_OUTDATED" | "SUMMARY_REQUIRED" | "OUTCOME_NOT_ALLOWED" | "OUTCOME_REASON_REQUIRED" | "DECISION_NOT_ALLOWED" | "DECISION_REASON_REQUIRED" | "DECISION_COMMENT_REQUIRED" | "BALANCE_CHANGED" | "DRAFT_ALREADY_EXISTS" | "RULE_SET_NOT_DRAFT" | "RULE_INVALID" | "EFFECTIVE_DATE_NOT_LATER" | "CATEGORY_NOT_CONFIGURED" | "INTERNAL_ERROR";
         /** @enum {string} */
         StaffRole: "INTAKE_OFFICER" | "CLAIMS_REVIEWER" | "SENIOR_APPROVER" | "ADMINISTRATOR";
         /** @enum {string} */
@@ -2244,6 +2244,7 @@ export interface components {
             categoryCode?: string;
             clauseText: string;
             clauseRef?: string;
+            /** @description Rules apply by kind: ELIGIBILITY, WAITING_PERIOD, EXCLUSION, COVERAGE, then COINSURANCE and LIMIT. This orders rules of one kind, and must be above every rule of a kind that applies before it, or the save is refused with RULE_INVALID. */
             applyOrder: number;
             rateBp?: number;
             /** Format: int64 */
@@ -4409,7 +4410,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Code: RULE_SET_NOT_DRAFT. */
             409: components["responses"]["Conflict"];
-            /** @description Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED. */
+            /** @description Codes: VALIDATION_FAILED, EFFECTIVE_DATE_NOT_LATER, CATEGORY_NOT_CONFIGURED, RULE_INVALID. */
             422: components["responses"]["Unprocessable"];
         };
     };

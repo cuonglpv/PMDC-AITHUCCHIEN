@@ -12,6 +12,8 @@ x-claims-api-env: &claims-api-env
   Auth__SigningKey: ${AUTH_SIGNING_KEY:-local-development-signing-key-not-for-any-real-use}
   Auth__AllowedOrigins__0: http://localhost:8088
   Seed__DevPassword: ${SEED_DEV_PASSWORD:-local-dev-password}
+  # The API believes X-Forwarded-For only from this address, which is `proxy` below. Anyone else's header is ignored.
+  Proxy__KnownProxies__0: 10.201.88.10
 
 services:
   postgres:
@@ -53,6 +55,12 @@ services:
       timeout: 5s
       retries: 12
 
+  # The API on the host trusts no proxy by default, so through proxy-dev every request is recorded with the address
+  # proxy-dev arrives from, and shares one per-address sign-in limit. That is fine for one developer. To record the
+  # browser's address, start the API with Proxy__KnownProxies__0 set to that arrival address:
+  #   Docker Desktop (Windows, macOS): 127.0.0.1, since Docker Desktop relays host.docker.internal from loopback.
+  #     Any local process can then claim an address, which only matters on a shared machine.
+  #   Docker Engine on Linux: proxy-dev's address on this network (10.201.88.x); pin it with ipv4_address like `proxy`.
   proxy-dev:
     image: caddy:2
     profiles: [dev]
@@ -113,6 +121,10 @@ services:
     environment:
       WEB_UPSTREAM: web:3000
       CLAIMS_API_UPSTREAM: claims-api:8080
+    networks:
+      default:
+        # Fixed so the API can name it in Proxy__KnownProxies__0.
+        ipv4_address: 10.201.88.10
     ports:
       - "8088:80"
     volumes:
@@ -120,6 +132,13 @@ services:
     depends_on:
       - web
       - claims-api
+
+networks:
+  default:
+    ipam:
+      config:
+        # Outside Docker's own address pools, so it does not collide with networks Docker hands out.
+        - subnet: 10.201.88.0/24
 
 volumes:
   postgres-data:
