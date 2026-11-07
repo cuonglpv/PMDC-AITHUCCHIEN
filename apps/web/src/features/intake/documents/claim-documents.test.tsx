@@ -299,7 +299,7 @@ describe("Documents and submit (SCR-13)", () => {
     state.snapshot = () => snapshotOf(state.documents, { fallbackActive: true });
     renderPage();
 
-    expect(await screen.findByText(/AI assistance unavailable/)).toBeTruthy();
+    expect(await screen.findByText(/AI check unavailable/)).toBeTruthy();
     expect(submitButton()).toHaveProperty("disabled", false);
   });
 

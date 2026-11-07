@@ -1,9 +1,9 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/problem";
-import type { QueueView, Warning } from "@/lib/api/types";
+import type { ChosenPageType, ClaimStatusSnapshot, Document, DocumentPage, QueueView, Warning } from "@/lib/api/types";
 import { isProcessing, POLL_INTERVAL_MS } from "./processing";
 
 /** Separate roots, so invalidating one claim's detail never refetches its status poll or its documents. */
@@ -67,14 +67,63 @@ export function useDocuments(claimId: string) {
 }
 
 /**
- * The one poll (docs/10-code-structure.md, Staff Web App rule 2): every 3 seconds while a file converts or a page check
- * is queued or running, and not at all otherwise.
+ * The one poll (docs/10-code-structure.md, Staff Web App rule 2): every 3 seconds while a file converts, a page check or
+ * the field extraction is queued or running, or the submitted claim is still processing; not at all otherwise.
  */
 export function useClaimStatus(claimId: string) {
   return useQuery({
     queryKey: intakeKeys.status(claimId),
     queryFn: () => unwrap(api.GET("/claims/{claimId}/status", { params: { path: { claimId } } })),
     refetchInterval: (query) => (query.state.data && isProcessing(query.state.data) ? POLL_INTERVAL_MS : false),
+  });
+}
+
+/**
+ * `reclassifyPage` from SCR-13: the officer chooses the type of an Unclassified page before submission. The answer is
+ * the page, now set by the officer (`USER`); it replaces the page in the list and in the last poll, so the card does
+ * not flash back to Unclassified before the next poll arrives.
+ */
+export function useReclassifyPage(claimId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pageId, pageType }: { pageId: string; pageType: ChosenPageType }) =>
+      unwrap(
+        api.PUT("/claims/{claimId}/pages/{pageId}/type", { params: { path: { claimId, pageId } }, body: { pageType } }),
+      ),
+    onSuccess: (updated: DocumentPage) => {
+      queryClient.setQueryData(intakeKeys.documents(claimId), (list: { items: Document[] } | undefined) =>
+        list
+          ? {
+              items: list.items.map((document) =>
+                document.id === updated.documentId
+                  ? { ...document, pages: document.pages.map((page) => (page.id === updated.id ? updated : page)) }
+                  : document,
+              ),
+            }
+          : list,
+      );
+      queryClient.setQueryData(intakeKeys.status(claimId), (snapshot: ClaimStatusSnapshot | undefined) =>
+        snapshot
+          ? {
+              ...snapshot,
+              documents: snapshot.documents.map((document) => ({
+                ...document,
+                pages: document.pages.map((page) =>
+                  page.id === updated.id
+                    ? { ...page, pageType: updated.pageType, quality: updated.quality, aiStatus: updated.aiStatus }
+                    : page,
+                ),
+              })),
+            }
+          : snapshot,
+      );
+      void queryClient.invalidateQueries({ queryKey: intakeKeys.status(claimId) });
+    },
+    // A 409 means the claim moved on (it was submitted elsewhere): reload what the screen shows.
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: intakeKeys.claim(claimId) });
+      void queryClient.invalidateQueries({ queryKey: intakeKeys.status(claimId) });
+    },
   });
 }
 
