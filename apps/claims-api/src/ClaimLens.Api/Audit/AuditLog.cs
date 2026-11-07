@@ -11,7 +11,15 @@ namespace ClaimLens.Api.Audit;
 /// </summary>
 public static class AuditLog
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    /// <summary>The API's own JSON rules, so an enum reads `READY` here as it does in the database and the API.</summary>
+    private static readonly JsonSerializerOptions Json = CreateJson();
+
+    private static JsonSerializerOptions CreateJson()
+    {
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        Startup.ConfigureJson(json);
+        return json;
+    }
 
     public static AuditEvent Event(
         HttpContext context,
@@ -36,5 +44,26 @@ public static class AuditLog
             AfterValue = after is null ? null : JsonSerializer.Serialize(after, Json),
             RequestId = RequestIdMiddleware.Current(context),
             IpAddress = context.Connection.RemoteIpAddress,
+        };
+
+    /// <summary>A change the system made outside any request, such as a background worker's. No person, no address.</summary>
+    public static AuditEvent SystemEvent(
+        TimeProvider clock,
+        Guid? claimId,
+        string eventType,
+        string entityType,
+        string entityId,
+        object? before = null,
+        object? after = null) =>
+        new()
+        {
+            OccurredAt = clock.GetUtcNow(),
+            ActorType = ActorType.System,
+            ClaimId = claimId,
+            EventType = eventType,
+            EntityType = entityType,
+            EntityId = entityId,
+            BeforeValue = before is null ? null : JsonSerializer.Serialize(before, Json),
+            AfterValue = after is null ? null : JsonSerializer.Serialize(after, Json),
         };
 }
