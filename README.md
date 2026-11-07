@@ -351,6 +351,7 @@ docker compose -f infra/compose.yaml --profile full up -d --build
 - [x] Write the API contract in OpenAPI 3.1
 - [x] Design the frontend and backend folder structures
 - [x] Scaffold the repository, the database, the Rule Engine, CI and the sign-in slice (US01)
+- [x] Build benefit rule sets: drafts, editor and publishing (US19)
 - [ ] Design class diagrams and sequence diagrams
 - [ ] Build the backend, Rule Engine and Document AI service
 - [ ] Build the frontend and connect it to the API

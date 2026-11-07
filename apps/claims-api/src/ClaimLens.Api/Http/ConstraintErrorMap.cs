@@ -14,6 +14,8 @@ public static class ConstraintErrorMap
         ["ck_claim_lifecycle"] = new(Conflict, "CLAIM_STATE_CONFLICT", "The claim's status does not allow this"),
         ["ck_claim_final_needs_decision"] = new(Conflict, "CLAIM_STATE_CONFLICT", "The claim's status does not allow this"),
         ["ux_rule_set_one_draft"] = new(Conflict, "DRAFT_ALREADY_EXISTS", "This plan already has a draft"),
+        // Two administrators creating a draft at once can meet here first, before ux_rule_set_one_draft.
+        ["ux_rule_set_version_no"] = new(Conflict, "DRAFT_ALREADY_EXISTS", "This plan already has a draft"),
         ["ck_rule_set_frozen"] = new(Conflict, "RULE_SET_NOT_DRAFT", "Only a draft can change"),
         ["ck_rule_set_effective_later"] = new(Unprocessable, "EFFECTIVE_DATE_NOT_LATER", "The effective date must be later than the current version's"),
         ["ux_rule_set_published_effective"] = new(Unprocessable, "EFFECTIVE_DATE_NOT_LATER", "The effective date must be later than the current version's"),

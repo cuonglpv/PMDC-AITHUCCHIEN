@@ -10,6 +10,10 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
     public DbSet<RefreshTokenRecord> RefreshTokens => Set<RefreshTokenRecord>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Claim> Claims => Set<Claim>();
+    public DbSet<BenefitPlan> BenefitPlans => Set<BenefitPlan>();
+    public DbSet<RuleSetVersion> RuleSetVersions => Set<RuleSetVersion>();
+    public DbSet<BenefitCategory> BenefitCategories => Set<BenefitCategory>();
+    public DbSet<BenefitRule> BenefitRules => Set<BenefitRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +60,60 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
             table.Property(row => row.AiRunId).HasColumnName("ai_run_id");
             table.Property(row => row.RequestId).HasColumnName("request_id");
             table.Property(row => row.IpAddress).HasColumnName("ip_address");
+        });
+
+        modelBuilder.Entity<BenefitPlan>(table =>
+        {
+            table.ToTable("benefit_plan");
+            table.Property(row => row.Id).HasColumnName("id");
+            table.Property(row => row.Code).HasColumnName("code");
+            table.Property(row => row.Name).HasColumnName("name");
+            table.Property(row => row.Description).HasColumnName("description");
+            table.Property(row => row.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<RuleSetVersion>(table =>
+        {
+            table.ToTable("rule_set_version");
+            table.Property(row => row.Id).HasColumnName("id");
+            table.Property(row => row.PlanId).HasColumnName("plan_id");
+            table.Property(row => row.VersionNo).HasColumnName("version_no");
+            table.Property(row => row.Status).HasColumnName("status");
+            table.Property(row => row.EffectiveFrom).HasColumnName("effective_from");
+            table.Property(row => row.BasedOnVersionId).HasColumnName("based_on_version_id");
+            table.Property(row => row.ChangeNote).HasColumnName("change_note");
+            table.Property(row => row.CreatedBy).HasColumnName("created_by");
+            table.Property(row => row.CreatedAt).HasColumnName("created_at");
+            table.Property(row => row.PublishedBy).HasColumnName("published_by");
+            table.Property(row => row.PublishedAt).HasColumnName("published_at");
+            table.HasMany<BenefitRule>().WithOne().HasForeignKey(rule => rule.RuleSetVersionId);
+        });
+
+        modelBuilder.Entity<BenefitCategory>(table =>
+        {
+            table.ToTable("benefit_category");
+            table.HasKey(row => row.Code);
+            table.Property(row => row.Code).HasColumnName("code");
+            table.Property(row => row.Name).HasColumnName("name");
+            table.Property(row => row.Description).HasColumnName("description");
+            table.Property(row => row.IsActive).HasColumnName("is_active");
+        });
+
+        modelBuilder.Entity<BenefitRule>(table =>
+        {
+            table.ToTable("benefit_rule");
+            table.Property(row => row.Id).HasColumnName("id");
+            table.Property(row => row.RuleSetVersionId).HasColumnName("rule_set_version_id");
+            table.Property(row => row.RuleCode).HasColumnName("rule_code");
+            table.Property(row => row.RuleType).HasColumnName("rule_type");
+            table.Property(row => row.CategoryCode).HasColumnName("category_code");
+            table.Property(row => row.ClauseText).HasColumnName("clause_text");
+            table.Property(row => row.ClauseRef).HasColumnName("clause_ref");
+            table.Property(row => row.ApplyOrder).HasColumnName("apply_order");
+            table.Property(row => row.RateBp).HasColumnName("rate_bp");
+            table.Property(row => row.LimitAmount).HasColumnName("limit_amount");
+            table.Property(row => row.LimitScope).HasColumnName("limit_scope");
+            table.Property(row => row.WaitingDays).HasColumnName("waiting_days");
         });
 
         modelBuilder.Entity<Claim>(table =>

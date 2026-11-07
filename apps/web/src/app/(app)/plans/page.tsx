@@ -1,5 +1,5 @@
-import { HomePlaceholder } from "@/features/shell/HomePlaceholder";
+import { PlansPage } from "@/features/plans/PlansPage";
 
 export default function BenefitPlans() {
-  return <HomePlaceholder title="Benefit plans" screen="SCR-41" stories="US19" />;
+  return <PlansPage />;
 }
