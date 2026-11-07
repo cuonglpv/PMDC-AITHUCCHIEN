@@ -86,7 +86,8 @@ MVP release = all **Must** stories (18 stories, 85 pts). **Should** stories (5 s
 - **Given** the AI service fails, **then** pages are listed as "Unclassified", the fallback banner is shown and submission continues.
 
 ### US05 — 🟣 Extract fields with source
-- **Given** a submitted claim, **when** extraction runs, **then** fields follow the catalogue (insured name, ID number, policy no., provider, provider tax code, service date, invoice no., line description, quantity, unit price, line amount, total, diagnosis, medications) and each value stores document, page and bounding box; clicking it highlights the region.
+- **Given** a submitted claim, **when** extraction runs, **then** fields follow the catalogue (insured name, ID number, policy no., provider, provider tax code, service date, invoice no., line description, quantity, unit price, line amount, total, diagnosis, medications), read by page type as the [field catalogue](03-use-cases.md#field-catalogue) lists them, and each value stores document, page and bounding box; clicking it highlights the region.
+- **Given** extraction finished, **then** each invoice line becomes an expense line, and the claim moves to `ReadyForReview` when every required field is resolved and no page is Unclassified, otherwise to `NeedsVerification`.
 - **Given** confidence ≥ 0.90 (≥ 0.95 for money and identity fields), **then** the value is an auto-accepted suggestion: it keeps the AI marker and the audit records `acceptedBy = threshold`.
 - **Given** 0.70 ≤ confidence < 0.90 (< 0.95 for money and identity fields), **then** the field is marked "Needs verification".
 - **Given** confidence < 0.70, **then** the field is left empty and marked "Needs entry" — no guessed value is shown.

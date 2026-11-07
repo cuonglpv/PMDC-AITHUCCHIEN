@@ -25,7 +25,22 @@ Every AI output is a **suggestion with a confidence and a source location**. A s
 | Field value (money & identity: insured name, ID number, policy number, invoice total, line amount) | ≥ 0.95 | 0.70 ≤ c < 0.95 → "Needs verification" | < 0.70 → "Needs entry" |
 | Expense line → benefit category | ≥ 0.85 | < 0.85 → reviewer confirms before adjudication | — |
 
-Thresholds are seed configuration per field group; there is no threshold UI in the MVP.
+Thresholds are seed configuration per field group; there is no threshold UI in the MVP. A confidence is rounded to three decimals, as it is stored, before it is compared. An auto-accepted value must also carry its page and region and read as its kind (whole VND such as `1.400.000`, a day-first date such as `12/10/2026`); otherwise it needs verification.
+
+### Field catalogue
+
+Fields are read by the type of the document they are on, which is the type of its first classified page. A required field (*) must be resolved, by auto-acceptance, a person's confirmation or entry, or "Not present", before the claim is `ReadyForReview`. Only the fields that validation and payment need are required (decided 07/11/2026).
+
+| Page type | Fields |
+|---|---|
+| Invoice | insured name*, provider*, invoice no.*, service date*, invoice total*, provider tax code; per line: description*, amount*, quantity, unit price. Each line becomes an expense line. |
+| Receipt | invoice total*, provider, invoice no., service date |
+| Visit summary | insured name*, service date*, diagnosis*, ID number, policy number |
+| Prescription | per item: medication*; insured name, service date, diagnosis |
+| Lab result | insured name, service date |
+| Other | none |
+
+Expense lines come only from invoices, so an itemised bill or a receipt is never counted twice.
 
 ## Actors
 
