@@ -97,14 +97,25 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public sealed record SessionBody(string AccessToken, string TokenType, int ExpiresIn);
 }
 
-/// <summary>Time the tests can move, for token rotation and sign-in windows.</summary>
+/// <summary>Time the tests can move, for token rotation, sign-in windows and dates that must not be in the past.</summary>
 public sealed class TestClock : TimeProvider
 {
+    private static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
+
     private TimeSpan offset;
 
     public override DateTimeOffset GetUtcNow() => System.GetUtcNow() + offset;
 
     public void Advance(TimeSpan by) => offset += by;
+
+    /// <summary>Moves to this moment; time keeps running from there.</summary>
+    public void Set(DateTimeOffset now) => offset = now - System.GetUtcNow();
+
+    /// <summary>Moves to 09:00 on this date in Vietnam, where business dates are kept.</summary>
+    public void SetToday(DateOnly date) => Set(new DateTimeOffset(date.ToDateTime(new TimeOnly(9, 0)), VietnamOffset));
+
+    /// <summary>Back to the real time.</summary>
+    public void Reset() => offset = TimeSpan.Zero;
 }
 
 /// <summary>The seeded accounts in db/seed/dev/020_staff.sql.</summary>

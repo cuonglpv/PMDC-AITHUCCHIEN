@@ -197,11 +197,30 @@ public class DatabaseTests(ApiFactory api)
     [InlineData("update rule_set_version set status = 'DRAFT' where version_no = 3", "ck_rule_set_frozen")]
     [InlineData("delete from benefit_rule where rule_code = 'EX-04'", "ck_rule_set_frozen")]
     [InlineData("update policy set consumed_amount = consumed_amount + 1 where policy_number = 'PL-2026-00731'", "ck_policy_usage_in_step")]
+    [InlineData("update policy set status = 'LAPSED' where policy_number = 'PL-2026-00731'", "ck_policy_terminated_on")]
+    [InlineData("update policy set terminated_on = '2026-06-01' where policy_number = 'PL-2026-00731'", "ck_policy_terminated_on")]
     public async Task Guards_refuse_with_a_named_constraint(string sql, string constraint)
     {
         var error = await Assert.ThrowsAsync<PostgresException>(() => api.Sql(sql));
 
         Assert.Equal(constraint, error.ConstraintName);
+    }
+
+    // Q-A (docs/11-audit-and-roadmap.md): a policy that is no longer active says from when.
+    [Theory]
+    [InlineData("LAPSED")]
+    [InlineData("TERMINATED")]
+    public async Task A_policy_that_is_not_active_keeps_the_date_it_ended(string status)
+    {
+        var id = Guid.CreateVersion7();
+        await api.Sql(
+            $"""
+            insert into policy (id, policy_number, member_id, plan_id, status, coverage_start, coverage_end, first_enrolled_on, terminated_on)
+            values ('{id}', 'T-{id.ToString("N")[20..]}', '{Member}', '20000000-0000-4000-8000-000000000001', '{status}',
+                    '2026-01-01', '2026-12-31', '2026-01-01', '2026-06-01')
+            """);
+
+        Assert.Equal(new DateOnly(2026, 6, 1), await api.Scalar<DateOnly>($"select terminated_on from policy where id = '{id}'"));
     }
 
     [Fact]

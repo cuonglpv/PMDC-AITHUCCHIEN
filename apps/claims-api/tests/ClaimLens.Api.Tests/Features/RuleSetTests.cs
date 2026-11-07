@@ -5,9 +5,22 @@ using System.Text.Json;
 namespace ClaimLens.Api.Tests.Features;
 
 /// <summary>US19. The contract handler in the client checks every response against claims-api.yaml as well.</summary>
-public class RuleSetTests(ApiFactory api)
+public sealed class RuleSetTests : IDisposable
 {
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
+
+    /// <summary>The day the seeded GOLD-OP v3 takes effect. Publishing refuses an earlier date, so each test starts here.</summary>
+    private static readonly DateOnly Today = new(2026, 1, 1);
+
+    private readonly ApiFactory api;
+
+    public RuleSetTests(ApiFactory api)
+    {
+        this.api = api;
+        api.Clock.SetToday(Today);
+    }
+
+    public void Dispose() => api.Clock.Reset();
 
     private const string GoldPlan = "20000000-0000-4000-8000-000000000001";
     private const string GoldV3 = "21000000-0000-4000-8000-000000000003";
@@ -93,6 +106,10 @@ public class RuleSetTests(ApiFactory api)
 
         var rule = Assert.Single(Rules(draft));
         Assert.Equal("ELIGIBILITY", rule.GetProperty("ruleType").GetString());
+
+        // One order for the system rule, whether the API or the seed added it (F-01b).
+        var seeded = await api.Scalar<short>($"select apply_order from benefit_rule where rule_set_version_id = '{GoldV3}' and rule_code = 'ELIG-01'");
+        Assert.Equal(seeded, rule.GetProperty("applyOrder").GetInt32());
     }
 
     [Fact]
@@ -237,6 +254,69 @@ public class RuleSetTests(ApiFactory api)
         Assert.Contains(body.GetProperty("errors").EnumerateArray(), error => error.GetProperty("field").GetString() == field);
     }
 
+    // F-01: the order shown in the editor must be the order rules apply in, which is fixed by their kind.
+    [Theory]
+    [InlineData("a coverage before eligibility", "rules[0].applyOrder", "above 10 (ELIG-01)")]
+    [InlineData("an exclusion before a waiting period", "rules[0].applyOrder", "above 35 (WAIT-30)")]
+    [InlineData("a coverage before an exclusion", "rules[0].applyOrder", "above 45 (EX-04)")]
+    [InlineData("a limit level with the rate", "rules[1].applyOrder", "above 50 (COINS)")]
+    public async Task An_order_that_contradicts_how_rules_apply_is_refused(string kind, string field, string message)
+    {
+        object[] rules = kind switch
+        {
+            "a coverage before eligibility" => [Coverage("COV-01", "CONSULTATION", order: -5)],
+            "an exclusion before a waiting period" => [Exclusion("EX-04", "COSMETIC"), Waiting("WAIT-30", order: 35)],
+            "a coverage before an exclusion" => [Coverage("COV-01", "CONSULTATION"), Exclusion("EX-04", "COSMETIC", order: 45)],
+            _ => [Rate("COINS"), Limit("LIM-A", "ANNUAL", order: 50)],
+        };
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+
+        var response = await Save(client, plan, draft, rules);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await Json(response);
+        Assert.Equal("RULE_INVALID", body.GetProperty("code").GetString());
+        var error = Assert.Single(body.GetProperty("errors").EnumerateArray());
+        Assert.Equal(field, error.GetProperty("field").GetString());
+        Assert.Contains(message, error.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Rules_of_one_kind_may_share_an_order()
+    {
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+
+        var response = await Save(client, plan, draft,
+            [Waiting("WAIT-30", order: 11), Waiting("WAIT-90", order: 11, category: "PROCEDURE"), Exclusion("EX-04", "COSMETIC", order: 12)]);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Publishing_refuses_a_draft_whose_rules_are_out_of_order()
+    {
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+        (await Save(client, plan, draft, FullRules())).EnsureSuccessStatusCode();
+        // As a draft saved before orders were checked, or copied from such a version, would be.
+        await api.Sql($"update benefit_rule set apply_order = -5 where rule_set_version_id = '{draft}' and rule_code = 'COV-0'");
+
+        var response = await client.PostAsJsonAsync($"plans/{plan}/versions/{draft}/publish", new { effectiveFrom = "2026-02-01" }, Cancel);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await Json(response);
+        Assert.Equal("RULE_INVALID", body.GetProperty("code").GetString());
+        var error = Assert.Single(body.GetProperty("errors").EnumerateArray());
+        Assert.Equal("rules", error.GetProperty("field").GetString());
+        Assert.StartsWith("COV-0:", error.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal("DRAFT", await api.Scalar<string>($"select status::text from rule_set_version where id = '{draft}'"));
+    }
+
     [Fact]
     public async Task Publishing_requires_a_date()
     {
@@ -266,6 +346,73 @@ public class RuleSetTests(ApiFactory api)
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Equal("EFFECTIVE_DATE_NOT_LATER", await Code(response));
+    }
+
+    // Q-B (docs/11-audit-and-roadmap.md): a version cannot take effect in the past.
+    [Fact]
+    public async Task Publishing_refuses_a_date_before_today()
+    {
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+        await Save(client, plan, draft, FullRules());
+
+        var response = await client.PostAsJsonAsync($"plans/{plan}/versions/{draft}/publish", new { effectiveFrom = "2025-12-31" }, Cancel);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await Json(response);
+        Assert.Equal("EFFECTIVE_DATE_NOT_LATER", body.GetProperty("code").GetString());
+        var error = Assert.Single(body.GetProperty("errors").EnumerateArray());
+        Assert.Equal("effectiveFrom", error.GetProperty("field").GetString());
+        Assert.Equal("It must be today, 01/01/2026, or later.", error.GetProperty("message").GetString());
+        Assert.Equal("DRAFT", await api.Scalar<string>($"select status::text from rule_set_version where id = '{draft}'"));
+    }
+
+    [Fact]
+    public async Task Publishing_with_today_as_the_date_is_allowed()
+    {
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+        await Save(client, plan, draft, FullRules());
+
+        var response = await client.PostAsJsonAsync($"plans/{plan}/versions/{draft}/publish", new { effectiveFrom = "2026-01-01" }, Cancel);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Today_is_the_date_in_Vietnam()
+    {
+        // 18:00 UTC on 31/12/2025 is 01:00 on 01/01/2026 in Vietnam.
+        api.Clock.Set(new DateTimeOffset(2025, 12, 31, 18, 0, 0, TimeSpan.Zero));
+        var plan = await NewPlan();
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+        await Save(client, plan, draft, FullRules());
+
+        var response = await client.PostAsJsonAsync($"plans/{plan}/versions/{draft}/publish", new { effectiveFrom = "2025-12-31" }, Cancel);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("EFFECTIVE_DATE_NOT_LATER", await Code(response));
+    }
+
+    [Theory]
+    [InlineData("2026-01-01", "2025-06-01", "It must be later than 01/01/2026.")]
+    [InlineData("2026-03-01", "2026-02-01", "It must be today, 01/03/2026, or later.")]
+    public async Task A_refused_date_names_the_bound_that_applies(string today, string date, string message)
+    {
+        var plan = await NewPlan();
+        await PublishFullVersion(plan, "2026-01-01");
+        api.Clock.SetToday(DateOnly.Parse(today, System.Globalization.CultureInfo.InvariantCulture));
+        var client = await api.SignedInAs(Staff.Admin);
+        var draft = await NewDraft(client, plan);
+        await Save(client, plan, draft, FullRules());
+
+        var response = await client.PostAsJsonAsync($"plans/{plan}/versions/{draft}/publish", new { effectiveFrom = date }, Cancel);
+
+        var error = Assert.Single((await Json(response)).GetProperty("errors").EnumerateArray());
+        Assert.Equal(message, error.GetProperty("message").GetString());
     }
 
     [Fact]
@@ -459,17 +606,23 @@ public class RuleSetTests(ApiFactory api)
         Limit("LIM-A", "ANNUAL"),
     ];
 
-    private static object Coverage(string code, string category) =>
-        new { ruleCode = code, ruleType = "COVERAGE", categoryCode = category, clauseText = "Covered.", applyOrder = 40 };
+    private static object Coverage(string code, string category, int order = 40) =>
+        new { ruleCode = code, ruleType = "COVERAGE", categoryCode = category, clauseText = "Covered.", applyOrder = order };
 
-    private static object Exclusion(string code, string category) =>
-        new { ruleCode = code, ruleType = "EXCLUSION", categoryCode = category, clauseText = "Excluded.", applyOrder = 30 };
+    private static object Exclusion(string code, string category, int order = 30) =>
+        new { ruleCode = code, ruleType = "EXCLUSION", categoryCode = category, clauseText = "Excluded.", applyOrder = order };
+
+    /// <summary>With no category, the waiting period covers every category, and the field is left out as the contract wants.</summary>
+    private static object Waiting(string code, int order = 20, string? category = null) =>
+        category is null
+            ? new { ruleCode = code, ruleType = "WAITING_PERIOD", clauseText = "Wait.", applyOrder = order, waitingDays = 30 }
+            : new { ruleCode = code, ruleType = "WAITING_PERIOD", categoryCode = category, clauseText = "Wait.", applyOrder = order, waitingDays = 30 };
 
     private static object Rate(string code, int rateBp = 8000) =>
         new { ruleCode = code, ruleType = "COINSURANCE", clauseText = "Rate.", applyOrder = 50, rateBp };
 
-    private static object Limit(string code, string scope) =>
-        new { ruleCode = code, ruleType = "LIMIT", clauseText = "Limit.", applyOrder = 60, limitAmount = 5_000_000L, limitScope = scope };
+    private static object Limit(string code, string scope, int order = 60) =>
+        new { ruleCode = code, ruleType = "LIMIT", clauseText = "Limit.", applyOrder = order, limitAmount = 5_000_000L, limitScope = scope };
 
     private static List<JsonElement> Rules(JsonElement version) => version.GetProperty("rules").EnumerateArray().ToList();
 

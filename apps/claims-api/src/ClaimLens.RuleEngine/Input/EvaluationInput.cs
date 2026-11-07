@@ -8,6 +8,10 @@ namespace ClaimLens.RuleEngine.Input;
 /// <param name="FirstEnrolledOn">The start of waiting periods; earlier than the coverage start after a renewal.</param>
 /// <param name="CoverageStart">Start of the policy year. Null for a sample claim, which has no policy.</param>
 /// <param name="CoverageEnd">End of the policy year. Null for a sample claim, which has no policy.</param>
+/// <param name="TerminatedOn">
+/// The first day a lapsed or terminated policy is no longer in force (policy.terminated_on). Null while the policy is
+/// active, and for a sample claim.
+/// </param>
 /// <param name="ConsumedBefore">Annual usage before this claim, in VND.</param>
 /// <param name="Lines">Expense lines with their accepted category.</param>
 /// <param name="Rules">Every rule of one rule-set version.</param>
@@ -16,6 +20,7 @@ public sealed record EvaluationInput(
     DateOnly FirstEnrolledOn,
     DateOnly? CoverageStart,
     DateOnly? CoverageEnd,
+    DateOnly? TerminatedOn,
     long ConsumedBefore,
     IReadOnlyList<LineInput> Lines,
     IReadOnlyList<RuleInput> Rules);

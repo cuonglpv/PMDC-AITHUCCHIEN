@@ -52,8 +52,11 @@ public static class UpdateRuleSet
             .Where(rule => rule.RuleSetVersionId == version.Id)
             .ToListAsync(cancel);
         var eligibility = kept.FirstOrDefault(rule => rule.RuleType == RuleType.Eligibility);
+        var system = eligibility is null
+            ? new OrderedRule(RuleSetRules.EligibilityCode, RuleType.Eligibility, RuleSetRules.EligibilityOrder)
+            : new OrderedRule(eligibility.RuleCode, RuleType.Eligibility, eligibility.ApplyOrder);
 
-        var problems = RuleSetRules.Check(inputs, active, eligibility?.RuleCode ?? RuleSetRules.EligibilityCode);
+        var problems = RuleSetRules.Check(inputs, active, system);
         if (problems is not null)
         {
             return Problems.Of(context, StatusCodes.Status422UnprocessableEntity, problems.Code, problems.Title, problems.Errors);

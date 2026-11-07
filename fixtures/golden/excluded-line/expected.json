@@ -7,6 +7,7 @@
       "firstEnrolledOn": "2024-01-01",
       "coverageStart": "2026-01-01",
       "coverageEnd": "2026-12-31",
+      "terminatedOn": null,
       "consumedBefore": 0,
       "lines": [
         { "lineNo": 1, "categoryCode": "CONSULTATION", "claimedAmount": 300000 },

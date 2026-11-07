@@ -32,6 +32,18 @@ export function formatDateTime(moment: string | null | undefined): string {
   return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`;
 }
 
+/** Today's business date, `YYYY-MM-DD`, in Vietnam whatever the browser's time zone. The API uses the same day. */
+export function todayInVietnam(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 /** Basis points as a percentage: 8000 is 80%. */
 export function formatRate(rateBp: number | null | undefined): string {
   return rateBp === null || rateBp === undefined ? "—" : `${rateBp / 100}%`;
