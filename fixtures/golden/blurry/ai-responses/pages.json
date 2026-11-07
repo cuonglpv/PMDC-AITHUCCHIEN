@@ -1,0 +1,63 @@
+[
+  {
+    "document": "receipt-blurry.jpg",
+    "pageNo": 1,
+    "pageHash": "4771414113454549",
+    "pageSharpness": 3.47,
+    "pageCheck": {
+      "pageType": "RECEIPT",
+      "typeConfidence": 0.64,
+      "qualityScore": 0.31
+    },
+    "fields": [
+      {
+        "fieldKey": "provider_name",
+        "itemNo": 0,
+        "value": "Phòng khám Đa khoa Hồng Ngọc",
+        "confidence": 0.61,
+        "bbox": {
+          "x": 0.097,
+          "y": 0.07,
+          "w": 0.459,
+          "h": 0.02
+        }
+      },
+      {
+        "fieldKey": "service_date",
+        "itemNo": 0,
+        "value": "12/10/2026",
+        "confidence": 0.52,
+        "bbox": {
+          "x": 0.359,
+          "y": 0.202,
+          "w": 0.283,
+          "h": 0.019
+        }
+      },
+      {
+        "fieldKey": "invoice_number",
+        "itemNo": 0,
+        "value": "HN-0045821",
+        "confidence": 0.48,
+        "bbox": {
+          "x": 0.453,
+          "y": 0.298,
+          "w": 0.12,
+          "h": 0.019
+        }
+      },
+      {
+        "fieldKey": "invoice_total",
+        "itemNo": 0,
+        "value": "1.400.000",
+        "confidence": 0.55,
+        "bbox": {
+          "x": 0.18,
+          "y": 0.333,
+          "w": 0.208,
+          "h": 0.022
+        }
+      }
+    ]
+  }
+]

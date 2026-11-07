@@ -120,6 +120,10 @@ services:
       DOCUMENT_AI_STORAGE_ENDPOINT: http://storage:8333
       DOCUMENT_AI_STORAGE_ACCESS_KEY: local-document-ai
       DOCUMENT_AI_STORAGE_SECRET_KEY: local-document-ai-secret
+      # The fake gateway replays the recorded answers for the golden pages (fixtures/golden/README.md).
+      DOCUMENT_AI_REPLAY_DIR: /golden
+    volumes:
+      - ../fixtures/golden:/golden:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8001/health')"]
       interval: 10s

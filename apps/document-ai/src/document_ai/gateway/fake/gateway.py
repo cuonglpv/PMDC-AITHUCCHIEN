@@ -1,8 +1,9 @@
 """
 A gateway that calls no provider, for local work and tests while the provider is still open.
 
-Its answers are the careful ones: every value is left for a person, so nothing is auto-accepted. Replaying recorded
-answers for the golden scenarios arrives with fixtures/golden/*/ai-responses.
+Its answers are the careful ones: every value is left for a person, so nothing is auto-accepted. With a replay book
+(DOCUMENT_AI_REPLAY_DIR), a page whose image is a recorded golden page gets the answer recorded in
+fixtures/golden/*/ai-responses instead, so the full stack and the e2e tests show real-looking AI results.
 """
 
 from document_ai.contracts.models import MappingCategory, MappingLine, ModelRef, SummaryFact
@@ -13,16 +14,35 @@ from document_ai.gateway.ports import (
     SentenceAnswer,
     SignalAnswer,
 )
+from document_ai.golden.fingerprint import NotAnImage, fingerprint
+from document_ai.golden.replay import RecordedPage, ReplayBook
 
 
 class FakeGateway:
+    def __init__(self, replay: ReplayBook | None = None) -> None:
+        self.replay = replay
+
+    def _recorded(self, image: bytes) -> RecordedPage | None:
+        if self.replay is None:
+            return None
+        try:
+            return self.replay.find(fingerprint(image))
+        except NotAnImage:
+            return None
+
     def check_page(self, model: ModelRef, image: bytes) -> PageAnswer:
+        recorded = self._recorded(image)
+        if recorded is not None:
+            return recorded.page
         return PageAnswer(page_type="OTHER", type_confidence=0.5, quality_score=0.9)
 
     def read_fields(
         self, model: ModelRef, page_type: str | None, image: bytes, catalogue: list[str]
     ) -> list[FieldAnswer]:
-        return []
+        recorded = self._recorded(image)
+        if recorded is None:
+            return []
+        return [field for field in recorded.fields if field.field_key in catalogue]
 
     def map_lines(
         self, model: ModelRef, lines: list[MappingLine], categories: list[MappingCategory]
