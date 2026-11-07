@@ -42,8 +42,9 @@ public static class GetPage
             return Requests.NotFound(context);
         }
 
-        // Private: the image is claim data, so no shared cache may keep it.
-        context.Response.Headers.CacheControl = "private";
+        // Claim data: no shared cache may keep it, and neither may the browser's disk cache, which would outlive the
+        // sign-out on a shared workstation.
+        context.Response.Headers.CacheControl = "private, no-store";
         return Results.File(image, "image/png");
     }
 }

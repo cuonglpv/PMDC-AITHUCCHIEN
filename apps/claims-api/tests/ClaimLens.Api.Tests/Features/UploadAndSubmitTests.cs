@@ -71,6 +71,7 @@ public sealed partial class UploadAndSubmitTests : IDisposable
         var thumbnail = await client.GetAsync($"claims/{claim}/pages/{Id(page)}/image?variant=thumbnail", Cancel);
         Assert.Equal("image/png", full.Content.Headers.ContentType!.MediaType);
         Assert.True(full.Headers.CacheControl!.Private);
+        Assert.True(full.Headers.CacheControl.NoStore, "A page image must not stay in the browser's cache after sign-out.");
         Assert.Equal((600, 300), Size(await full.Content.ReadAsByteArrayAsync(Cancel)));
         Assert.Equal((240, 120), Size(await thumbnail.Content.ReadAsByteArrayAsync(Cancel)));
     }
@@ -463,9 +464,12 @@ public sealed partial class UploadAndSubmitTests : IDisposable
         var client = await api.SignedInAs(Staff.Intake);
         var older = await NewDraftAsync(api, client);
         var newer = await NewDraftAsync(api, client);
+        var submittedFirst = await NewDraftAsync(api, client);
         var submitted = await NewDraftAsync(api, client);
+        await UploadedAsync(client, submittedFirst, TestFiles.Png(), "r.png");
         await UploadedAsync(client, submitted, TestFiles.Png(), "r.png");
         await api.PrepareDocumentsAsync();
+        (await client.PostAsync($"claims/{submittedFirst}/submit", null, Cancel)).EnsureSuccessStatusCode();
         (await client.PostAsync($"claims/{submitted}/submit", null, Cancel)).EnsureSuccessStatusCode();
         var someoneElses = await SomeoneElsesDraftAsync();
 
@@ -476,7 +480,9 @@ public sealed partial class UploadAndSubmitTests : IDisposable
         Assert.True(draftIds.IndexOf(newer) < draftIds.IndexOf(older) && draftIds.IndexOf(newer) >= 0);
         Assert.DoesNotContain(submitted, draftIds);
         Assert.DoesNotContain(someoneElses, draftIds);
-        Assert.Equal(submitted, Id(submissions.GetProperty("items")[0]));
+        // Only this test's own claims are compared: rows other tests inserted carry the database's clock, not the API's.
+        var submittedIds = submissions.GetProperty("items").EnumerateArray().Select(Id).ToList();
+        Assert.True(submittedIds.IndexOf(submitted) >= 0 && submittedIds.IndexOf(submitted) < submittedIds.IndexOf(submittedFirst));
 
         var counts = drafts.GetProperty("counts");
         Assert.Equal(await Mine("status = 'DRAFT'"), counts.GetProperty("MY_DRAFTS").GetInt32());
