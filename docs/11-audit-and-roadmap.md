@@ -39,7 +39,14 @@ Mức độ: **Major** = có thể trả sai tiền, lộ/giả mạo dữ liệ
 | F-07 | Minor | [Startup.cs:43-51](../apps/claims-api/src/ClaimLens.Api/Startup.cs#L43) | Không kiểm `Auth:SigningKey` lúc khởi động (rỗng hoặc ngắn → lần đăng nhập đầu mới 500); JWT không có `iss`/`aud`. | `ValidateOnStart` cho `AuthOptions` (key ≥ 32 byte, `AllowedOrigins` không rỗng); thêm issuer/audience. |
 | F-08 | Minor | [SignInThrottle.cs:12](../apps/claims-api/src/ClaimLens.Api/AccessControl/SignInThrottle.cs#L12) | Từ điển đếm lần sai không bao giờ dọn; gửi email ngẫu nhiên liên tục làm bộ nhớ tăng mãi. | Dọn cửa sổ đã hết hạn khi ghi, hoặc dùng `MemoryCache` có hạn kích thước. |
 
-### Cần quyết định nghiệp vụ (không tự sửa)
+### Quyết định nghiệp vụ
+
+**Đã chốt (07/11/2026):**
+
+- **Q-A:** thêm `policy.terminated_on` (bắt buộc khi status khác `ACTIVE`). `ELIG-01` coi policy hết hiệu lực từ ngày đó.
+- **Q-B:** không cho publish với ngày hiệu lực trước hôm nay (giờ Việt Nam), và vẫn phải sau version hiện tại. Lý do: đây là cách đơn giản và an toàn nhất, và DB chưa có claim nào nên không có claim cũ bị ảnh hưởng. Cả hai quyết định được làm cùng task A.
+
+Bảng dưới giữ câu hỏi gốc:
 
 | ID | Câu hỏi | Hiện trạng | Đề xuất mặc định |
 |---|---|---|---|
@@ -97,8 +104,8 @@ Ba task độc lập, mỗi task một worktree và một nhánh, không đụng
 
 | Task | Gồm | File chính |
 |---|---|---|
-| **A. Thứ tự rule an toàn** | F-01, F-01b | `ClaimLens.RuleEngine`, `Features/RuleSets/RuleSetRules.cs`, `apps/web/src/features/plans/editor/*`, seed mới, `docs/03-use-cases.md` (BR-05) |
-| **B. Gia cố nền tảng API và DB** | F-02 … F-08 | `Startup.cs`, `Http/*`, `AccessControl/*`, `db/migrations/0007_*`, `infra/compose.yaml`, test tương ứng |
+| **A. Thứ tự rule an toàn** | F-01, F-01b, Q-A, Q-B | `ClaimLens.RuleEngine`, `Features/RuleSets/*`, `apps/web/src/features/plans/editor/*`, `db/migrations/0008_*`, seed mới, DBML, `docs/03`, `docs/08`, khối `policy` trong `docs/06` |
+| **B. Gia cố nền tảng API và DB** | F-02 … F-08 | `Startup.cs`, `Http/*`, `AccessControl/*`, `db/migrations/0007_*`, `infra/compose.yaml`, test tương ứng. Hai task dùng hai số migration khác nhau (0007, 0008) nên merge theo thứ tự nào cũng được |
 | **C. Đồng bộ tài liệu với code** | D-01 … D-07 | `README.md`, `docs/04`, `docs/06`, `docs/10`, `docs/architecture/c4/README.md` |
 
 Thứ tự merge khuyến nghị: B và A trước Slice 1 (Slice 1 cần F-03 và F-04), C bất cứ lúc nào.
@@ -112,7 +119,7 @@ Còn **16 story Must / 74 điểm**. Chia 6 slice theo phụ thuộc giữa các
 | Việc | Vì sao | Khi nào |
 |---|---|---|
 | Merge task A, B | F-03 chặn mọi thao tác đọc có audit; F-04 chặn bảng mới | Trước Slice 1 |
-| Trả lời Q-A, Q-B | Ảnh hưởng `EvaluationInput` và hộp publish | Trước Slice 4b |
+| ~~Trả lời Q-A, Q-B~~ | Đã chốt 07/11, làm trong task A | — |
 | `tools/golden`: sinh tài liệu tổng hợp (HTML → PDF/PNG bằng headless Chrome) cho 7 kịch bản | Definition of Done chạy trên 7 golden case; Slice 1–2 cần file `clean`, `blurry` | Trong Slice 1 |
 | Spike nhà cung cấp AI (tiếng Việt có dấu, bounding box, confidence có đỡ được ngưỡng 0.95) | [10 §6](10-code-structure.md#6-document-ai-service): "needs a spike before US05" | Song song Slice 1, xong trước Slice 2 |
 | NFR tối thiểu (log, lưu giữ tài liệu, thời gian phản hồi) | Còn mở từ README | Trước lần deploy đầu |
