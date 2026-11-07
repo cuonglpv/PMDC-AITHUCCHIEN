@@ -20,49 +20,98 @@ public sealed class DocumentPreparer(
     IDocumentStore store,
     IDocumentConverter converter,
     PageRenderer renderer,
+    PreparationAttempts attempts,
     AiJobQueue ai,
     IOptions<LimitsOptions> limits,
     TimeProvider clock,
     ILogger<DocumentPreparer> logger)
 {
-    /// <summary>True when a document was prepared or rejected, false when none was waiting.</summary>
+    /// <summary>What the officer reads when a file failed for reasons outside it until no attempt was left.</summary>
+    public const string GaveUpReason = "The file could not be processed. Upload it again.";
+
+    /// <summary>
+    /// True when a document was prepared, rejected or put back to wait after a failure; false when none was waiting.
+    /// </summary>
     public async Task<bool> PrepareNextAsync(CancellationToken cancel)
     {
         // The row lock is held through the conversion. If the process dies, the lock dies with it and the next pass
         // retries the file, so no column records who is working on it (docs/10-code-structure.md, section 4).
+        // A file waiting out a failure is skipped, so it does not hold up the files behind it.
+        var waiting = attempts.Waiting();
+        var transaction = await db.Database.BeginTransactionAsync(cancel);
+        Document? document = null;
+        try
+        {
+            document = (await db.Documents
+                    .FromSql($"""
+                        select * from document
+                        where status = 'CONVERTING' and id <> all({waiting})
+                        order by uploaded_at, id
+                        limit 1
+                        for update skip locked
+                        """)
+                    .ToListAsync(cancel))
+                .FirstOrDefault();
+            if (document is null)
+            {
+                return false;
+            }
+
+            var outcome = await PrepareAsync(document, cancel);
+            if (outcome is Rejected rejected)
+            {
+                Reject(document, rejected.Reason);
+            }
+            else if (await NumberAndStoreAsync(document, (Prepared)outcome, cancel) is { } overLimit)
+            {
+                Reject(document, overLimit);
+            }
+
+            await db.SaveChangesAsync(cancel);
+            await transaction.CommitAsync(cancel);
+            attempts.Done(document.Id);
+            return true;
+        }
+        catch (Exception error) when (document is not null && !(error is OperationCanceledException && cancel.IsCancellationRequested))
+        {
+            // Not the file's fault, as far as the API can tell: the converter or storage is down, or the database
+            // refused the write. The file waits and the worker goes on; past the last attempt it is rejected.
+            await transaction.DisposeAsync();
+            db.ChangeTracker.Clear();
+            if (attempts.Failed(document.Id))
+            {
+                logger.LogWarning(error, "Document {DocumentId} failed on its last attempt and is rejected", document.Id);
+                await GiveUpAsync(document.Id, cancel);
+            }
+            else
+            {
+                logger.LogWarning(error, "Document {DocumentId} could not be prepared; it will be tried again", document.Id);
+            }
+
+            return true;
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+        }
+    }
+
+    private async Task GiveUpAsync(Guid documentId, CancellationToken cancel)
+    {
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var document = (await db.Documents
-                .FromSql($"""
-                    select * from document
-                    where status = 'CONVERTING'
-                    order by uploaded_at, id
-                    limit 1
-                    for update skip locked
-                    """)
+                .FromSql($"select * from document where id = {documentId} and status = 'CONVERTING' for update skip locked")
                 .ToListAsync(cancel))
             .FirstOrDefault();
         if (document is null)
         {
-            return false;
+            // Removed by the officer, or another worker has it now.
+            return;
         }
 
-        var outcome = await PrepareAsync(document, cancel);
-        if (outcome is Rejected rejected)
-        {
-            Reject(document, rejected.Reason);
-        }
-        else
-        {
-            var prepared = (Prepared)outcome;
-            if (await NumberAndStoreAsync(document, prepared, cancel) is { } overLimit)
-            {
-                Reject(document, overLimit);
-            }
-        }
-
+        Reject(document, GaveUpReason);
         await db.SaveChangesAsync(cancel);
         await transaction.CommitAsync(cancel);
-        return true;
     }
 
     private abstract record Outcome;

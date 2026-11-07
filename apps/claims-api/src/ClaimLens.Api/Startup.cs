@@ -67,6 +67,7 @@ public static class Startup
             });
         services.AddSingleton<PageRenderer>();
         services.AddSingleton<PreparationSignal>();
+        services.AddSingleton<PreparationAttempts>();
         services.AddScoped<DocumentPreparer>();
         services.AddHostedService<DocumentPreparationWorker>();
 

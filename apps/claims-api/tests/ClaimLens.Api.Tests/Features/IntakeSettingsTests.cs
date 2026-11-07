@@ -20,6 +20,8 @@ public class IntakeSettingsTests(ApiFactory api)
     [InlineData("Limits:MaxPagesPerClaim", "31", typeof(LimitsOptions))]
     [InlineData("Workers:DocumentPreparation:PollIntervalSeconds", "0", typeof(WorkersOptions))]
     [InlineData("Workers:DocumentPreparation:ConcurrentRuns", "0", typeof(WorkersOptions))]
+    [InlineData("Workers:DocumentPreparation:MaxAttempts", "0", typeof(WorkersOptions))]
+    [InlineData("Workers:DocumentPreparation:RetryDelaySeconds", "-1", typeof(WorkersOptions))]
     [InlineData("Ai:PageCheck:Name", "", typeof(AiOptions))]
     [InlineData("Ai:FieldExtraction:Version", "", typeof(AiOptions))]
     [InlineData("Queue:HighValueThreshold", "0", typeof(QueueOptions))]

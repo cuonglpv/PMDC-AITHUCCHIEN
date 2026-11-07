@@ -19,6 +19,15 @@ public sealed class WorkerSettings
     public double PollIntervalSeconds { get; set; } = 2;
 
     public int ConcurrentRuns { get; set; } = 1;
+
+    /// <summary>
+    /// Document Preparation only: how many times a file is tried when something other than the file fails, such as the
+    /// converter or storage being down, before the file is rejected.
+    /// </summary>
+    public int MaxAttempts { get; set; } = 5;
+
+    /// <summary>The wait after the first such failure; it doubles after each one, up to 15 minutes.</summary>
+    public double RetryDelaySeconds { get; set; } = 10;
 }
 
 public sealed class WorkersOptionsValidator : IValidateOptions<WorkersOptions>
@@ -46,6 +55,16 @@ public sealed class WorkersOptionsValidator : IValidateOptions<WorkersOptions>
         if (settings.ConcurrentRuns is < 1 or > 16)
         {
             failures.Add($"Workers:{worker}:ConcurrentRuns must be between 1 and 16.");
+        }
+
+        if (settings.MaxAttempts is < 1 or > 50)
+        {
+            failures.Add($"Workers:{worker}:MaxAttempts must be between 1 and 50.");
+        }
+
+        if (settings.RetryDelaySeconds is < 0 or > 3600)
+        {
+            failures.Add($"Workers:{worker}:RetryDelaySeconds must be between 0 and 3600.");
         }
     }
 }

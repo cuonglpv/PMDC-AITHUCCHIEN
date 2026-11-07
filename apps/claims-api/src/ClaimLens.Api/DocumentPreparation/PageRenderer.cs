@@ -22,6 +22,11 @@ public sealed class PageRenderer
     /// <summary>A phone photo can be 8000 px wide; the page image keeps the long side at or under this.</summary>
     public const int MaxSide = 3000;
 
+    /// <summary>
+    /// The most pixels a photo is decoded at, about 200 MB of memory. A 20 MB file can declare far more than this.
+    /// </summary>
+    public const long MaxDecodedPixels = 50_000_000;
+
     /// <summary>The document rail's width for a page thumbnail.</summary>
     public const int ThumbnailWidth = 240;
 
@@ -82,11 +87,40 @@ public sealed class PageRenderer
     {
         using var data = SKData.CreateCopy(image);
         using var codec = SKCodec.Create(data) ?? throw new UnreadableFileException("The image could not be read.");
-        using var decoded = SKBitmap.Decode(codec) ?? throw new UnreadableFileException("The image could not be read.");
+        var size = DecodeSize(codec);
+        using var decoded = SKBitmap.Decode(codec, codec.Info.WithSize(size))
+            ?? throw new UnreadableFileException("The image could not be read.");
         using var upright = Upright(decoded, codec.EncodedOrigin);
         using var page = Fit(upright, MaxSide);
         return Encode(page ?? upright);
     }
+
+    /// <summary>
+    /// The size to decode at, read from the header before any pixel is decoded. Above <see cref="MaxDecodedPixels"/> a
+    /// JPEG is decoded at a smaller scale, which its codec does as it reads; a format that cannot do that is refused.
+    /// </summary>
+    public static SKSizeI DecodeSize(SKCodec codec)
+    {
+        var declared = new SKSizeI(codec.Info.Width, codec.Info.Height);
+        if (Pixels(declared) <= MaxDecodedPixels)
+        {
+            return declared;
+        }
+
+        for (var scale = (float)Math.Sqrt(MaxDecodedPixels / (double)Pixels(declared)); scale > 0.01f; scale /= 2)
+        {
+            var scaled = codec.GetScaledDimensions(scale);
+            if (scaled.Width > 0 && scaled.Height > 0 && Pixels(scaled) <= MaxDecodedPixels)
+            {
+                return scaled;
+            }
+        }
+
+        throw new UnreadableFileException(
+            $"The image is too large to read: it has {Pixels(declared) / 1_000_000} megapixels and at most {MaxDecodedPixels / 1_000_000} megapixels are accepted.");
+    }
+
+    private static long Pixels(SKSizeI size) => (long)size.Width * size.Height;
 
     private static RenderedPage Encode(SKBitmap page)
     {
