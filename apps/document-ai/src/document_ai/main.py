@@ -7,12 +7,13 @@ from document_ai.config import Settings
 from document_ai.errors import add_error_handlers
 from document_ai.gateway.fake.gateway import FakeGateway
 from document_ai.gateway.ports import ModelGateway
+from document_ai.golden.replay import ReplayBook
 from document_ai.pages.reader import PageReader, S3PageReader
 
 
 def _build_gateway(settings: Settings) -> ModelGateway:
     if settings.gateway == "fake":
-        return FakeGateway()
+        return FakeGateway(ReplayBook.load(settings.replay_dir) if settings.replay_dir else None)
     raise ValueError(f"Unknown gateway: {settings.gateway}. No provider has been chosen yet.")
 
 

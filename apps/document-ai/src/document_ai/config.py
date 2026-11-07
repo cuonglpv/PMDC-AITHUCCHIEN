@@ -12,3 +12,5 @@ class Settings(BaseSettings):
     storage_bucket: str = "claimlens"
     storage_access_key: str = ""
     storage_secret_key: str = ""
+    # The folder of recorded golden answers (fixtures/golden) for the fake gateway. Unset or empty: no replay.
+    replay_dir: str | None = None
