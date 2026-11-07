@@ -23,7 +23,8 @@ public static class Startup
         var services = builder.Services;
 
         services.AddSingleton(TimeProvider.System);
-        services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+        services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection("Auth")).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
         services.Configure<ReleaseOptions>(builder.Configuration.GetSection("Release"));
 
         services.AddDbContext<ClaimLensDbContext>(options =>
@@ -48,8 +49,10 @@ public static class Startup
                 jwt.MapInboundClaims = false;
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    ValidateIssuer = true,
+                    ValidIssuer = auth.Value.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = auth.Value.Audience,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                     ClockSkew = TimeSpan.Zero,
@@ -62,21 +65,36 @@ public static class Startup
                 };
             });
 
-        services.Configure<ForwardedHeadersOptions>(options =>
-        {
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-            options.KnownIPNetworks.Clear();
-            options.KnownProxies.Clear();
-            foreach (var proxy in builder.Configuration.GetSection("Proxy:KnownProxies").Get<string[]>() ?? [])
+        // Only the proxies named here may say who the client is (infra/compose.yaml sets them for the full stack).
+        services
+            .AddOptions<ForwardedHeadersOptions>()
+            .Configure<IConfiguration>((options, configuration) =>
             {
-                options.KnownProxies.Add(IPAddress.Parse(proxy));
-            }
-        });
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+                options.KnownIPNetworks.Clear();
+                options.KnownProxies.Clear();
+                foreach (var proxy in configuration.GetSection("Proxy:KnownProxies").Get<string[]>() ?? [])
+                {
+                    options.KnownProxies.Add(IPAddress.Parse(proxy));
+                }
+
+                foreach (var network in configuration.GetSection("Proxy:KnownNetworks").Get<string[]>() ?? [])
+                {
+                    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+                }
+            });
     }
 
     public static void UseClaimLens(this WebApplication app)
     {
-        app.UseForwardedHeaders();
+        // With both lists empty ASP.NET Core would believe X-Forwarded-For from any caller, who could then forge
+        // audit_event.ip_address and dodge the per-address sign-in limit. So no trusted proxy means no forwarded headers.
+        var forwarded = app.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;
+        if (forwarded.KnownProxies.Count > 0 || forwarded.KnownIPNetworks.Count > 0)
+        {
+            app.UseForwardedHeaders();
+        }
+
         app.UseMiddleware<RequestIdMiddleware>();
         app.UseMiddleware<ErrorMiddleware>();
         app.UseAuthentication();

@@ -76,6 +76,26 @@ public static class MigrationRunner
                 throw new InvalidOperationException("A seed script failed.", result.Error);
             }
         }
+
+        // The seed journal is the runner's bookkeeping, like schema_migration. The owner creates it after 0007, so the
+        // default privileges there would hand it to the app.
+        using var connection = new NpgsqlConnection(ownerConnection);
+        connection.Open();
+        using var revoke = new NpgsqlCommand(
+            """
+            revoke all on schema_seed from claimlens_app;
+            do $$
+            declare
+              journal_sequence text := pg_get_serial_sequence('schema_seed', 'schemaversionsid');
+            begin
+              if journal_sequence is not null then
+                execute format('revoke all on sequence %s from claimlens_app', journal_sequence);
+              end if;
+            end;
+            $$;
+            """,
+            connection);
+        revoke.ExecuteNonQuery();
     }
 
     private static void SetAppPassword(string ownerConnection, string appConnection)

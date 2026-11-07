@@ -3,6 +3,7 @@ using ClaimLens.Api.Audit;
 using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Domain.Enums;
 using ClaimLens.Api.Persistence;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,8 @@ namespace ClaimLens.Api.Http;
 /// <summary>
 /// Enforces x-claimlens on every operation. It is middleware rather than an endpoint filter so it runs before
 /// model binding: a caller who may not use an operation never learns anything from its validation errors.
-/// Order: release, role, scope, status, handler, read audit (docs/10-code-structure.md, section 4).
+/// Order: release, role, scope, status, handler, read audit (docs/10-code-structure.md, section 4). A read's body is
+/// held back until its audit event is saved.
 /// </summary>
 public sealed class OperationPolicyMiddleware(RequestDelegate next)
 {
@@ -33,12 +35,36 @@ public sealed class OperationPolicyMiddleware(RequestDelegate next)
             return;
         }
 
-        await next(context);
+        if (policy.Audit != AuditKind.Read)
+        {
+            await next(context);
+            return;
+        }
 
-        if (policy.Audit == AuditKind.Read && context.Response.StatusCode is >= 200 and < 300)
+        // The data of a read leaves only after its audit event is saved (BR-12). The handler writes into a buffer, so a
+        // failed insert still lets ErrorMiddleware answer with an error instead of the claim's data. getPage is an
+        // image of at most one page, so memory is enough; a temporary file would put claim data on disk.
+        var server = context.Features.GetRequiredFeature<IHttpResponseBodyFeature>();
+        using var buffer = new MemoryStream();
+        var buffering = new StreamResponseBodyFeature(buffer, server);
+        context.Features.Set<IHttpResponseBodyFeature>(buffering);
+        try
+        {
+            await next(context);
+            await buffering.CompleteAsync();
+        }
+        finally
+        {
+            context.Features.Set(server);
+        }
+
+        if (context.Response.StatusCode is >= 200 and < 300)
         {
             await RecordReadAsync(context, db, policy);
         }
+
+        buffer.Position = 0;
+        await buffer.CopyToAsync(context.Response.Body, context.RequestAborted);
     }
 
     private static async Task<IResult?> CheckAsync(
