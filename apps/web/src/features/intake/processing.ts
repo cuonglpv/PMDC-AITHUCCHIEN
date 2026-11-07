@@ -1,16 +1,47 @@
-import type { ClaimStatusSnapshot, Document, DocumentPage } from "@/lib/api/types";
+import type { AiRunState, AiTask, ClaimDetail, ClaimStatusSnapshot, Document, DocumentPage } from "@/lib/api/types";
 
-export const POLL_INTERVAL_MS = 3_000;
+/** Typed as a number, not the literal 3000, so a test can poll faster. */
+export const POLL_INTERVAL_MS: number = 3_000;
 
 const pageWaiting = (page: { aiStatus: DocumentPage["aiStatus"] }) => page.aiStatus === "QUEUED" || page.aiStatus === "READING";
 const fileBusy = (document: { status: Document["status"] }) =>
   document.status === "UPLOADING" || document.status === "CONVERTING";
 
-/** Whether to keep polling: a file is still converting, or a page check is queued or running. */
+/** The AI work that SCR-13 waits for: the page check before submission and the field extraction after it. */
+const INTAKE_TASKS: readonly AiTask[] = ["PAGE_CHECK", "FIELD_EXTRACTION"];
+const runActive = (run: AiRunState) => run.status === "QUEUED" || run.status === "RUNNING";
+
+/**
+ * Whether to keep polling: a file is still converting, a page check or the field extraction is queued or running, or
+ * the submitted claim is still `PROCESSING`. Polling stops once nothing runs.
+ */
 export function isProcessing(snapshot: ClaimStatusSnapshot): boolean {
   return (
+    snapshot.status === "PROCESSING" ||
     snapshot.documents.some((document) => fileBusy(document) || document.pages.some(pageWaiting)) ||
-    snapshot.aiRuns.some((run) => run.task === "PAGE_CHECK" && (run.status === "QUEUED" || run.status === "RUNNING"))
+    snapshot.aiRuns.some((run) => INTAKE_TASKS.includes(run.task) && runActive(run))
+  );
+}
+
+/** The most recently requested run of a task in the poll, or undefined when there is none. */
+export function latestRun(snapshot: ClaimStatusSnapshot | undefined, task: AiTask): AiRunState | undefined {
+  return snapshot?.aiRuns
+    .filter((run) => run.task === task)
+    .reduce<AiRunState | undefined>(
+      (latest, run) => (!latest || Date.parse(run.requestedAt) > Date.parse(latest.requestedAt) ? run : latest),
+      undefined,
+    );
+}
+
+/**
+ * The fallback banner (US04): the API says an AI run failed (`fallbackActive` on the claim or the poll), or the latest
+ * page check failed. The work continues by hand and nothing is blocked.
+ */
+export function isFallbackActive(claim: ClaimDetail, snapshot: ClaimStatusSnapshot | undefined): boolean {
+  return (
+    claim.ai.fallbackActive ||
+    Boolean(snapshot?.fallbackActive) ||
+    latestRun(snapshot, "PAGE_CHECK")?.status === "FAILED"
   );
 }
 

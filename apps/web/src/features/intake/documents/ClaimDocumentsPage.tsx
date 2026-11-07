@@ -13,12 +13,20 @@ import { api } from "@/lib/api/client";
 import { ApiProblem, expectNoContent, unwrap } from "@/lib/api/problem";
 import type { ClaimDetail, Document, Warning } from "@/lib/api/types";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { INTAKE_FALLBACK_LABEL } from "@/lib/labels/ai";
 import { CHANNEL_LABEL, CLAIM_STATUS_LABEL, CLAIM_STATUS_TONE, WARNING_LABEL } from "@/lib/labels/claims";
 import { UPLOAD_ACCEPT } from "@/lib/labels/documents";
 import { IntakeStepper } from "../IntakeStepper";
 import { selectionFromClaim } from "../new-claim/claim-form";
 import { PolicyCard, Row } from "../PolicyCard";
-import { isListBehind, isWaitingForAi, submitBlock, SUBMIT_BLOCK_LABEL, withLiveState } from "../processing";
+import {
+  isFallbackActive,
+  isListBehind,
+  isWaitingForAi,
+  submitBlock,
+  SUBMIT_BLOCK_LABEL,
+  withLiveState,
+} from "../processing";
 import { intakeKeys, useClaim, useClaimStatus, useClaimWarnings, useDocuments } from "../queries";
 import { DocumentRow, problemMessage, UploadRow } from "./FileRows";
 import { PageCard } from "./PageCard";
@@ -50,7 +58,8 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
   const [removeErrors, setRemoveErrors] = useState<Record<string, ApiProblem>>({});
 
   const snapshot = status.data;
-  const draft = (snapshot?.status ?? claim.status) === "DRAFT";
+  const claimStatus = snapshot?.status ?? claim.status;
+  const draft = claimStatus === "DRAFT";
   const canUpload = draft && claim.allowedActions.includes("UPLOAD_DOCUMENT");
   // Submit is on offer when the API allows it, or names only why it is not open yet (a file still converting, nothing
   // ready). The detail is not polled, so the button must not wait for it to change; its disabled state follows the poll.
@@ -61,6 +70,8 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
   const canEdit = draft && claim.allowedActions.includes("EDIT_CLAIM");
 
   // The poll is the fresher source: when it knows of a converted file, new pages or a new claim status, reload those.
+  // After submission that is how the read-only view learns the extraction finished (Needs verification or Ready for
+  // review) and whether it fell back to manual work.
   useEffect(() => {
     if (!snapshot) {
       return;
@@ -152,9 +163,7 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
             </Link>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <h1 className="font-mono text-xl font-medium">{claim.claimNumber}</h1>
-              <StatusPill tone={CLAIM_STATUS_TONE[snapshot?.status ?? claim.status]}>
-                {CLAIM_STATUS_LABEL[snapshot?.status ?? claim.status]}
-              </StatusPill>
+              <StatusPill tone={CLAIM_STATUS_TONE[claimStatus]}>{CLAIM_STATUS_LABEL[claimStatus]}</StatusPill>
             </div>
             <p className="mt-1 text-[13px] text-on-surface-muted">
               {claim.submittedAt ? `Submitted ${formatDateTime(claim.submittedAt)}. ` : ""}
@@ -164,9 +173,9 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
         )}
       </header>
 
-      {snapshot?.fallbackActive && (
+      {isFallbackActive(claim, snapshot) && (
         <div className="mt-4">
-          <FallbackBanner>AI assistance unavailable. Page checks do not run; the claim can still be submitted.</FallbackBanner>
+          <FallbackBanner>{draft ? INTAKE_FALLBACK_LABEL.DRAFT : INTAKE_FALLBACK_LABEL.SUBMITTED}</FallbackBanner>
         </div>
       )}
 
@@ -196,7 +205,7 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
 
           {submit.isSuccess && (
             <p role="status" className="rounded-sm bg-success-container px-4 py-3 text-[13px] text-success">
-              Claim submitted. It is now processing.
+              {claimStatus === "PROCESSING" ? "Claim submitted. It is now processing." : "Claim submitted."}
             </p>
           )}
 
@@ -258,7 +267,7 @@ function ClaimDocuments({ claim }: { claim: ClaimDetail }) {
               </h2>
               <ul className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
                 {pages.map(({ page, fileName }) => (
-                  <PageCard key={page.id} claimId={claimId} page={page} fileName={fileName} />
+                  <PageCard key={page.id} claimId={claimId} page={page} fileName={fileName} canChooseType={canUpload} />
                 ))}
               </ul>
             </section>

@@ -1,4 +1,4 @@
-import type { DocumentStatus, ErrorCode, PageQuality, PageType } from "@/lib/api/types";
+import type { ChosenPageType, DocumentStatus, ErrorCode, PageQuality, PageType } from "@/lib/api/types";
 
 export const DOCUMENT_STATUS_LABEL: Record<DocumentStatus, string> = {
   UPLOADING: "Uploading",
@@ -17,6 +17,16 @@ export const PAGE_TYPE_LABEL: Record<PageType, string> = {
   OTHER: "Other",
   UNCLASSIFIED: "Unclassified",
 };
+
+/** The types a person may choose for a page (`reclassifyPage` takes any type except Unclassified), in menu order. */
+export const CHOSEN_PAGE_TYPES: readonly ChosenPageType[] = [
+  "INVOICE",
+  "RECEIPT",
+  "PRESCRIPTION",
+  "VISIT_SUMMARY",
+  "LAB_RESULT",
+  "OTHER",
+];
 
 export const PAGE_QUALITY_LABEL: Record<PageQuality, string> = {
   NOT_CHECKED: "Not checked",
@@ -61,3 +71,6 @@ export const INTAKE_PROBLEM_LABEL: Partial<Record<ErrorCode, string>> = {
   NO_READY_DOCUMENT: "No document is ready yet. Upload at least one file that converts, then submit.",
   NOT_FOUND: "This file no longer exists. It may have been removed already.",
 };
+
+/** When `reclassifyPage` fails for a reason with no label above. */
+export const PAGE_TYPE_NOT_SAVED = "The page type could not be saved. Please try again.";
