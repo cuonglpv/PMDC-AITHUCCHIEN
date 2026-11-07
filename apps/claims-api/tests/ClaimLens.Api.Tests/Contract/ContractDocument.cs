@@ -80,6 +80,12 @@ public sealed class ContractDocument
             return [$"{operation["operationId"]} {status} does not declare {mediaType}"];
         }
 
+        // A page image is declared as image/png with a binary string schema: the media type is all there is to check.
+        if (mediaType != "application/json" && !mediaType.EndsWith("+json", StringComparison.Ordinal))
+        {
+            return [];
+        }
+
         var schema = content[mediaType]!["schema"]!.DeepClone().ToJsonString()
             .Replace("#/components/schemas/", "#/$defs/", StringComparison.Ordinal);
         var evaluated = JsonSchema

@@ -1,8 +1,11 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ClaimLens.Api.DocumentPreparation;
+using ClaimLens.Api.DocumentStore;
 using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
 using ClaimLens.Api.Tests.Contract;
+using ClaimLens.Api.Tests.Documents;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -29,6 +32,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public TestClock Clock { get; } = new();
 
+    /// <summary>Object storage for every test but the one integration class that runs SeaweedFS.</summary>
+    public InMemoryDocumentStore Store { get; } = new();
+
+    /// <summary>Gotenberg for every test but the one integration class that runs it.</summary>
+    public FakeConverter Converter { get; } = new();
+
     public string OwnerConnection => database.GetConnectionString();
 
     public string AppConnection =>
@@ -54,11 +63,41 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:SigningKey", "test-only-signing-key-long-enough-for-hs256");
         builder.UseSetting("Auth:AllowedOrigins:0", Origin);
         builder.UseSetting("Auth:SignInFailuresPerAddress", "1000");
+
+        // Valid settings for services the tests replace below; nothing connects to these addresses.
+        builder.UseSetting("Storage:ServiceUrl", "http://storage.test");
+        builder.UseSetting("Storage:AccessKey", "test");
+        builder.UseSetting("Storage:SecretKey", "test");
+        builder.UseSetting("Converter:BaseUrl", "http://converter.test");
+
+        // Tests prepare documents themselves, with PrepareDocumentsAsync, so they know when it has happened.
+        builder.UseSetting("Workers:DocumentPreparation:Enabled", "false");
+
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<IDocumentStore>();
+            services.AddSingleton<IDocumentStore>(Store);
+            services.RemoveAll<IDocumentConverter>();
+            services.AddSingleton<IDocumentConverter>(Converter);
         });
+    }
+
+    /// <summary>Runs Document Preparation until no file is waiting, as the worker would. Returns how many it handled.</summary>
+    public async Task<int> PrepareDocumentsAsync(IServiceProvider? services = null)
+    {
+        var handled = 0;
+        while (true)
+        {
+            await using var scope = (services ?? Services).CreateAsyncScope();
+            if (!await scope.ServiceProvider.GetRequiredService<DocumentPreparer>().PrepareNextAsync(TestContext.Current.CancellationToken))
+            {
+                return handled;
+            }
+
+            handled++;
+        }
     }
 
     /// <summary>Every response through this client is checked against claims-api.yaml.</summary>
@@ -128,6 +167,9 @@ public static class Staff
     public const string Admin = "admin@claimlens.test";
 
     public const string IntakeId = "10000000-0000-4000-8000-000000000001";
+
+    /// <summary>A second Intake Officer that tests insert when they need one; it cannot sign in.</summary>
+    public const string OtherIntakeId = "10000000-0000-4000-8000-0000000000a1";
     public const string ReviewerId = "10000000-0000-4000-8000-000000000002";
 }
 

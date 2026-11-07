@@ -55,7 +55,7 @@ public class RoleMatrixTests(ApiFactory api)
         foreach (var (role, email) in Accounts)
         {
             var client = await api.SignedInAs(email);
-            var response = await Call(client, policy);
+            var response = await Call(client, policy, role: role);
 
             if (policy.Roles.ContainsKey(role))
             {
@@ -88,15 +88,24 @@ public class RoleMatrixTests(ApiFactory api)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    internal static Task<HttpResponseMessage> Call(HttpClient client, OperationPolicy policy, Guid? claimId = null)
+    internal static Task<HttpResponseMessage> Call(HttpClient client, OperationPolicy policy, Guid? claimId = null, StaffRole? role = null)
     {
         var path = Regex.Replace(policy.Path, @"\{(\w+)\}", match =>
             match.Groups[1].Value == "claimNumber"
                 ? "CLM-2026-999999"
                 : (match.Groups[1].Value == "claimId" && claimId is not null ? claimId.Value : Guid.NewGuid()).ToString());
 
-        var query = policy.OperationId == "listClaims" ? "?view=AVAILABLE" : "";
+        // listClaims needs a view, and a view of another role is FORBIDDEN_ROLE too, so each role asks for one of its own.
+        var query = policy.OperationId == "listClaims" ? "?view=" + ViewOf(role) : "";
         using var request = new HttpRequestMessage(new HttpMethod(policy.Method), path.TrimStart('/') + query);
         return client.SendAsync(request, Cancel);
     }
+
+    private static string ViewOf(StaffRole? role) =>
+        role switch
+        {
+            StaffRole.IntakeOfficer => "MY_DRAFTS",
+            StaffRole.SeniorApprover => "PENDING_APPROVAL",
+            _ => "AVAILABLE",
+        };
 }
