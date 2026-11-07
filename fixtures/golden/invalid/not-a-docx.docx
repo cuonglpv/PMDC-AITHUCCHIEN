@@ -1,0 +1,2 @@
+Đây là văn bản thuần, không phải tệp DOCX, dù tên tệp có đuôi .docx.
+Claims API phải từ chối tệp này theo các byte đầu tiên, không theo tên.

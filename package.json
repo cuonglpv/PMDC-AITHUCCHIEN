@@ -11,6 +11,7 @@
     "contract:generate": "node tools/contract/generate.mjs",
     "contract:check": "node tools/contract/generate.mjs --check",
     "schema:check": "node tools/schema/check-drift.mjs",
+    "golden:generate": "node tools/golden/generate.mjs",
     "e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
