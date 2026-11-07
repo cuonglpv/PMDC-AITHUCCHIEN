@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiProblem } from "@/lib/api/problem";
 import type { Document } from "@/lib/api/types";
+import { refusalBeforeUpload } from "@/lib/labels/documents";
 import { isAbortError, uploadDocument } from "@/lib/api/upload";
 
 export type Upload = {
@@ -16,6 +17,16 @@ export type Upload = {
 };
 
 let nextKey = 0;
+
+/** The refusal the API would give, made in the browser so a file it cannot take is never sent (413 or 415). */
+function localRefusal(file: File): ApiProblem | null {
+  const code = refusalBeforeUpload(file);
+  if (!code) {
+    return null;
+  }
+  const status = code === "FILE_TOO_LARGE" ? 413 : 415;
+  return new ApiProblem(status, { type: "about:blank", title: "Not sent", status, code, requestId: "" });
+}
 
 /**
  * Files on their way to the API, one request each, so each row shows its own progress. A stored file leaves this
@@ -55,15 +66,16 @@ export function useUploads(claimId: string, onStored: (document: Document) => vo
   );
 
   const add = (files: File[]) => {
-    const added = files.map((file) => ({
+    const added: Upload[] = files.map((file) => ({
       key: `upload-${(nextKey += 1)}`,
       file,
       progress: 0,
-      error: null,
+      error: localRefusal(file),
       controller: new AbortController(),
     }));
     setUploads((current) => [...current, ...added]);
-    added.forEach((upload) => void run(upload));
+    // A file the browser already refused is listed with its reason and never sent.
+    added.filter((upload) => !upload.error).forEach((upload) => void run(upload));
   };
 
   const retry = (key: string) => {

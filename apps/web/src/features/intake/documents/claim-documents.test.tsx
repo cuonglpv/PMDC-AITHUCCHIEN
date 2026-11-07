@@ -169,13 +169,50 @@ describe("Documents and submit (SCR-13)", () => {
     renderPage();
     const user = userEvent.setup({ applyAccept: false });
 
-    await user.upload(await screen.findByLabelText("Add files"), new File(["x"], "ghi-chu.txt", { type: "text/plain" }));
+    await user.upload(await screen.findByLabelText("Add files"), new File(["x"], "ghi-chu.pdf", { type: "application/pdf" }));
 
-    const row = await screen.findByRole("listitem", { name: "ghi-chu.txt" });
+    const row = await screen.findByRole("listitem", { name: "ghi-chu.pdf" });
     expect(await within(row).findByText(message)).toBeTruthy();
-    expect(within(row).queryByRole("button", { name: "Retry ghi-chu.txt" })).toBeNull();
-    await user.click(within(row).getByRole("button", { name: "Dismiss ghi-chu.txt" }));
-    expect(screen.queryByRole("listitem", { name: "ghi-chu.txt" })).toBeNull();
+    expect(within(row).queryByRole("button", { name: "Retry ghi-chu.pdf" })).toBeNull();
+    await user.click(within(row).getByRole("button", { name: "Dismiss ghi-chu.pdf" }));
+    expect(screen.queryByRole("listitem", { name: "ghi-chu.pdf" })).toBeNull();
+  });
+
+  it.each([
+    ["a file over 20 MB", "scan-lon.pdf", 20 * 1024 * 1024 + 1, "This file is larger than 20 MB. Compress or split it, then upload it again."],
+    ["a file type the API never takes", "ghi-chu.txt", 10, "This file type is not accepted. Use JPG, PNG, PDF, DOCX or XLSX."],
+  ])("refuses %s in the browser, without sending it", async (_, name, size, message) => {
+    let sent = 0;
+    server.use(
+      http.post(`${CLAIM}/documents`, () => {
+        sent += 1;
+        return HttpResponse.json(document(), { status: 201 });
+      }),
+    );
+    renderPage();
+    const user = userEvent.setup({ applyAccept: false });
+    const big = new File(["x"], name);
+    Object.defineProperty(big, "size", { value: size });
+
+    await user.upload(await screen.findByLabelText("Add files"), big);
+
+    const row = await screen.findByRole("listitem", { name });
+    expect(within(row).getByText(message)).toBeTruthy();
+    expect(within(row).queryByRole("progressbar")).toBeNull();
+    expect(within(row).queryByRole("button", { name: `Retry ${name}` })).toBeNull();
+    expect(sent).toBe(0);
+  });
+
+  it("does not offer Retry for a bare 413 from the proxy", async () => {
+    server.use(http.post(`${CLAIM}/documents`, () => new HttpResponse(null, { status: 413 })));
+    renderPage();
+    const user = userEvent.setup();
+
+    await user.upload(await screen.findByLabelText("Add files"), new File(["x"], "hoa-don-2.pdf", { type: "application/pdf" }));
+
+    const row = await screen.findByRole("listitem", { name: "hoa-don-2.pdf" });
+    expect(await within(row).findByText("This file is larger than 20 MB. Compress or split it, then upload it again.")).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Retry hoa-don-2.pdf" })).toBeNull();
   });
 
   it("takes files dropped on the drop area", async () => {

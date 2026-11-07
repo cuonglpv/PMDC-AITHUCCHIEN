@@ -33,6 +33,25 @@ export const UPLOAD_ACCEPT =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+/**
+ * The API's file limit: 20 MB, counted as 20 × 1024 × 1024 bytes like `PreparationOptions.MaxFileBytes` and the
+ * database check. The browser refuses a larger file before sending it, because the proxy in front of the API cuts a
+ * large request off with a bare 413 or a dropped connection. The API stays the real check.
+ */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+/** Extensions the API can take. A fast hint only: the API decides by the file's bytes and may still answer 415. */
+export const UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "pdf", "docx", "xlsx"] as const;
+
+/** Why the browser will not send a file, with the same code the API would answer; null when it may be sent. */
+export function refusalBeforeUpload(file: File): "FILE_TOO_LARGE" | "UNSUPPORTED_FILE_TYPE" | null {
+  const extension = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
+  if (!(UPLOAD_EXTENSIONS as readonly string[]).includes(extension)) {
+    return "UNSUPPORTED_FILE_TYPE";
+  }
+  return file.size > MAX_UPLOAD_BYTES ? "FILE_TOO_LARGE" : null;
+}
+
 /** Why a file or a submission was refused, by the code the API sends (docs/07-api-contract.md). */
 export const INTAKE_PROBLEM_LABEL: Partial<Record<ErrorCode, string>> = {
   FILE_TOO_LARGE: "This file is larger than 20 MB. Compress or split it, then upload it again.",

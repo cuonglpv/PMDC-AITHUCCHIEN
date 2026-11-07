@@ -30,6 +30,10 @@ export async function uploadDocument(claimId: string, file: File, options: Uploa
   if (answer.status === 201 && answer.body) {
     return answer.body as Document;
   }
+  if (answer.status === 413 && !isProblem(answer.body)) {
+    // The reverse proxy refuses a large body itself, with no problem details: it means the same as the API's 413.
+    throw new ApiProblem(413, { type: "about:blank", title: "File too large", status: 413, code: "FILE_TOO_LARGE", requestId: "" });
+  }
   throw new ApiProblem(answer.status, isProblem(answer.body) ? answer.body : null);
 }
 

@@ -79,6 +79,16 @@ describe("uploadDocument", () => {
     expect((refusal as ApiProblem).status).toBe(status);
   });
 
+  it("reads a 413 without a problem body, as the proxy sends it, as FILE_TOO_LARGE", async () => {
+    session.start(authSession("INTAKE_OFFICER"));
+    server.use(http.post(URL_, () => new HttpResponse("Request Entity Too Large", { status: 413 })));
+
+    const refusal = await uploadDocument(CLAIM_ID, file()).catch((error: unknown) => error);
+
+    expect((refusal as ApiProblem).status).toBe(413);
+    expect((refusal as ApiProblem).code).toBe("FILE_TOO_LARGE");
+  });
+
   it("rejects with an AbortError when cancelled", async () => {
     session.start(authSession("INTAKE_OFFICER"));
     const controller = new AbortController();
