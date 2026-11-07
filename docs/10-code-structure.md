@@ -554,17 +554,19 @@ Latest stable on 04/11/2026. Lock files pin the exact version when each part is 
 
 ## 14. What is built
 
-The foundation and the first slice, US01 sign-in, work end to end.
+Two slices work end to end: US01 sign-in and US19 rule sets.
 
 | Part | State |
 |---|---|
 | `infra/`, `db/`, generators, CI | Done |
 | `ClaimLens.RuleEngine` | Done: US11 and US12 on the golden numbers |
-| Claims API | Sign-in, and the role, scope, status and audit rules of all 59 operations. The other 55 answer 501 until their features are built |
+| Claims API | Sign-in and the 8 Must operations of Rule Set Management, with the role, scope, status and audit rules of all 59 operations. The other 47 answer 501 until their features are built |
 | Document AI Service | All six routes with the fake gateway |
-| Staff Web App | Sign-in, shell, role routing and the client gate. Each role's home is a placeholder |
+| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor. Other homes are placeholders |
 
-Next, in the order the stories depend on each other: US19 rule sets, US02 and US03 intake with Document Preparation, the AI Job Runner with US04 and US05, then the claim workspace.
+US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 0 and has no tab. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
+
+Next, in the order the stories depend on each other: US02 and US03 intake with Document Preparation, the AI Job Runner with US04 and US05, then the claim workspace.
 
 ## Still open
 
