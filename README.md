@@ -307,9 +307,9 @@ apps/web            Staff Web App: routes, features, design system, generated AP
 apps/claims-api     ClaimLens.Api with feature folders, and ClaimLens.RuleEngine, which references nothing
 apps/document-ai    Task API, one module per AI task, and the Model Gateway
 db                  SQL migrations and seed data
-fixtures/golden     The seven golden scenarios, shared by every test suite (two exist so far; the rest arrive with the intake slice, US02/US03, and the extraction slice, US04/US05)
+fixtures/golden     The seven golden scenarios, shared by every test suite (clean has its documents, made by tools/golden; the rest arrive with the slices that need them)
 e2e                 Browser tests against the whole stack
-tools               Generators and the check that keeps the database in step with the DBML
+tools               Generators, the golden documents and the check that keeps the database in step with the DBML
 infra               Local stack and reverse proxy (the converter is the stock Gotenberg image in compose)
 ```
 
@@ -352,6 +352,8 @@ docker compose -f infra/compose.yaml --profile full up -d --build
 - [x] Design the frontend and backend folder structures
 - [x] Scaffold the repository, the database, the Rule Engine, CI and the sign-in slice (US01)
 - [x] Build benefit rule sets: drafts, editor and publishing (US19)
+- [x] Audit code and docs, fix the findings, and plan the remaining slices ([audit and roadmap](docs/11-audit-and-roadmap.md))
+- [x] Build Slice 1, intake: member search, claim registration, document upload and preparation, submission (US02, US03)
 - [ ] Design class diagrams and sequence diagrams (written per slice; closes when the last slice ships)
 - [ ] Build the backend, Rule Engine and Document AI service
 - [ ] Build the frontend and connect it to the API
