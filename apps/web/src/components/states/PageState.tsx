@@ -12,12 +12,16 @@ export function Loading({ label }: { label: string }) {
 
 export function LoadError({ error }: { error: unknown }) {
   const status = error instanceof ApiProblem ? error.status : undefined;
+  const [title, detail] =
+    status === 404
+      ? ["This item does not exist", "It may have been removed, or the link is wrong."]
+      : status === 403
+        ? ["You cannot open this", "It belongs to another role or to someone else's work."]
+        : ["This page could not be loaded", "Please reload the page to try again."];
   return (
     <div role="alert" className="m-6 rounded-sm border border-line bg-surface p-6">
-      <p className="font-semibold">{status === 404 ? "This item does not exist" : "This page could not be loaded"}</p>
-      <p className="mt-1 text-[13px] text-on-surface-muted">
-        {status === 404 ? "It may have been removed, or the link is wrong." : "Please reload the page to try again."}
-      </p>
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 text-[13px] text-on-surface-muted">{detail}</p>
     </div>
   );
 }

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, formatMoney, formatRate, todayInVietnam } from ".";
+import {
+  formatDate,
+  formatDateTime,
+  formatFileSize,
+  formatMoney,
+  formatPeriod,
+  formatRate,
+  parseDate,
+  parseMoney,
+  todayInVietnam,
+} from ".";
 
 describe("formats", () => {
   it("shows money as whole dong with separators", () => {
@@ -26,5 +36,29 @@ describe("formats", () => {
   it("shows basis points as a percentage", () => {
     expect(formatRate(8000)).toBe("80%");
     expect(formatRate(8050)).toBe("80.5%");
+  });
+
+  it("reads whole dong typed with or without separators", () => {
+    expect(parseMoney("1,400,000")).toBe(1_400_000);
+    expect(parseMoney("1.400.000 ₫")).toBe(1_400_000);
+    expect(parseMoney(" 350000 ")).toBe(350_000);
+    expect(parseMoney("1,400,000.50")).toBeNull();
+    expect(parseMoney("12a")).toBeNull();
+    expect(parseMoney("")).toBeNull();
+  });
+
+  it("reads a date typed as dd/MM/yyyy, and only a real one", () => {
+    expect(parseDate("12/10/2026")).toBe("2026-10-12");
+    expect(parseDate(" 5/1/2027 ")).toBe("2027-01-05");
+    expect(parseDate("29/02/2028")).toBe("2028-02-29");
+    expect(parseDate("31/02/2026")).toBeNull();
+    expect(parseDate("2026-10-12")).toBeNull();
+    expect(parseDate("")).toBeNull();
+  });
+
+  it("shows a coverage period and a file size", () => {
+    expect(formatPeriod("2026-01-01", "2026-12-31")).toBe("01/01/2026 – 31/12/2026");
+    expect(formatFileSize(2_048)).toBe("2 KB");
+    expect(formatFileSize(5_452_595)).toBe("5.2 MB");
   });
 });
