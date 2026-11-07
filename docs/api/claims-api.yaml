@@ -2328,6 +2328,7 @@ components:
         - RULE_INVALID
         - EFFECTIVE_DATE_NOT_LATER
         - CATEGORY_NOT_CONFIGURED
+        - INTERNAL_ERROR
     # ---- Enums, same values as claimlens.dbml ----
     StaffRole:
       type: string

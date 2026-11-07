@@ -22,6 +22,7 @@ public static class ErrorCodes
     public const string UnknownCategory = "UNKNOWN_CATEGORY";
     public const string EffectiveDateNotLater = "EFFECTIVE_DATE_NOT_LATER";
     public const string CategoryNotConfigured = "CATEGORY_NOT_CONFIGURED";
+    public const string InternalError = "INTERNAL_ERROR";
 }
 
 public sealed record FieldError(string Field, string Code, string Message);

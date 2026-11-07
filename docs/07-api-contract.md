@@ -126,6 +126,7 @@ Errors follow RFC 9457 (`application/problem+json`) with a stable `code`, which 
 | 413, 415 | The file was refused before anything was stored | `FILE_TOO_LARGE`, `UNSUPPORTED_FILE_TYPE` |
 | 422 | The request itself breaks a rule | See the table below |
 | 429 | Too many sign-in attempts | `TOO_MANY_ATTEMPTS` |
+| 500 | A fault in the Claims API. The body names nothing about it; `requestId` finds it in the log | `INTERNAL_ERROR` |
 
 A claim outside the caller's scope gives 403 by id, as UC11 requires. `getClaimByNumber` gives 404 there, so a claim number reveals nothing about other claims.
 
