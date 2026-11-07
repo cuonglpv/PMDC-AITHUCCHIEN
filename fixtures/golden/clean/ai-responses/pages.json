@@ -1,0 +1,547 @@
+[
+  {
+    "document": "invoice.pdf",
+    "pageNo": 1,
+    "pageHash": "a2a2a896940000a2",
+    "pageSharpness": 23.59,
+    "pageCheck": {
+      "pageType": "INVOICE",
+      "typeConfidence": 0.98,
+      "qualityScore": 0.95
+    },
+    "fields": [
+      {
+        "fieldKey": "provider_name",
+        "itemNo": 0,
+        "value": "Phòng khám Đa khoa Hồng Ngọc",
+        "confidence": 0.96,
+        "bbox": {
+          "x": 0.067,
+          "y": 0.049,
+          "w": 0.393,
+          "h": 0.016
+        }
+      },
+      {
+        "fieldKey": "provider_tax_code",
+        "itemNo": 0,
+        "value": "0101234567",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.153,
+          "y": 0.087,
+          "w": 0.087,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "invoice_number",
+        "itemNo": 0,
+        "value": "HN-0045821",
+        "confidence": 0.96,
+        "bbox": {
+          "x": 0.845,
+          "y": 0.147,
+          "w": 0.09,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "service_date",
+        "itemNo": 0,
+        "value": "12/10/2026",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.401,
+          "y": 0.172,
+          "w": 0.2,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "insured_name",
+        "itemNo": 0,
+        "value": "Nguyễn Văn An",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.362,
+          "y": 0.203,
+          "w": 0.116,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_description",
+        "itemNo": 1,
+        "value": "Khám nội tổng quát",
+        "confidence": 0.94,
+        "bbox": {
+          "x": 0.139,
+          "y": 0.41,
+          "w": 0.137,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_quantity",
+        "itemNo": 1,
+        "value": "1",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.655,
+          "y": 0.41,
+          "w": 0.009,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_unit_price",
+        "itemNo": 1,
+        "value": "300.000",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.728,
+          "y": 0.41,
+          "w": 0.056,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_amount",
+        "itemNo": 1,
+        "value": "300.000",
+        "confidence": 0.98,
+        "bbox": {
+          "x": 0.865,
+          "y": 0.41,
+          "w": 0.058,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_description",
+        "itemNo": 2,
+        "value": "Xét nghiệm công thức máu",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.139,
+          "y": 0.438,
+          "w": 0.19,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_quantity",
+        "itemNo": 2,
+        "value": "1",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.655,
+          "y": 0.438,
+          "w": 0.009,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_unit_price",
+        "itemNo": 2,
+        "value": "250.000",
+        "confidence": 0.94,
+        "bbox": {
+          "x": 0.728,
+          "y": 0.438,
+          "w": 0.056,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_amount",
+        "itemNo": 2,
+        "value": "250.000",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.865,
+          "y": 0.438,
+          "w": 0.058,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_description",
+        "itemNo": 3,
+        "value": "Amoxicillin 500mg × 20 viên",
+        "confidence": 0.92,
+        "bbox": {
+          "x": 0.139,
+          "y": 0.465,
+          "w": 0.196,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_quantity",
+        "itemNo": 3,
+        "value": "20",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.646,
+          "y": 0.465,
+          "w": 0.018,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_unit_price",
+        "itemNo": 3,
+        "value": "7.500",
+        "confidence": 0.92,
+        "bbox": {
+          "x": 0.744,
+          "y": 0.465,
+          "w": 0.04,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_amount",
+        "itemNo": 3,
+        "value": "150.000",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.865,
+          "y": 0.465,
+          "w": 0.058,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_description",
+        "itemNo": 4,
+        "value": "Kem dưỡng phục hồi da Obagi",
+        "confidence": 0.91,
+        "bbox": {
+          "x": 0.139,
+          "y": 0.493,
+          "w": 0.217,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_quantity",
+        "itemNo": 4,
+        "value": "1",
+        "confidence": 0.94,
+        "bbox": {
+          "x": 0.655,
+          "y": 0.493,
+          "w": 0.009,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_unit_price",
+        "itemNo": 4,
+        "value": "300.000",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.728,
+          "y": 0.493,
+          "w": 0.056,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_amount",
+        "itemNo": 4,
+        "value": "300.000",
+        "confidence": 0.96,
+        "bbox": {
+          "x": 0.865,
+          "y": 0.493,
+          "w": 0.058,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_description",
+        "itemNo": 5,
+        "value": "Siêu âm ổ bụng",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.139,
+          "y": 0.522,
+          "w": 0.111,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_quantity",
+        "itemNo": 5,
+        "value": "1",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.655,
+          "y": 0.522,
+          "w": 0.009,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_unit_price",
+        "itemNo": 5,
+        "value": "400.000",
+        "confidence": 0.94,
+        "bbox": {
+          "x": 0.728,
+          "y": 0.522,
+          "w": 0.056,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "line_amount",
+        "itemNo": 5,
+        "value": "400.000",
+        "confidence": 0.98,
+        "bbox": {
+          "x": 0.865,
+          "y": 0.522,
+          "w": 0.058,
+          "h": 0.013
+        }
+      }
+    ]
+  },
+  {
+    "document": "invoice.pdf",
+    "pageNo": 2,
+    "pageHash": "e8f2f0c8c00000a1",
+    "pageSharpness": 19.36,
+    "pageCheck": {
+      "pageType": "INVOICE",
+      "typeConfidence": 0.93,
+      "qualityScore": 0.95
+    },
+    "fields": [
+      {
+        "fieldKey": "invoice_total",
+        "itemNo": 0,
+        "value": "1.400.000",
+        "confidence": 0.98,
+        "bbox": {
+          "x": 0.842,
+          "y": 0.276,
+          "w": 0.079,
+          "h": 0.014
+        }
+      }
+    ]
+  },
+  {
+    "document": "receipt.jpg",
+    "pageNo": 1,
+    "pageHash": "4771414111454541",
+    "pageSharpness": 20.68,
+    "pageCheck": {
+      "pageType": "RECEIPT",
+      "typeConfidence": 0.96,
+      "qualityScore": 0.88
+    },
+    "fields": [
+      {
+        "fieldKey": "provider_name",
+        "itemNo": 0,
+        "value": "Phòng khám Đa khoa Hồng Ngọc",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.097,
+          "y": 0.07,
+          "w": 0.459,
+          "h": 0.02
+        }
+      },
+      {
+        "fieldKey": "service_date",
+        "itemNo": 0,
+        "value": "12/10/2026",
+        "confidence": 0.91,
+        "bbox": {
+          "x": 0.359,
+          "y": 0.202,
+          "w": 0.283,
+          "h": 0.019
+        }
+      },
+      {
+        "fieldKey": "invoice_number",
+        "itemNo": 0,
+        "value": "HN-0045821",
+        "confidence": 0.93,
+        "bbox": {
+          "x": 0.453,
+          "y": 0.298,
+          "w": 0.12,
+          "h": 0.019
+        }
+      },
+      {
+        "fieldKey": "invoice_total",
+        "itemNo": 0,
+        "value": "1.400.000",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.18,
+          "y": 0.333,
+          "w": 0.208,
+          "h": 0.022
+        }
+      }
+    ]
+  },
+  {
+    "document": "prescription.docx",
+    "pageNo": 1,
+    "pageHash": "a0f0909e66200000",
+    "pageSharpness": 23.65,
+    "pageCheck": {
+      "pageType": "PRESCRIPTION",
+      "typeConfidence": 0.95,
+      "qualityScore": 0.94
+    },
+    "fields": [
+      {
+        "fieldKey": "insured_name",
+        "itemNo": 0,
+        "value": "Nguyễn Văn An",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.261,
+          "y": 0.183,
+          "w": 0.136,
+          "h": 0.014
+        }
+      },
+      {
+        "fieldKey": "diagnosis",
+        "itemNo": 0,
+        "value": "J02.9",
+        "confidence": 0.58,
+        "bbox": {
+          "x": 0.196,
+          "y": 0.262,
+          "w": 0.046,
+          "h": 0.014
+        }
+      },
+      {
+        "fieldKey": "medication",
+        "itemNo": 1,
+        "value": "Amoxicillin 500mg",
+        "confidence": 0.94,
+        "bbox": {
+          "x": 0.163,
+          "y": 0.333,
+          "w": 0.142,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "service_date",
+        "itemNo": 0,
+        "value": "13/10/2026",
+        "confidence": 0.92,
+        "bbox": {
+          "x": 0.673,
+          "y": 0.427,
+          "w": 0.233,
+          "h": 0.015
+        }
+      }
+    ]
+  },
+  {
+    "document": "itemised-bill.xlsx",
+    "pageNo": 1,
+    "pageHash": "8888902000000000",
+    "pageSharpness": 24.18,
+    "pageCheck": {
+      "pageType": "OTHER",
+      "typeConfidence": 0.88,
+      "qualityScore": 0.93
+    },
+    "fields": []
+  },
+  {
+    "document": "visit-summary.pdf",
+    "pageNo": 1,
+    "pageHash": "e0a0a08280860680",
+    "pageSharpness": 22.28,
+    "pageCheck": {
+      "pageType": "VISIT_SUMMARY",
+      "typeConfidence": 0.94,
+      "qualityScore": 0.95
+    },
+    "fields": [
+      {
+        "fieldKey": "service_date",
+        "itemNo": 0,
+        "value": "12/10/2026",
+        "confidence": 0.95,
+        "bbox": {
+          "x": 0.506,
+          "y": 0.156,
+          "w": 0.078,
+          "h": 0.012
+        }
+      },
+      {
+        "fieldKey": "insured_name",
+        "itemNo": 0,
+        "value": "Nguyễn Văn An",
+        "confidence": 0.97,
+        "bbox": {
+          "x": 0.362,
+          "y": 0.187,
+          "w": 0.116,
+          "h": 0.013
+        }
+      },
+      {
+        "fieldKey": "national_id",
+        "itemNo": 0,
+        "value": "000000000001",
+        "confidence": 0.96,
+        "bbox": {
+          "x": 0.362,
+          "y": 0.23,
+          "w": 0.105,
+          "h": 0.012
+        }
+      },
+      {
+        "fieldKey": "policy_number",
+        "itemNo": 0,
+        "value": "PL-2026-00731",
+        "confidence": 0.96,
+        "bbox": {
+          "x": 0.466,
+          "y": 0.252,
+          "w": 0.108,
+          "h": 0.012
+        }
+      },
+      {
+        "fieldKey": "diagnosis",
+        "itemNo": 0,
+        "value": "J02.9",
+        "confidence": 0.62,
+        "bbox": {
+          "x": 0.067,
+          "y": 0.56,
+          "w": 0.04,
+          "h": 0.012
+        }
+      }
+    ]
+  }
+]

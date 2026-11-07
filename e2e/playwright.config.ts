@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+/** Specs that upload whole packets. One at a time, so they do not queue behind each other in Document Preparation. */
+const UPLOADS = /(intake|ai-reading)\.spec\.ts$/;
+
 // Runs against the whole stack: docker compose -f infra/compose.yaml --profile full up -d --build
 export default defineConfig({
   testDir: ".",
@@ -11,4 +14,8 @@ export default defineConfig({
     channel: process.env.CI ? undefined : "chrome",
     trace: "retain-on-failure",
   },
+  projects: [
+    { name: "app", testIgnore: UPLOADS },
+    { name: "uploads", testMatch: UPLOADS, workers: 1 },
+  ],
 });

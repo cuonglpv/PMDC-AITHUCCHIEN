@@ -26,6 +26,9 @@ public static class StorageKeys
             ? ThumbnailsPrefix + imageKey[PagesPrefix.Length..]
             : throw new ArgumentException("A page image key starts with pages/.", nameof(imageKey));
 
+    /// <summary>The Document AI Service's answer to one ai_run, exactly as it arrived (ai_run.raw_output_key).</summary>
+    public static string AiRaw(Guid claimId, Guid runId) => $"ai-raw/{claimId}/{runId}.json";
+
     public static string Extension(FileFormat format) => format.ToString().ToLowerInvariant();
 
     public static string ContentType(FileFormat format) =>

@@ -184,4 +184,20 @@ Slice 1 (US02, US03) được làm trong ba session song song: backend, web, gol
 
 Chạy trên full stack Docker từ bản gộp: tìm "Nguyen Van An" không dấu ra đúng người và số dư 800.000 ₫, CCCD bị che; 5 file golden đều lên `Ready`, đủ 6 trang; ảnh biên lai chụp ngang (EXIF orientation 6) ra trang đứng; file giả DOCX bị từ chối; xoá một file thì đánh lại số trang; submit xong claim `PROCESSING` và nằm trong My submissions; axe không có vi phạm WCAG AA. Luồng này giờ là `e2e/intake.spec.ts`.
 
+## 9. Slice 2 — audit trước khi merge (08/11/2026)
+
+Slice 2 (US04, US05) được làm trong ba session song song: Claims API (AI Job Runner, appliers), Document AI (phát lại golden) và web (SCR-13). Ba nhánh được review diff, gộp thử (không conflict) và chạy trên full stack.
+
+**Quyết định (07/11):** chỉ bắt buộc các trường dùng để kiểm tra và tính tiền ([danh mục trường](03-use-cases.md#field-catalogue)); chưa chọn nhà cung cấp AI thật, Slice 2 dùng gateway giả có phát lại golden.
+
+| ID | Mức | Phát hiện | Kết quả |
+|---|---|---|---|
+| S2-01 | Minor (test) | Lần chạy e2e đầu sau khi build, `invoice.pdf` mất 64 giây mới `READY`, vượt mức chờ 60 giây, vì worker Document Preparation một luồng phải xử lý 11 file của hai spec upload chạy song song khi máy đang tải nặng. Khi stack đã ấm, cả 11 file xong trong khoảng 20 giây. Đã đo: LibreOffice khởi động lạnh không phải nguyên nhân (lần chuyển đổi đầu 0,6 giây). | Hai spec upload (`intake`, `ai-reading`) chạy trong project Playwright riêng với `workers: 1`. |
+| S2-02 | Minor | Banner fallback theo run mới nhất của mỗi task: nếu file 1 lỗi page check mà file 2 (upload sau) đọc được thì banner không hiện, dù trang của file 1 vẫn ghi "AI check failed". | Ghi nhận trong `docs/10` §14. |
+| S2-03 | Minor | Claim mà mọi trang là Other không có trường bắt buộc nên sang `READY_FOR_REVIEW`. | Kiểm tra đủ hồ sơ của US07 (Slice 4a) sẽ chặn; ghi trong `docs/10` §14. |
+| S2-04 | Lưu ý cho Slice 3 | `ai_value` giữ CCCD đầy đủ. | `listFields` của Slice 3 phải che. |
+| S2-05 | Lưu ý | API sập giữa lúc đang gọi AI: run bị `FAILED` (`TIMEOUT`) sau thời hạn chứ không được thử lại, claim chuyển sang làm tay. Tắt máy có báo trước thì run được trả về hàng đợi. | Ghi trong `docs/10` §4. |
+
+Đã kiểm: backend parse đúng `1.400.000` và `12/10/2026` mà bản phát lại trả về. Gateway giả nhận trang golden bằng dHash kèm độ sắc nét, vì riêng dHash không tách được biên lai sạch và biên lai mờ (lệch 2 bit). Trên full stack, claim golden sạch có 7 run AI thành công (response gốc đã lưu), 37 trường tự chấp nhận, 5 dòng chi phí tổng 1.400.000 và kết thúc ở `NEEDS_VERIFICATION`, chỉ còn chẩn đoán J02.9 (đọc ở 0,62) cần người nhập. Biên lai mờ thành Unclassified và Low quality; officer chọn loại thì được giữ. Golden test C# (`tests/.../Golden`) đọc đúng file `pages.json` mà Document AI phát lại, nên test và e2e thấy cùng một AI.
+
 **Liên quan:** [Audit yêu cầu](09-audit-report.md) · [Code structure](10-code-structure.md) · [User stories](08-invest-requirements.md) · [API contract](07-api-contract.md)

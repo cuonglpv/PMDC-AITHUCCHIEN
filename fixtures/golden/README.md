@@ -19,9 +19,9 @@ and the seeded member in `db/seed/dev/040_members_and_policies.sql`. Every docum
 | `clean/documents/` | The five documents of the golden claim, below | `tools/golden/generate.mjs` |
 | `blurry/documents/receipt-blurry.jpg` | The clean receipt, upright, blurred with CSS `blur(3px)`, no EXIF | `tools/golden/generate.mjs` |
 | `invalid/not-a-docx.docx` | Plain UTF-8 text with a `.docx` name | `tools/golden/generate.mjs` |
+| `clean/ai-responses/pages.json`, `blurry/ai-responses/pages.json` | Recorded Document AI answers for each golden page, replayed by the fake gateway | Hand, page hashes from `document_ai.golden.record` |
 
-`missing-document`, `duplicate` and `conflicting` have no files yet, and no scenario has `ai-responses/` or a full
-`expected.json` yet. `invalid/` is not one of the seven scenarios: it holds files that must be refused at upload.
+`missing-document`, `duplicate` and `conflicting` have no files yet, and no scenario has a full `expected.json` yet. `invalid/` is not one of the seven scenarios: it holds files that must be refused at upload.
 
 ## The clean documents
 
@@ -63,6 +63,78 @@ the prescription and visit summary.
 - `invalid/not-a-docx.docx`: for US03 "any other type is rejected with the reason". The Claims API must refuse it by its
   first bytes (not `PK\x03\x04`). Gotenberg does not refuse it: on 07/11/2026 `gotenberg/gotenberg:8.39.0` turned it
   into a one-page PDF with HTTP 200, so a check that waits for the conversion to fail would let it through.
+
+## Recorded AI answers (golden replay)
+
+No AI provider is chosen yet, so the Document AI Service answers through a fake gateway. Its usual answer is the
+careful one: every value is left for a person. With `DOCUMENT_AI_REPLAY_DIR` set (the full stack in
+`infra/compose.yaml` mounts this folder at `/golden`), a page whose image is a golden page gets the answer recorded in
+`<scenario>/ai-responses/pages.json` instead, so the stack and the e2e tests show real-looking AI results.
+
+A request carries only ids and image keys, so the service knows a page by its image alone:
+
+- **Hash**: a 64-bit difference hash (dHash) of the page in grey, shrunk to 9 × 8 pixels. A recording within 6 bits
+  matches.
+- **Sharpness**: the root mean square of the differences between neighbouring pixels, on the page scaled to 600 pixels
+  wide. A blurred capture of a page has nearly the same hash as the sharp one (the clean and blurry receipts are 2 bits
+  apart), so a recording also has to be within a factor of 1.5 in sharpness. The two receipts are 6 times apart.
+- No image can match two recordings: every pair is more than 12 bits or more than 1.5² in sharpness apart
+  (`tests/test_golden_replay.py`). The closest two documents are 15 bits apart.
+
+`pages.json` holds one entry per page:
+
+| Key | What it is |
+|---|---|
+| `document`, `pageNo` | The file name as uploaded and the page inside the file |
+| `pageHash`, `pageSharpness` | The page's fingerprint, as `document_ai.golden.record` prints it |
+| `pageCheck` | `pageType`, `typeConfidence`, `qualityScore` for `PAGE_CHECK` |
+| `fields` | `fieldKey`, `itemNo` (0 for the header, n for line or item n), `value` as printed, `confidence`, `bbox` (0–1, relative to the page image) for `FIELD_EXTRACTION`. Only the fields in the request's catalogue come back |
+
+Values are written as printed in Vietnamese documents: money with `.` between thousands (`1.400.000`), dates as
+`dd/MM/yyyy` (`12/10/2026`). The Claims API parses them. Boxes were measured on the page images the pipeline drew.
+
+What the recordings say, following the golden case (BR-03 thresholds: page type 0.80; 0.95 for `insured_name`,
+`national_id`, `policy_number`, `invoice_total`, `line_amount`; 0.90 for the rest; below 0.70 left empty):
+
+| Page | Type | Fields |
+|---|---|---|
+| `clean/invoice.pdf` p1 | INVOICE 0.98 | Insured name, provider, tax code `0101234567`, invoice `HN-0045821`, service date, and the five lines (description, quantity, unit price, amount 300.000 · 250.000 · 150.000 · 300.000 · 400.000), all at or above their threshold |
+| `clean/invoice.pdf` p2 | INVOICE 0.93 | Total `1.400.000` at 0.98 |
+| `clean/receipt.jpg` | RECEIPT 0.96 | Total, provider, invoice number, service date |
+| `clean/prescription.docx` | PRESCRIPTION 0.95 | Medication 1 `Amoxicillin 500mg`, insured name, date `13/10/2026`; diagnosis `J02.9` at 0.58 |
+| `clean/itemised-bill.xlsx` | OTHER 0.88 | None |
+| `clean/visit-summary.pdf` | VISIT_SUMMARY 0.94 | Insured name, service date, national ID, policy number; diagnosis `J02.9` at 0.62 |
+| `blurry/receipt-blurry.jpg` | RECEIPT 0.64 (Unclassified) | Quality 0.31 (Low quality); the receipt's four fields at 0.48–0.61 |
+
+So the clean claim ends in `NEEDS_VERIFICATION` with only the visit summary's diagnosis to enter.
+
+### Re-recording the hashes
+
+Record again whenever the documents or the page pipeline change (PDFium, LibreOffice, the 150 DPI, the PNG encoding):
+the hashes must come from pages the Claims API drew, never from the HTML.
+
+1. Start the stack: `docker compose -f infra/compose.yaml --profile full up -d --build`.
+2. At `http://localhost:8088`, sign in as `intake@claimlens.test` with `SEED_DEV_PASSWORD` from `infra/.env.example`,
+   create a claim for Nguyễn Văn An (search `PL-2026-00731`) and upload `clean/documents/*` and
+   `blurry/documents/*`. Wait until every file is Ready. The claim id is in the address bar.
+3. Get an access token (it lasts 15 minutes) and run the recorder from `apps/document-ai`. It lists the claim's
+   documents through the Claims API and reads each page from storage with the Document AI Service's own read-only
+   identity, which may read `pages/` but not list it:
+
+   ```bash
+   export CLAIMLENS_TOKEN=$(curl -s http://localhost:8088/api/v1/auth/login -H 'Content-Type: application/json'      -d '{"email":"intake@claimlens.test","password":"<SEED_DEV_PASSWORD>"}' | python -c "import json,sys; print(json.load(sys.stdin)['accessToken'])")
+   DOCUMENT_AI_STORAGE_ACCESS_KEY=local-document-ai DOCUMENT_AI_STORAGE_SECRET_KEY=local-document-ai-secret    DOCUMENT_AI_REPLAY_DIR=../../fixtures/golden uv run python -m document_ai.golden.record --claim <claimId>
+   ```
+
+   It prints one line per page with `document`, `pageNo`, `pageHash`, `pageSharpness` and, with
+   `DOCUMENT_AI_REPLAY_DIR` set, the recording it matches now (`"clean/invoice.pdf p1, 0 bits"`, or `null`).
+4. Copy `pageHash` and `pageSharpness` into the entry with the same `document` and `pageNo`, run the recorder again
+   until every page matches its own entry, then `uv run pytest` (it checks that no image can match two recordings).
+5. `docker compose -f infra/compose.yaml --profile full down`.
+
+Recorded on 08/11/2026 from claims `01a1b668-0779-7568-8def-457eba8e6e7f` and `01a1b738-dac0-7d5e-89d5-7b7762565f12`
+(the second a fresh upload, which gave the same hashes) with `claimlens/claims-api:local` built from `112be68`
+(PDFium through PDFtoImage, `gotenberg/gotenberg:8.39.0`).
 
 ## Regenerating
 

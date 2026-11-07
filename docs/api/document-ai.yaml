@@ -25,8 +25,9 @@ info:
     | `runClinicalCheck` | 30 s |
     | `runSummaryDraft` | 30 s |
 
-    A timeout or any error response marks the `ai_run` as `FAILED`, with the response's `code` as `error_code`, and the
-    claim follows the manual fallback. One bad page does not fail a whole run: see `PageFailure`.
+    A timeout, a 5xx answer or an answer off this contract is retried by the Claims API with a doubling wait, up to a
+    configured number of attempts; a 401 or 422 is not. The run then becomes `FAILED`, with the response's `code` as
+    `error_code`, and the claim follows the manual fallback. One bad page does not fail a whole run: see `PageFailure`.
 
     Only synthetic or de-identified claim data reaches this service in the MVP. Each request carries only what its task
     needs. Only `runPageCheck`, `runFieldExtraction` and `runPageReread` receive page images.

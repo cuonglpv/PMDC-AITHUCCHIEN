@@ -78,7 +78,8 @@ test.describe("Intake (US02, US03)", () => {
     await expect(page.getByText("p6", { exact: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Submit" }).click();
-    await expect(page.getByText("Processing").first()).toBeVisible();
+    // Submitted: Processing, until the AI Job Runner moves the claim on (ai-reading.spec.ts follows that part).
+    await expect(page.getByText(/^(Processing|Needs verification|Ready for review)$/).first()).toBeVisible();
     await expect(page.getByLabel("Add files")).toHaveCount(0);
 
     await page.goto("/intake?tab=submitted");

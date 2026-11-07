@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { document, page, snapshotOf } from "@/test/intake";
-import { isListBehind, isProcessing, submitBlock, withLiveState } from "./processing";
+import { aiRun, claimDetail, document, page, snapshotOf } from "@/test/intake";
+import { isFallbackActive, isListBehind, isProcessing, latestRun, submitBlock, withLiveState } from "./processing";
 
 const ready = document({ pages: [page({ aiStatus: "DONE", quality: "READABLE" })] });
 const converting = document({ id: "d2", status: "CONVERTING", pageCount: null, pages: [] });
@@ -32,6 +32,31 @@ describe("status polling", () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it("polls while the submitted claim is processing or its field extraction is queued or running", () => {
+    expect(isProcessing(snapshotOf([ready], { status: "PROCESSING" }))).toBe(true);
+    for (const status of ["QUEUED", "RUNNING"] as const) {
+      const extraction = aiRun({ task: "FIELD_EXTRACTION", status });
+      expect(isProcessing(snapshotOf([ready], { status: "NEEDS_VERIFICATION", aiRuns: [extraction] }))).toBe(true);
+    }
+  });
+
+  it("stops once the extraction is over and the claim has left Processing", () => {
+    for (const [status, run] of [
+      ["NEEDS_VERIFICATION", "SUCCEEDED"],
+      ["READY_FOR_REVIEW", "SUCCEEDED"],
+      ["NEEDS_VERIFICATION", "FAILED"],
+    ] as const) {
+      const extraction = aiRun({ task: "FIELD_EXTRACTION", status: run });
+      expect(isProcessing(snapshotOf([ready], { status, aiRuns: [aiRun(), extraction] }))).toBe(false);
+    }
+  });
+
+  it("does not poll for AI work that is not part of intake", () => {
+    expect(isProcessing(snapshotOf([ready], { aiRuns: [aiRun({ task: "BENEFIT_MAPPING", status: "QUEUED" })] }))).toBe(
+      false,
+    );
   });
 
   it("stops once every file is ready or rejected and every page check is over", () => {
@@ -76,5 +101,28 @@ describe("submit", () => {
 
   it("does not wait for a page check", () => {
     expect(submitBlock(0, [document({ pages: [page({ aiStatus: "QUEUED" })] })])).toBeNull();
+  });
+});
+
+describe("fallback", () => {
+  const failed = aiRun({ id: "r1", status: "FAILED", errorCode: "MODEL_ERROR", requestedAt: "2026-10-13T09:00:00Z" });
+  const later = aiRun({ id: "r2", status: "SUCCEEDED", requestedAt: "2026-10-13T09:05:00Z" });
+
+  it("finds the latest run of a task", () => {
+    const snapshot = snapshotOf([], { aiRuns: [later, failed, aiRun({ id: "r3", task: "FIELD_EXTRACTION" })] });
+    expect(latestRun(snapshot, "PAGE_CHECK")?.id).toBe("r2");
+    expect(latestRun(snapshot, "FIELD_EXTRACTION")?.id).toBe("r3");
+    expect(latestRun(snapshot, "SUMMARY_DRAFT")).toBeUndefined();
+    expect(latestRun(undefined, "PAGE_CHECK")).toBeUndefined();
+  });
+
+  it("is on when the claim or the poll says so, or when the latest page check failed", () => {
+    const claim = claimDetail();
+    expect(isFallbackActive(claim, snapshotOf([]))).toBe(false);
+    expect(isFallbackActive(claim, undefined)).toBe(false);
+    expect(isFallbackActive(claimDetail({ ai: { fallbackActive: true, clinicalCheck: "NOT_RUN" } }), undefined)).toBe(true);
+    expect(isFallbackActive(claim, snapshotOf([], { fallbackActive: true }))).toBe(true);
+    expect(isFallbackActive(claim, snapshotOf([], { aiRuns: [failed] }))).toBe(true);
+    expect(isFallbackActive(claim, snapshotOf([], { aiRuns: [failed, later] }))).toBe(false);
   });
 });

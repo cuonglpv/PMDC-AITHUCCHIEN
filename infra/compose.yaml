@@ -20,6 +20,9 @@ x-claims-api-env: &claims-api-env
   Storage__SecretKey: local-claims-api-secret
   Storage__CreateBucket: "true"
   Converter__BaseUrl: http://converter:3000
+  # The AI Job Runner calls document-ai with the same key that service expects.
+  Ai__BaseUrl: http://document-ai:8001
+  Ai__ServiceKey: ${DOCUMENT_AI_SERVICE_KEY:-local-service-key}
 
 services:
   postgres:
@@ -120,6 +123,10 @@ services:
       DOCUMENT_AI_STORAGE_ENDPOINT: http://storage:8333
       DOCUMENT_AI_STORAGE_ACCESS_KEY: local-document-ai
       DOCUMENT_AI_STORAGE_SECRET_KEY: local-document-ai-secret
+      # The fake gateway replays the recorded answers for the golden pages (fixtures/golden/README.md).
+      DOCUMENT_AI_REPLAY_DIR: /golden
+    volumes:
+      - ../fixtures/golden:/golden:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8001/health')"]
       interval: 10s

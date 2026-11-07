@@ -29,3 +29,12 @@ export type DocumentStatus = Schemas["DocumentStatus"];
 export type PageType = Schemas["PageType"];
 export type PageQuality = Schemas["PageQuality"];
 export type PageAiStatus = Schemas["PageAiStatus"];
+export type ValueSource = Schemas["ValueSource"];
+export type StaffRef = Schemas["StaffRef"];
+
+export type AiTask = Schemas["AiTask"];
+export type AiRunStatus = Schemas["AiRunStatus"];
+export type AiRunState = Schemas["AiRunState"];
+export type ConfidenceLevel = Schemas["ConfidenceLevel"];
+export type PageAiSuggestion = Schemas["PageAiSuggestion"];
+export type ChosenPageType = Schemas["ReclassifyPageRequest"]["pageType"];

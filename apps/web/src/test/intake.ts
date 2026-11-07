@@ -1,4 +1,5 @@
 import type {
+  AiRunState,
   ClaimDetail,
   ClaimQueueItem,
   ClaimStatusSnapshot,
@@ -13,7 +14,7 @@ export const CLAIM_ID = "30000000-0000-4000-8000-000000000184";
 export const MEMBER_ID = "31000000-0000-4000-8000-000000007731";
 export const POLICY_ID = "32000000-0000-4000-8000-000000000731";
 
-const officer = { id: "10000000-0000-4000-8000-000000000001", fullName: "Phạm Gia Bảo", initials: "PB" };
+export const OFFICER = { id: "10000000-0000-4000-8000-000000000001", fullName: "Phạm Gia Bảo", initials: "PB" };
 
 export function policySummary(overrides: Partial<PolicySummary> = {}): PolicySummary {
   return {
@@ -74,7 +75,7 @@ export function claimDetail(overrides: Partial<ClaimDetail> = {}): ClaimDetail {
     claimedTotal: 1_400_000,
     channel: "COUNTER",
     priority: "NORMAL",
-    registeredBy: officer,
+    registeredBy: OFFICER,
     assignee: null,
     assignedAt: null,
     submittedAt: null,
@@ -145,7 +146,7 @@ export function document(overrides: Partial<Document> = {}): Document {
     pageCount: 1,
     status: "READY",
     rejectionReason: null,
-    uploadedBy: officer,
+    uploadedBy: OFFICER,
     uploadedAt: "2026-10-13T09:00:00Z",
     pages: [page()],
     ...overrides,
@@ -176,6 +177,21 @@ export function snapshotOf(documents: Document[], overrides: Partial<ClaimStatus
       })),
     })),
     aiRuns: [],
+    ...overrides,
+  };
+}
+
+export function aiRun(overrides: Partial<AiRunState> = {}): AiRunState {
+  return {
+    id: "50000000-0000-4000-8000-000000000001",
+    task: "PAGE_CHECK",
+    status: "SUCCEEDED",
+    errorCode: null,
+    modelName: "fake-document-ai",
+    modelVersion: "1",
+    requestedAt: "2026-10-13T09:00:00Z",
+    startedAt: "2026-10-13T09:00:01Z",
+    finishedAt: "2026-10-13T09:00:03Z",
     ...overrides,
   };
 }

@@ -15,6 +15,8 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentPage> DocumentPages => Set<DocumentPage>();
     public DbSet<AiRun> AiRuns => Set<AiRun>();
+    public DbSet<ClaimField> ClaimFields => Set<ClaimField>();
+    public DbSet<ExpenseLine> ExpenseLines => Set<ExpenseLine>();
     public DbSet<BenefitPlan> BenefitPlans => Set<BenefitPlan>();
     public DbSet<RuleSetVersion> RuleSetVersions => Set<RuleSetVersion>();
     public DbSet<BenefitCategory> BenefitCategories => Set<BenefitCategory>();
@@ -239,6 +241,47 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
             table.Property(row => row.FinishedAt).HasColumnName("finished_at");
             table.Property(row => row.RawOutputKey).HasColumnName("raw_output_key");
         });
+
+        modelBuilder.Entity<ClaimField>(table =>
+        {
+            table.ToTable("claim_field");
+            table.Property(row => row.Id).HasColumnName("id");
+            table.Property(row => row.ClaimId).HasColumnName("claim_id");
+            table.Property(row => row.DocumentId).HasColumnName("document_id");
+            table.Property(row => row.FieldKey).HasColumnName("field_key");
+            table.Property(row => row.ItemNo).HasColumnName("item_no");
+            table.Property(row => row.ExpenseLineId).HasColumnName("expense_line_id");
+            table.Property(row => row.Status).HasColumnName("status");
+            table.Property(row => row.ValueText).HasColumnName("value_text");
+            table.Property(row => row.ValueAmount).HasColumnName("value_amount");
+            table.Property(row => row.ValueDate).HasColumnName("value_date");
+            table.Property(row => row.SourcePageId).HasColumnName("source_page_id");
+            table.Property(row => row.SourceBbox).HasColumnName("source_bbox").HasColumnType("jsonb");
+            table.Property(row => row.AiRunId).HasColumnName("ai_run_id");
+            table.Property(row => row.AiValue).HasColumnName("ai_value");
+            table.Property(row => row.AiConfidence).HasColumnName("ai_confidence").HasPrecision(4, 3);
+            table.Property(row => row.AiLevel).HasColumnName("ai_level");
+            table.Property(row => row.AiPageId).HasColumnName("ai_page_id");
+            table.Property(row => row.AiBbox).HasColumnName("ai_bbox").HasColumnType("jsonb");
+            table.Property(row => row.ResolvedBy).HasColumnName("resolved_by");
+            table.Property(row => row.ResolvedAt).HasColumnName("resolved_at");
+            table.Property(row => row.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
+        });
+
+        modelBuilder.Entity<ExpenseLine>(table =>
+        {
+            table.ToTable("expense_line");
+            table.Property(row => row.Id).HasColumnName("id");
+            table.Property(row => row.ClaimId).HasColumnName("claim_id");
+            table.Property(row => row.DocumentId).HasColumnName("document_id");
+            table.Property(row => row.LineNo).HasColumnName("line_no");
+            table.Property(row => row.Description).HasColumnName("description");
+            table.Property(row => row.Quantity).HasColumnName("quantity").HasPrecision(10, 2);
+            table.Property(row => row.UnitPrice).HasColumnName("unit_price");
+            table.Property(row => row.Amount).HasColumnName("amount");
+            table.Property(row => row.Origin).HasColumnName("origin");
+            table.Property(row => row.MappingStatus).HasColumnName("mapping_status");
+        });
     }
 
     /// <summary>
@@ -257,6 +300,12 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
         modelBuilder.Entity<DocumentPage>().HasOne<AiRun>().WithMany().HasForeignKey(row => row.AiRunId).OnDelete(DeleteBehavior.ClientNoAction);
         modelBuilder.Entity<AiRun>().HasOne<Claim>().WithMany().HasForeignKey(row => row.ClaimId).OnDelete(DeleteBehavior.ClientNoAction);
         modelBuilder.Entity<AiRun>().HasOne<Document>().WithMany().HasForeignKey(row => row.ScopeDocumentId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ExpenseLine>().HasOne<Document>().WithMany().HasForeignKey(row => row.DocumentId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ExpenseLine>().HasOne<Claim>().WithMany().HasForeignKey(row => row.ClaimId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ClaimField>().HasOne<Claim>().WithMany().HasForeignKey(row => row.ClaimId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ClaimField>().HasOne<Document>().WithMany().HasForeignKey(row => row.DocumentId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ClaimField>().HasOne<ExpenseLine>().WithMany().HasForeignKey(row => row.ExpenseLineId).OnDelete(DeleteBehavior.ClientNoAction);
+        modelBuilder.Entity<ClaimField>().HasOne<AiRun>().WithMany().HasForeignKey(row => row.AiRunId).OnDelete(DeleteBehavior.ClientNoAction);
         modelBuilder.Entity<AuditEvent>().HasOne<Claim>().WithMany().HasForeignKey(row => row.ClaimId).OnDelete(DeleteBehavior.ClientNoAction);
         modelBuilder.Entity<AuditEvent>().HasOne<AiRun>().WithMany().HasForeignKey(row => row.AiRunId).OnDelete(DeleteBehavior.ClientNoAction);
     }

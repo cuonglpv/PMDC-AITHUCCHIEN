@@ -24,6 +24,8 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\..\..\docs\api\claims-api.yaml" Link="contract\claims-api.yaml" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\..\..\docs\07-api-contract.md" Link="contract\07-api-contract.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The golden documents and the answers the Document AI fake replays for them, shared with every suite. -->
+    <Content Include="..\..\..\..\fixtures\golden\**\documents\*;..\..\..\..\fixtures\golden\**\ai-responses\*.json" Link="golden\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

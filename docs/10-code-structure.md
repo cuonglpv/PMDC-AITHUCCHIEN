@@ -183,7 +183,7 @@ Each of the 17 components in [C3](architecture/c4/03-component-claims-api.md) ha
 |---|---|---|
 | The Rule Engine has no I/O and depends on nothing | C3 rules 1 and 2 | No project references, `BannedApiAnalyzers` |
 | Every policy has an endpoint | S6 | `NotBuiltEndpoints` maps any operation with no handler to 501, so the role, scope and status rules of all 59 run and are tested before the features exist |
-| Thresholds are applied only in `AiJobs/` | C3 rule 4 | Architecture test |
+| Thresholds are applied only in `AiJobs/`, and only `AiJobs/` sets `ai_level` and `ai_type_level` | C3 rule 4 | Architecture tests |
 | Only `AiJobs/` calls the Document AI Service | C3 | Architecture test |
 | Only `DocumentStore/` uses the S3 SDK | C3 | Architecture test |
 | The engine reads only accepted values | C3 rule 3 | `EngineInputLoader`, golden tests |
@@ -210,7 +210,7 @@ Both workers are `BackgroundService` classes inside the API process, and tests c
 
 | Worker | Queue | How a crash is handled |
 |---|---|---|
-| `AiJobRunner` | `ai_run` in `QUEUED`, claimed with `FOR UPDATE SKIP LOCKED`, then committed as `RUNNING` before the call | A run left in `RUNNING` past its timeout is marked `FAILED`, which triggers the fallback |
+| `AiJobRunner` | `ai_run` in `QUEUED`, claimed with `FOR UPDATE SKIP LOCKED`, then committed as `RUNNING` before the call. A claim's `FIELD_EXTRACTION` waits until none of its `PAGE_CHECK` runs is `QUEUED` or `RUNNING` | A transient failure (5xx, 429, timeout, unreachable, an answer off the contract) puts the run back to `QUEUED` with a doubling wait while other runs go ahead; after `MaxAttempts`, or at once for 401 and 422, it is `FAILED`. A run left in `RUNNING` past its task timeout plus 30 seconds is `FAILED` as `TIMEOUT`. Every `FAILED` run triggers the fallback. Both workers share `FailedAttempts`, kept in memory for one API instance |
 | `DocumentPreparationWorker` | `document` in `CONVERTING`, with `FOR UPDATE SKIP LOCKED` held during the conversion | The lock dies with the process, so the next pass retries the file. No new column is needed. Pages and `READY` commit together |
 
 `uploadDocument` stores the original first and then inserts the row as `CONVERTING`, so a failed store leaves no row that would block submission. It checks a file's type by its first bytes, not its name: LibreOffice turns any bytes into a PDF, so a corrupted DOCX would otherwise become a page of garbage instead of being refused (section 13). Images are rotated according to their EXIF data before a page image is written, because every bounding box is relative to that image.
@@ -223,14 +223,14 @@ Settings without a UI (06, section 2) live in `appsettings.json` and environment
 |---|---|
 | `Auth` | Token lifetimes, signing key (at least 32 bytes), allowed origins, issuer and audience; checked when the API starts |
 | `Proxy` | `KnownProxies` and `KnownNetworks` allowed to set `X-Forwarded-For`. With neither set, forwarded headers are ignored |
-| `Thresholds` | BR-03 thresholds, quality and clinical thresholds |
-| `Ai` | Base URL, service key, pipeline name and version per task, timeout per task |
+| `Thresholds` | `PageType` 0.80, `GeneralField` 0.90, `MoneyAndIdentityField` 0.95, `NeedsEntryBelow` 0.70, `PageQuality` 0.50 (to tune on the golden set), `BenefitMapping` 0.85; checked when the API starts |
+| `Ai` | `BaseUrl` (the service root), `ServiceKey` (environment only), and per task the pipeline name and version and `TimeoutSeconds` (page check 30, extraction 120) |
 | `Converter`, `Storage` | Base URL, timeout, bucket and credentials |
 | `Limits` | 20 MB per file, 30 pages per claim |
 | `Queue` | BR-09 high-value threshold |
 | `Validation` | Required document types |
 | `Release` | `IncludeShould` |
-| `Workers` | On or off, poll interval, concurrent runs; for Document Preparation also `MaxAttempts` and `RetryDelaySeconds`, how a file whose converter or storage call fails waits (doubling, at most 15 minutes) while the files behind it go ahead, and when it is rejected |
+| `Workers` | On or off, poll interval, concurrent runs for `DocumentPreparation` and `AiJobs`; for both also `MaxAttempts` and `RetryDelaySeconds`, how a file whose converter or storage call fails waits (doubling, at most 15 minutes) while the files behind it go ahead, and when it is rejected |
 
 ## 5. Staff Web App
 
@@ -555,21 +555,21 @@ Latest stable on 04/11/2026. Lock files pin the exact version when each part is 
 
 ## 14. What is built
 
-Three slices work end to end: US01 sign-in, US19 rule sets and Slice 1 intake (US02, US03).
+Four slices work end to end: US01 sign-in, US19 rule sets, Slice 1 intake (US02, US03) and Slice 2 AI reading (US04, US05).
 
 | Part | State |
 |---|---|
 | `infra/`, `db/`, generators, CI | Done |
 | `ClaimLens.RuleEngine` | Done: US11 and US12 on the golden numbers |
-| Claims API | Sign-in, the 8 Must operations of Rule Set Management, and the 12 of intake: `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `submitClaim`, `listDocuments`, `getPage`, `getClaim`, `getClaimStatus` and `listClaims` for `MY_DRAFTS` and `MY_SUBMISSIONS`. Document Store on S3, Document Preparation with Gotenberg, PDFium and SkiaSharp, and `ClaimStatusMachine`. The role, scope, status and audit rules of all 59 operations run; the other 35 answer 501 until their features are built, and so do the reviewer's and approver's queue views |
-| Document AI Service | All six routes with the fake gateway |
-| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor, SCR-10 to SCR-13 intake. The reviewer's and approver's homes are placeholders |
+| Claims API | Sign-in, the 8 Must operations of Rule Set Management, and the 12 of intake: `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `submitClaim`, `listDocuments`, `getPage`, `getClaim`, `getClaimStatus` and `listClaims` for `MY_DRAFTS` and `MY_SUBMISSIONS`, plus `reclassifyPage` for the Intake Officer. Document Store on S3, Document Preparation with Gotenberg, PDFium and SkiaSharp, `ClaimStatusMachine`, and the AI Job Runner with the page check and field extraction appliers, `Thresholds` and `FieldCatalogue`. The role, scope, status and audit rules of all 59 operations run; the other 34 answer 501 until their features are built, and so do the reviewer's and approver's queue views and the reviewer's `reclassifyPage` |
+| Document AI Service | All six routes with the fake gateway, which replays the recorded answers for the golden pages when `DOCUMENT_AI_REPLAY_DIR` is set (a page is recognised by its dHash and sharpness) |
+| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor, SCR-10 to SCR-13 intake, with the AI page check on SCR-13 (type, AI marker and level, Choose type, the fallback banner). The reviewer's and approver's homes are placeholders |
 
 US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 10, the value the seeded rule sets use, and has no tab. Rules apply by kind (eligibility, waiting periods, exclusions, coverage, then the rate and limits), and a save or publish that orders a rule before a kind that applies first is refused with `RULE_INVALID`. A version is published with an effective date of today or later in Vietnam time. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
 
-Slice 1 queues a `PAGE_CHECK` run for each ready file and a `FIELD_EXTRACTION` run on submission, but nothing runs them yet: pages show "Waiting for AI check" and a submitted claim stays `PROCESSING` until the AI Job Runner arrives. Its flow is in [seq-01-intake](diagrams/seq-01-intake.md).
+Slice 1 queues a `PAGE_CHECK` run for each ready file and a `FIELD_EXTRACTION` run on submission ([seq-01-intake](diagrams/seq-01-intake.md)); Slice 2 runs them, fills the field slots of the [field catalogue](03-use-cases.md#field-catalogue) and moves the claim to `READY_FOR_REVIEW` or `NEEDS_VERIFICATION` ([seq-02-ai-reading](diagrams/seq-02-ai-reading.md)). A claim whose pages are all Other has no required field and is `READY_FOR_REVIEW`; the required-document check of US07 catches it. `ai_value` keeps a national ID in full, so `listFields` (Slice 3) must mask it. The fallback banner follows the latest run of each task, so a failed page check on an earlier file shows only on that file's pages once a later file was checked.
 
-Next, in the order the stories depend on each other: the AI Job Runner with US04 and US05, then the review queue and the claim workspace.
+Next, in the order the stories depend on each other: the review queue and the Evidence tab (US23, US06), then validation and adjudication.
 
 ## Still open
 
