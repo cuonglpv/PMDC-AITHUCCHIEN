@@ -12,13 +12,16 @@ public enum ThresholdGroup
     MoneyAndIdentity,
 }
 
-/// <summary>How a value is read into the claim_field columns: text only, or also value_amount, value_date or a quantity.</summary>
+/// <summary>
+/// How a value is read into the claim_field columns: text only, or also value_amount, value_date or a quantity. The
+/// contract's FieldValueKind, which a request and a response both name.
+/// </summary>
 public enum FieldValueKind
 {
     Text,
     Money,
     Date,
-    Quantity,
+    Number,
 }
 
 /// <summary>A field of a page type. Required fields must be resolved before a claim is READY_FOR_REVIEW.</summary>
@@ -102,6 +105,13 @@ public static class FieldCatalogue
     /// <summary>The fields read from a document of this type. OTHER and UNCLASSIFIED have none.</summary>
     public static PageTypeFields For(PageType type) => ByType.TryGetValue(type, out var fields) ? fields : None;
 
+    /// <summary>Whether a slot must be resolved before a claim is READY_FOR_REVIEW, on a document of this type.</summary>
+    public static bool IsRequired(PageType type, FieldKey key, short itemNo)
+    {
+        var fields = For(type);
+        return (itemNo == 0 ? fields.Header : fields.Item).Any(field => field.Key == key && field.Required);
+    }
+
     public static ThresholdGroup GroupOf(FieldKey key) =>
         MoneyAndIdentity.Contains(key) ? ThresholdGroup.MoneyAndIdentity : ThresholdGroup.General;
 
@@ -110,7 +120,7 @@ public static class FieldCatalogue
         {
             FieldKey.InvoiceTotal or FieldKey.LineAmount or FieldKey.LineUnitPrice => FieldValueKind.Money,
             FieldKey.ServiceDate => FieldValueKind.Date,
-            FieldKey.LineQuantity => FieldValueKind.Quantity,
+            FieldKey.LineQuantity => FieldValueKind.Number,
             _ => FieldValueKind.Text,
         };
 
@@ -136,4 +146,8 @@ public static class FieldCatalogue
     /// <summary>The status of a field that counts as handled for READY_FOR_REVIEW (docs/06-data-model.md, section 7).</summary>
     public static bool IsResolved(FieldStatus status) =>
         status is FieldStatus.AutoAccepted or FieldStatus.Confirmed or FieldStatus.Corrected or FieldStatus.Entered or FieldStatus.NotPresent;
+
+    /// <summary>A person decided this field, so nothing the AI reads later changes its value (US06).</summary>
+    public static bool IsResolvedByPerson(FieldStatus status) =>
+        status is FieldStatus.Confirmed or FieldStatus.Corrected or FieldStatus.Entered or FieldStatus.NotPresent;
 }

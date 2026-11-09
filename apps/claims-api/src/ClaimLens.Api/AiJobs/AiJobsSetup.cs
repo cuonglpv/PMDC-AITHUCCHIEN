@@ -29,7 +29,9 @@ public static class AiJobsSetup
                 http.Timeout = Timeout.InfiniteTimeSpan;
             });
         services.AddScoped<PageCheckApplier>();
+        services.AddSingleton<FieldReadings>();
         services.AddScoped<FieldExtractionApplier>();
+        services.AddScoped<PageRereadApplier>();
         services.AddScoped<AiRunProcessor>();
         services.AddHostedService<AiJobRunner>();
     }

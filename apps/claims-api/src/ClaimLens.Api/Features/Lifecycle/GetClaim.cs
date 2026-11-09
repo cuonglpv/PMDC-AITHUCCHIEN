@@ -9,7 +9,7 @@ public static class GetClaim
 {
     public static async Task<IResult> Handle(HttpContext context, ClaimLensDbContext db, QueuePriority priority, CancellationToken cancel)
     {
-        context.User.TryGetStaff(out _, out var role);
-        return Results.Ok(await ClaimResponses.DetailAsync(db, priority, ClaimAccess.Of(context).ClaimId, role, cancel));
+        context.User.TryGetStaff(out var staffId, out var role);
+        return Results.Ok(await ClaimResponses.DetailAsync(db, priority, ClaimAccess.Of(context).ClaimId, staffId, role, cancel));
     }
 }

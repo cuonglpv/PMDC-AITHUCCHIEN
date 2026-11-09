@@ -7,6 +7,7 @@ using ClaimLens.Api.AiJobs;
 using ClaimLens.Api.Domain.Enums;
 using ClaimLens.Api.DocumentPreparation;
 using ClaimLens.Api.DocumentStore;
+using ClaimLens.Api.Features.Adjudication;
 using ClaimLens.Api.Features.Evidence;
 using ClaimLens.Api.Features.Intake;
 using ClaimLens.Api.Features.Lifecycle;
@@ -141,6 +142,7 @@ public static class Startup
         api.MapIntake();
         api.MapLifecycle();
         api.MapEvidence();
+        api.MapAdjudication();
         api.MapRuleSets();
         NotBuiltEndpoints.MapRemaining(api, app);
     }

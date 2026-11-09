@@ -281,6 +281,8 @@ public sealed class ClaimLensDbContext(DbContextOptions<ClaimLensDbContext> opti
             table.Property(row => row.Amount).HasColumnName("amount");
             table.Property(row => row.Origin).HasColumnName("origin");
             table.Property(row => row.MappingStatus).HasColumnName("mapping_status");
+            table.Property(row => row.RemovedBy).HasColumnName("removed_by");
+            table.Property(row => row.RemovedAt).HasColumnName("removed_at");
         });
     }
 
