@@ -12,6 +12,7 @@ public class AiSettingsTests(ApiFactory api)
     [InlineData("Ai:ServiceKey", "", typeof(AiOptions))]
     [InlineData("Ai:PageCheck:TimeoutSeconds", "0", typeof(AiOptions))]
     [InlineData("Ai:FieldExtraction:TimeoutSeconds", "601", typeof(AiOptions))]
+    [InlineData("Ai:PageReread:TimeoutSeconds", "0", typeof(AiOptions))]
     [InlineData("Thresholds:PageType", "1.5", typeof(ThresholdsOptions))]
     [InlineData("Thresholds:GeneralField", "0", typeof(ThresholdsOptions))]
     [InlineData("Thresholds:NeedsEntryBelow", "0.95", typeof(ThresholdsOptions))]

@@ -1,7 +1,9 @@
 using ClaimLens.Api.AccessControl;
 using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Domain.Enums;
+using ClaimLens.Api.Features.Evidence;
 using ClaimLens.Api.Features.RuleSets;
+using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,6 +57,23 @@ public enum AllowedAction
 
 /// <summary>Why an action is not open yet, so the screen can name the missing item.</summary>
 public sealed record Blocker(string Code, string Message);
+
+/// <summary>
+/// What a change did to the claim. Alerts, mappings and revisions stay at zero and null until Slices 4a and 4b fill them
+/// through <see cref="ClaimRecheck"/>.
+/// </summary>
+public sealed record ClaimProgress(
+    ClaimStatus Status,
+    bool IsReturned,
+    int RowVersion,
+    int FieldsToVerify,
+    int BlockingAlerts,
+    int WarningAlerts,
+    int MappingsToConfirm,
+    int? CurrentRevisionNo,
+    long? PayableAmount,
+    bool IsRevisionStale,
+    bool RevisionCreated);
 
 public sealed record ClaimDetail(
     Guid Id,
@@ -120,6 +139,7 @@ public static class ClaimResponses
         ClaimLensDbContext db,
         QueuePriority priority,
         Guid claimId,
+        Guid viewerId,
         StaffRole viewer,
         CancellationToken cancel)
     {
@@ -137,7 +157,10 @@ public static class ClaimResponses
         var version = await EffectiveRuleSet.OnAsync(db, policy.PlanId, claim.ServiceDate, cancel);
         var returned = await ReturnAsync(db, claim, cancel);
         var ai = await AiStateAsync(db, claim.Id, cancel);
-        var (actions, blockers) = await ActionsAsync(db, claim, viewer, cancel);
+        var evidence = viewer == StaffRole.IntakeOfficer ? null : await ReviewReadiness.ForClaimAsync(db, claim.Id, cancel);
+        var (actions, blockers) = viewer == StaffRole.IntakeOfficer
+            ? await IntakeActionsAsync(db, claim, cancel)
+            : ReviewActions(claim, viewerId, viewer, evidence!);
 
         // An Intake Officer gets the same shape with the reviewer's numbers left out (contract, getClaim).
         ClaimBalance? balance = null;
@@ -172,11 +195,30 @@ public static class ClaimResponses
             // Calculation revisions arrive with adjudication (US11, US12); until then no claim has one.
             CurrentRevision: null,
             balance,
-            // The counts are the reviewer's: fields, alerts, mappings and flags arrive with US05 to US14.
-            Counts: null,
+            // Fields are counted now; alerts, mappings and flags arrive with US07 to US14.
+            evidence is null ? null : new ClaimCounts(evidence.FieldsToVerify, 0, 0, 0, 0, 0),
             ai,
             actions,
             blockers);
+    }
+
+    /// <summary>The answer to a change on a claim, after the change and any move it caused are saved.</summary>
+    public static async Task<ClaimProgress> ProgressAsync(ClaimLensDbContext db, Claim claim, CancellationToken cancel)
+    {
+        var evidence = await ReviewReadiness.ForClaimAsync(db, claim.Id, cancel);
+        var returned = await ReturnAsync(db, claim, cancel);
+        return new ClaimProgress(
+            claim.Status,
+            returned.IsReturned,
+            claim.RowVersion,
+            evidence.FieldsToVerify,
+            BlockingAlerts: 0,
+            WarningAlerts: 0,
+            MappingsToConfirm: 0,
+            CurrentRevisionNo: null,
+            PayableAmount: null,
+            IsRevisionStale: false,
+            RevisionCreated: false);
     }
 
     public static async Task<ClaimStatusSnapshot> StatusAsync(ClaimLensDbContext db, Guid claimId, CancellationToken cancel)
@@ -313,14 +355,55 @@ public static class ClaimResponses
         return latest.Where(row => row.Status == "RETURNED").Select(row => row.ClaimId).ToHashSet();
     }
 
-    private static async Task<(List<AllowedAction> Actions, List<Blocker> Blockers)> ActionsAsync(
+    /// <summary>
+    /// START_REVIEW for a claim nobody has taken, EDIT_FIELDS for the assignee while it can still change, with what is
+    /// left named. The approver reads only until Slice 5; the later actions arrive with US07 onwards.
+    /// </summary>
+    private static (List<AllowedAction> Actions, List<Blocker> Blockers) ReviewActions(
+        Claim claim,
+        Guid viewerId,
+        StaffRole viewer,
+        ClaimEvidence evidence)
+    {
+        if (viewer != StaffRole.ClaimsReviewer)
+        {
+            return ([], []);
+        }
+
+        if (claim.AssigneeId is null)
+        {
+            return claim.Status is ClaimStatus.NeedsVerification or ClaimStatus.ReadyForReview
+                ? ([AllowedAction.StartReview], [])
+                : ([], []);
+        }
+
+        if (claim.AssigneeId != viewerId || claim.Status is not (ClaimStatus.NeedsVerification or ClaimStatus.InReview))
+        {
+            return ([], []);
+        }
+
+        var blockers = new List<Blocker>();
+        if (evidence.FieldsToVerify > 0)
+        {
+            blockers.Add(new Blocker(ErrorCodes.FieldsToVerify, $"{evidence.FieldsToVerify} {Plural(evidence.FieldsToVerify, "field")} left to verify."));
+        }
+
+        if (evidence.PagesToClassify > 0)
+        {
+            blockers.Add(new Blocker(ErrorCodes.PageUnclassified, $"{evidence.PagesToClassify} {Plural(evidence.PagesToClassify, "page")} still needs a type."));
+        }
+
+        return ([AllowedAction.EditFields], blockers);
+    }
+
+    private static string Plural(int count, string word) => count == 1 ? word : word + "s";
+
+    private static async Task<(List<AllowedAction> Actions, List<Blocker> Blockers)> IntakeActionsAsync(
         ClaimLensDbContext db,
         Claim claim,
-        StaffRole viewer,
         CancellationToken cancel)
     {
-        // The reviewer's and approver's actions arrive with the claim workspace (US06 onwards) and the queues (US23).
-        if (viewer != StaffRole.IntakeOfficer || claim.Status != ClaimStatus.Draft)
+        if (claim.Status != ClaimStatus.Draft)
         {
             return ([], []);
         }

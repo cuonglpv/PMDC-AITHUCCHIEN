@@ -26,6 +26,7 @@ public sealed class AiRunProcessor(
     IDocumentStore store,
     PageCheckApplier pageCheck,
     FieldExtractionApplier extraction,
+    PageRereadApplier reread,
     AiRunAttempts attempts,
     IOptions<AiOptions> options,
     TimeProvider clock,
@@ -103,7 +104,7 @@ public sealed class AiRunProcessor(
                 .FromSql($"""
                     select r.* from ai_run r
                     where r.status = 'QUEUED'
-                      and r.task in ('PAGE_CHECK', 'FIELD_EXTRACTION')
+                      and r.task in ('PAGE_CHECK', 'FIELD_EXTRACTION', 'PAGE_REREAD')
                       and r.id <> all({waiting})
                       and (r.task <> 'FIELD_EXTRACTION' or not exists (
                             select 1 from ai_run p
@@ -124,6 +125,10 @@ public sealed class AiRunProcessor(
         if (run.Task == AiTask.PageCheck)
         {
             await pageCheck.StartAsync(run, cancel);
+        }
+        else if (run.Task == AiTask.PageReread)
+        {
+            await reread.StartAsync(run, cancel);
         }
 
         await db.SaveChangesAsync(cancel);
@@ -161,6 +166,26 @@ public sealed class AiRunProcessor(
                 var readAnswer = await ai.RunFieldExtractionAsync(read, cancel);
                 var readKey = await StoreRawAsync(run, readAnswer.Raw, cancel);
                 await CompleteAsync(run.Id, readKey, readAnswer.Body.Model, locked => extraction.ApplyAsync(locked, readAnswer.Body, cancel), cancel);
+                return;
+
+            case AiTask.PageReread:
+                if (await reread.RequestAsync(run, cancel) is not { } again)
+                {
+                    await FailAsync(run.Id, NothingToReadCode, cancel);
+                    return;
+                }
+
+                if (again.FieldCatalogue.Count == 0)
+                {
+                    // The page's type has no fields, so there is nothing to ask, and what it gave before no longer applies.
+                    var nothing = new PageRereadResponse(run.Id, new ModelRef(run.ModelName, run.ModelVersion), again.DocumentId, []);
+                    await CompleteAsync(run.Id, null, null, locked => reread.ApplyAsync(locked, nothing, cancel), cancel);
+                    return;
+                }
+
+                var againAnswer = await ai.RunPageRereadAsync(again, cancel);
+                var againKey = await StoreRawAsync(run, againAnswer.Raw, cancel);
+                await CompleteAsync(run.Id, againKey, againAnswer.Body.Model, locked => reread.ApplyAsync(locked, againAnswer.Body, cancel), cancel);
                 return;
 
             default:
@@ -230,6 +255,7 @@ public sealed class AiRunProcessor(
         {
             AiTask.PageCheck => await pageCheck.FailAsync(run, cancel),
             AiTask.FieldExtraction => await extraction.FailAsync(run, cancel),
+            AiTask.PageReread => await reread.FailAsync(run, cancel),
             _ => new { },
         };
 
@@ -254,6 +280,10 @@ public sealed class AiRunProcessor(
         {
             await pageCheck.RequeueAsync(run, cancel);
         }
+        else if (run.Task == AiTask.PageReread)
+        {
+            await reread.RequeueAsync(run, cancel);
+        }
 
         await db.SaveChangesAsync(cancel);
         await transaction.CommitAsync(cancel);
@@ -266,6 +296,7 @@ public sealed class AiRunProcessor(
         var now = clock.GetUtcNow();
         var pageCheckCutoff = now - TimeSpan.FromSeconds(options.Value.PageCheck.TimeoutSeconds) - StuckMargin;
         var extractionCutoff = now - TimeSpan.FromSeconds(options.Value.FieldExtraction.TimeoutSeconds) - StuckMargin;
+        var rereadCutoff = now - TimeSpan.FromSeconds(options.Value.PageReread.TimeoutSeconds) - StuckMargin;
 
         db.ChangeTracker.Clear();
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
@@ -274,7 +305,8 @@ public sealed class AiRunProcessor(
                     select * from ai_run
                     where status = 'RUNNING'
                       and ((task = 'PAGE_CHECK' and started_at < {pageCheckCutoff})
-                        or (task = 'FIELD_EXTRACTION' and started_at < {extractionCutoff}))
+                        or (task = 'FIELD_EXTRACTION' and started_at < {extractionCutoff})
+                        or (task = 'PAGE_REREAD' and started_at < {rereadCutoff}))
                     order by started_at, id
                     limit 1
                     for update skip locked

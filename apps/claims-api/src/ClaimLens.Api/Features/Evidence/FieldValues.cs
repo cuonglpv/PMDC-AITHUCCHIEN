@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Domain.Enums;
 
 namespace ClaimLens.Api.Features.Evidence;
@@ -31,9 +32,42 @@ public static partial class FieldValues
         {
             FieldValueKind.Money => Money(trimmed) is { } amount ? new FieldValue(trimmed, amount, null, null) : null,
             FieldValueKind.Date => Date(trimmed) is { } date ? new FieldValue(trimmed, null, date, null) : null,
-            FieldValueKind.Quantity => Quantity(trimmed) is { } quantity ? new FieldValue(trimmed, null, null, quantity) : null,
+            FieldValueKind.Number => Quantity(trimmed) is { } quantity ? new FieldValue(trimmed, null, null, quantity) : null,
             _ => new FieldValue(trimmed, null, null, null),
         };
+    }
+
+    /// <summary>Whether two readings of a field say the same thing: "1.400.000" and 1400000 do.</summary>
+    public static bool SameValue(FieldKey key, FieldValue one, FieldValue other) =>
+        FieldCatalogue.KindOf(key) switch
+        {
+            FieldValueKind.Money => one.Amount == other.Amount,
+            FieldValueKind.Date => one.Date == other.Date,
+            FieldValueKind.Number => one.Quantity == other.Quantity,
+            _ => one.Text == other.Text,
+        };
+
+    /// <summary>
+    /// The line's column follows the value in use of the field that feeds it, in the same transaction
+    /// (docs/06-data-model.md, section 10). A field with no value in use leaves the column empty.
+    /// </summary>
+    public static void FollowOnLine(ExpenseLine line, ClaimField field)
+    {
+        switch (field.FieldKey)
+        {
+            case FieldKey.LineDescription:
+                line.Description = field.ValueText;
+                break;
+            case FieldKey.LineQuantity:
+                line.Quantity = field.ValueText is { } quantity ? Quantity(quantity) : null;
+                break;
+            case FieldKey.LineUnitPrice:
+                line.UnitPrice = field.ValueAmount;
+                break;
+            case FieldKey.LineAmount:
+                line.Amount = field.ValueAmount;
+                break;
+        }
     }
 
     /// <summary>

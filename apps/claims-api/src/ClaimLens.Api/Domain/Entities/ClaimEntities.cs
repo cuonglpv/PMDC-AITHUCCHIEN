@@ -177,4 +177,9 @@ public sealed class ExpenseLine
     public long? Amount { get; set; }
     public LineOrigin Origin { get; set; }
     public MappingStatus MappingStatus { get; set; }
+
+    /// <summary>A removed line stays, so earlier revisions remain readable; later ones leave it out (removeExpenseLine).</summary>
+    public Guid? RemovedBy { get; set; }
+
+    public DateTimeOffset? RemovedAt { get; set; }
 }

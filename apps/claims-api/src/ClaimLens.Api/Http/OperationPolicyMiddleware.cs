@@ -113,14 +113,7 @@ public sealed class OperationPolicyMiddleware(RequestDelegate next)
             return Problems.Of(context, StatusCodes.Status404NotFound, ErrorCodes.NotFound, "Not found");
         }
 
-        var inScope = scope switch
-        {
-            ClaimScopeKind.Registered => claim.RegisteredBy == staffId,
-            ClaimScopeKind.Assigned => claim.AssigneeId == staffId,
-            _ => true,
-        };
-
-        if (!inScope)
+        if (!claim.InScope(scope, staffId))
         {
             return Problems.Of(context, StatusCodes.Status403Forbidden, ErrorCodes.ClaimOutOfScope, "This claim is not available to you");
         }
@@ -163,4 +156,12 @@ public sealed record ClaimAccess(Guid ClaimId, ClaimStatus Status, Guid Register
     public static ClaimAccess Of(HttpContext context) =>
         context.Items[ItemKey] as ClaimAccess
         ?? throw new InvalidOperationException("This operation has no claim the policy middleware checked.");
+
+    public bool InScope(ClaimScopeKind scope, Guid staffId) =>
+        scope switch
+        {
+            ClaimScopeKind.Registered => RegisteredBy == staffId,
+            ClaimScopeKind.Assigned => AssigneeId == staffId,
+            _ => true,
+        };
 }

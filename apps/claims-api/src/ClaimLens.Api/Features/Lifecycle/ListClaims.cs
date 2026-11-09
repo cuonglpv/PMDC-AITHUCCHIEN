@@ -1,6 +1,8 @@
 using System.Globalization;
 using ClaimLens.Api.AccessControl;
+using ClaimLens.Api.Domain.Entities;
 using ClaimLens.Api.Domain.Enums;
+using ClaimLens.Api.Features.Evidence;
 using ClaimLens.Api.Http;
 using ClaimLens.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -36,18 +38,23 @@ public sealed record ClaimQueuePage(
     IReadOnlyDictionary<string, int> Counts);
 
 /// <summary>
-/// The queue tabs. This slice builds the Intake Officer's two, MY_DRAFTS and MY_SUBMISSIONS; the reviewer's and the
-/// approver's arrive with US23 and US18 and answer 501 until then. A view of another role is 403 FORBIDDEN_ROLE.
+/// The queue tabs: the Intake Officer's two (newest first) and the Claims Reviewer's four (BR-09). The approver's arrive
+/// with US18 and answer 501 until then. A view of another role is 403 FORBIDDEN_ROLE. AVAILABLE never reads the member
+/// table and filters only by claim number, because the reviewer has not taken those claims yet (BR-11).
 /// </summary>
 public static class ListClaims
 {
     public const string MyDrafts = "MY_DRAFTS";
     public const string MySubmissions = "MY_SUBMISSIONS";
+    public const string Available = "AVAILABLE";
+    public const string AssignedToMe = "ASSIGNED_TO_ME";
+    public const string NeedsVerification = "NEEDS_VERIFICATION";
+    public const string Returned = "RETURNED";
 
     private static readonly Dictionary<StaffRole, string[]> ViewsByRole = new()
     {
         [StaffRole.IntakeOfficer] = [MyDrafts, MySubmissions],
-        [StaffRole.ClaimsReviewer] = ["AVAILABLE", "ASSIGNED_TO_ME", "NEEDS_VERIFICATION", "RETURNED"],
+        [StaffRole.ClaimsReviewer] = [Available, AssignedToMe, NeedsVerification, Returned],
         [StaffRole.SeniorApprover] = ["PENDING_APPROVAL", "DECIDED_BY_ME"],
     };
 
@@ -78,28 +85,25 @@ public static class ListClaims
             return Problems.Of(context, StatusCodes.Status403Forbidden, ErrorCodes.ForbiddenRole, "This queue belongs to another role");
         }
 
-        if (role != StaffRole.IntakeOfficer)
+        if (role is not (StaffRole.IntakeOfficer or StaffRole.ClaimsReviewer))
         {
             return Results.StatusCode(StatusCodes.Status501NotImplemented);
         }
 
-        var mine = db.Claims.AsNoTracking().Where(claim => claim.RegisteredBy == staffId);
-        var counts = new Dictionary<string, int>(StringComparer.Ordinal)
+        if (filters.View == Available && OnlyByNumber(filters) is { Count: > 0 } refused)
         {
-            [MyDrafts] = await mine.CountAsync(claim => claim.Status == ClaimStatus.Draft, cancel),
-            [MySubmissions] = await mine.CountAsync(claim => claim.Status != ClaimStatus.Draft, cancel),
-        };
+            return Problems.Of(context, StatusCodes.Status422UnprocessableEntity, ErrorCodes.ValidationFailed, "Check the highlighted fields", refused);
+        }
+
+        var (scoped, counts) = role == StaffRole.IntakeOfficer
+            ? await OfficerViewAsync(db, staffId, filters.View, cancel)
+            : await ReviewerViewAsync(db, staffId, filters.View, cancel);
 
         var rows =
-            from claim in mine
+            from claim in scoped
             join policy in db.Policies on claim.PolicyId equals policy.Id
             join plan in db.BenefitPlans on policy.PlanId equals plan.Id
-            join member in db.Members on claim.MemberId equals member.Id
-            select new { claim, PlanCode = plan.Code, MemberName = member.FullName };
-
-        rows = filters.View == MyDrafts
-            ? rows.Where(row => row.claim.Status == ClaimStatus.Draft)
-            : rows.Where(row => row.claim.Status != ClaimStatus.Draft);
+            select new { claim, PlanCode = plan.Code };
 
         if (filters.Priority is { } wanted)
         {
@@ -132,10 +136,18 @@ public static class ListClaims
 
         var total = await rows.CountAsync(cancel);
 
-        // Newest first: a draft by when it was registered, a submission by when it was handed over.
-        var ordered = filters.View == MyDrafts
-            ? rows.OrderByDescending(row => row.claim.CreatedAt).ThenByDescending(row => row.claim.Id)
-            : rows.OrderByDescending(row => row.claim.SubmittedAt ?? row.claim.CreatedAt).ThenByDescending(row => row.claim.Id);
+        // Newest first: a draft by when it was registered, a submission by when it was handed over. The review queue
+        // follows BR-09: high value, then unresolved High flags (none until Slice 6), then the longest wait.
+        var highValue = priority.HighValueThreshold;
+        var ordered = filters.View switch
+        {
+            MyDrafts => rows.OrderByDescending(row => row.claim.CreatedAt).ThenByDescending(row => row.claim.Id),
+            MySubmissions => rows.OrderByDescending(row => row.claim.SubmittedAt ?? row.claim.CreatedAt).ThenByDescending(row => row.claim.Id),
+            _ => rows
+                .OrderByDescending(row => row.claim.ClaimedTotal >= highValue)
+                .ThenBy(row => row.claim.StatusChangedAt)
+                .ThenBy(row => row.claim.Id),
+        };
         var page = await ordered
             .Skip((filters.Page - 1) * filters.PageSize)
             .Take(filters.PageSize)
@@ -150,21 +162,32 @@ public static class ListClaims
             page.Where(row => row.claim.Status == ClaimStatus.InReview).Select(row => row.claim.Id).ToList(),
             cancel);
 
-        // Alert, field and flag counts, payables and decisions belong to the reviewer's and approver's views.
+        var memberIds = page.Select(row => row.claim.MemberId).Distinct().ToList();
+        var members = filters.View == Available
+            ? []
+            : await db.Members.AsNoTracking()
+                .Where(member => memberIds.Contains(member.Id))
+                .ToDictionaryAsync(member => member.Id, member => member.FullName, cancel);
+
+        // Fields to verify are the reviewer's; alerts, flags, payables and decisions arrive with later slices.
+        var evidence = role == StaffRole.ClaimsReviewer
+            ? await ReviewReadiness.ForClaimsAsync(db, page.Select(row => row.claim.Id).ToList(), cancel)
+            : new Dictionary<Guid, ClaimEvidence>();
+
         var items = page
             .Select(row => new ClaimQueueItem(
                 row.claim.Id,
                 row.claim.ClaimNumber,
                 row.claim.Status,
                 returned.Contains(row.claim.Id),
-                row.MemberName,
+                members.GetValueOrDefault(row.claim.MemberId),
                 row.PlanCode,
                 row.claim.ServiceDate,
                 row.claim.ClaimedTotal,
                 priority.Of(row.claim.ClaimedTotal),
                 row.claim.StatusChangedAt,
                 row.claim.AssigneeId is { } assignee ? initials[assignee] : null,
-                FieldsToVerify: 0,
+                FieldsToVerify: evidence.GetValueOrDefault(row.claim.Id)?.FieldsToVerify ?? 0,
                 BlockingAlerts: 0,
                 WarningAlerts: 0,
                 OpenFlags: 0,
@@ -175,6 +198,86 @@ public static class ListClaims
             .ToList();
 
         return Results.Ok(new ClaimQueuePage(items, filters.Page, filters.PageSize, total, counts));
+    }
+
+    private static async Task<(IQueryable<Claim> Scoped, Dictionary<string, int> Counts)> OfficerViewAsync(
+        ClaimLensDbContext db,
+        Guid staffId,
+        string view,
+        CancellationToken cancel)
+    {
+        var mine = db.Claims.AsNoTracking().Where(claim => claim.RegisteredBy == staffId);
+        var drafts = mine.Where(claim => claim.Status == ClaimStatus.Draft);
+        var submissions = mine.Where(claim => claim.Status != ClaimStatus.Draft);
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            [MyDrafts] = await drafts.CountAsync(cancel),
+            [MySubmissions] = await submissions.CountAsync(cancel),
+        };
+
+        return (view == MyDrafts ? drafts : submissions, counts);
+    }
+
+    /// <summary>The four tabs of US23. Returned depends on a table Slice 5 maps, so its claims are looked up first.</summary>
+    private static async Task<(IQueryable<Claim> Scoped, Dictionary<string, int> Counts)> ReviewerViewAsync(
+        ClaimLensDbContext db,
+        Guid staffId,
+        string view,
+        CancellationToken cancel)
+    {
+        var claims = db.Claims.AsNoTracking();
+        var mineInReview = claims.Where(claim => claim.AssigneeId == staffId && claim.Status == ClaimStatus.InReview);
+        var returned = (await ClaimResponses.ReturnedAsync(db, await mineInReview.Select(claim => claim.Id).ToListAsync(cancel), cancel)).ToArray();
+
+        var available = claims.Where(claim => claim.AssigneeId == null
+            && (claim.Status == ClaimStatus.NeedsVerification || claim.Status == ClaimStatus.ReadyForReview));
+        var assigned = mineInReview.Where(claim => !returned.Contains(claim.Id));
+        var verifying = claims.Where(claim => claim.AssigneeId == staffId && claim.Status == ClaimStatus.NeedsVerification);
+        var sentBack = mineInReview.Where(claim => returned.Contains(claim.Id));
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            [Available] = await available.CountAsync(cancel),
+            [AssignedToMe] = await assigned.CountAsync(cancel),
+            [NeedsVerification] = await verifying.CountAsync(cancel),
+            [Returned] = returned.Length,
+        };
+
+        return (view switch
+        {
+            Available => available,
+            AssignedToMe => assigned,
+            NeedsVerification => verifying,
+            _ => sentBack,
+        }, counts);
+    }
+
+    private static List<FieldError> OnlyByNumber(Filters filters)
+    {
+        var refused = new List<FieldError>();
+        void Refuse(string field) => refused.Add(new FieldError(field, "NOT_ALLOWED", "This tab can only be filtered by claim number."));
+
+        if (filters.Priority is not null)
+        {
+            Refuse("priority");
+        }
+
+        if (filters.PlanCode is not null)
+        {
+            Refuse("planCode");
+        }
+
+        if (filters.ServiceDateFrom is not null)
+        {
+            Refuse("serviceDateFrom");
+        }
+
+        if (filters.ServiceDateTo is not null)
+        {
+            Refuse("serviceDateTo");
+        }
+
+        return refused;
     }
 
     private static (Filters? Filters, List<FieldError> Errors) Read(IQueryCollection query)

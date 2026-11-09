@@ -33,6 +33,32 @@ public class DocumentAiClientTests
         Assert.Equal(body, Encoding.UTF8.GetString(answer.Raw));
     }
 
+    [Fact]
+    public async Task A_reread_goes_to_its_own_path_and_reads_its_suggestions()
+    {
+        var page = Guid.CreateVersion7();
+        var document = Guid.CreateVersion7();
+        var request = new PageRereadRequest(
+            Guid.CreateVersion7(),
+            new ModelRef("field-extractor", "v2.4"),
+            document,
+            new TypedPageRef(page, "pages/a/b/1.png", Domain.Enums.PageType.Invoice),
+            [Domain.Enums.FieldKey.InvoiceTotal]);
+        var body = $$$"""
+            {"runId":"{{{request.RunId}}}","model":{"name":"field-extractor","version":"v2.4"},"documentId":"{{{document}}}",
+             "fields":[{"fieldKey":"invoice_total","itemNo":0,"value":"300.000","confidence":0.97,"pageId":"{{{page}}}","bbox":{"x":0.1,"y":0.2,"w":0.3,"h":0.04}}]}
+            """;
+        var handler = new StubHandler(HttpStatusCode.OK, body);
+
+        var answer = await Client(handler).RunPageRereadAsync(request, Cancel);
+
+        Assert.Equal("http://document-ai.test/v1/tasks/page-reread", handler.Seen!.RequestUri!.ToString());
+        Assert.Contains("\"fieldCatalogue\":[\"invoice_total\"]", handler.SentBody, StringComparison.Ordinal);
+        Assert.Contains("\"pageType\":\"INVOICE\"", handler.SentBody, StringComparison.Ordinal);
+        Assert.Equal(Domain.Enums.FieldKey.InvoiceTotal, answer.Body.Fields.Single().FieldKey);
+        Assert.Equal(0.97m, answer.Body.Fields.Single().Confidence);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.UnprocessableEntity, "INVALID_REQUEST", false)]
     [InlineData(HttpStatusCode.Unauthorized, "SERVICE_KEY_INVALID", false)]

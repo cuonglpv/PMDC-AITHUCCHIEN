@@ -16,12 +16,14 @@ public sealed class AiOptions
 
     public PipelineOptions PageCheck { get; set; } = new() { TimeoutSeconds = 30 };
     public PipelineOptions FieldExtraction { get; set; } = new() { TimeoutSeconds = 120 };
+    public PipelineOptions PageReread { get; set; } = new() { TimeoutSeconds = 60 };
 
     public PipelineOptions For(Domain.Enums.AiTask task) =>
         task switch
         {
             Domain.Enums.AiTask.PageCheck => PageCheck,
             Domain.Enums.AiTask.FieldExtraction => FieldExtraction,
+            Domain.Enums.AiTask.PageReread => PageReread,
             _ => throw new ArgumentOutOfRangeException(nameof(task), task, "This task is not built yet."),
         };
 }
@@ -58,6 +60,7 @@ public sealed class AiOptionsValidator : IValidateOptions<AiOptions>
 
         Check("PageCheck", options.PageCheck, failures);
         Check("FieldExtraction", options.FieldExtraction, failures);
+        Check("PageReread", options.PageReread, failures);
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

@@ -99,7 +99,8 @@ public partial class ArchitectureTests
                 typeof(IDocumentAiClient).FullName!,
                 typeof(DocumentAiClient).FullName!,
                 typeof(PageCheckRequest).FullName!,
-                typeof(FieldExtractionRequest).FullName!)
+                typeof(FieldExtractionRequest).FullName!,
+                typeof(PageRereadRequest).FullName!)
             .GetResult();
 
         Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
