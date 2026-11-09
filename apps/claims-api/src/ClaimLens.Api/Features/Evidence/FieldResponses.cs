@@ -18,8 +18,11 @@ public sealed record FieldBox(decimal X, decimal Y, decimal W, decimal H)
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
 
-    /// <summary>A region a person drew has some size and lies inside the page.</summary>
-    public bool LiesOnThePage => X >= 0 && Y >= 0 && W > 0 && H > 0 && X + W <= 1 && Y + H <= 1;
+    /// <summary>
+    /// A region a person drew has some size and lies inside the page. A method, because a property would be serialized
+    /// into the jsonb columns, the answers and the audit trail.
+    /// </summary>
+    public bool LiesOnThePage() => X >= 0 && Y >= 0 && W > 0 && H > 0 && X + W <= 1 && Y + H <= 1;
 }
 
 public sealed record FieldAiSuggestion(string? Value, decimal Confidence, ConfidenceLevel Level, Guid? PageId, FieldBox? Bbox, Guid RunId);

@@ -72,7 +72,7 @@ public static class FieldChanges
             return new FieldError("sourceBbox", "REQUIRED", "Draw the region on the page.");
         }
 
-        if (!box.LiesOnThePage)
+        if (!box.LiesOnThePage())
         {
             return new FieldError("sourceBbox", "OUT_OF_RANGE", "The region must lie on the page.");
         }
