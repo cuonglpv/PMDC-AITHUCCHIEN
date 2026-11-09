@@ -1,13 +1,13 @@
 "use client";
 
-import { useId } from "react";
 import { AiMarker } from "@/components/ai/AiMarker";
 import { ConfidenceBadge } from "@/components/ai/ConfidenceBadge";
 import { PersonMarker } from "@/components/ai/PersonMarker";
+import { PageTypeSelect } from "@/components/ui/PageTypeSelect";
 import { ApiProblem } from "@/lib/api/problem";
-import type { ChosenPageType, DocumentPage } from "@/lib/api/types";
+import type { DocumentPage } from "@/lib/api/types";
 import { CHOOSE_PAGE_TYPE_LABEL, PAGE_AI_STATUS_LABEL } from "@/lib/labels/ai";
-import { CHOSEN_PAGE_TYPES, PAGE_QUALITY_LABEL, PAGE_TYPE_LABEL, PAGE_TYPE_NOT_SAVED } from "@/lib/labels/documents";
+import { PAGE_QUALITY_LABEL, PAGE_TYPE_LABEL, PAGE_TYPE_NOT_SAVED } from "@/lib/labels/documents";
 import { isWaitingForAi } from "../processing";
 import { useReclassifyPage } from "../queries";
 import { problemMessage } from "./FileRows";
@@ -60,53 +60,23 @@ export function PageCard({
   );
 }
 
-/** A labelled native select, so it works with the keyboard and reads well to a screen reader. */
 function ChooseType({ claimId, page }: { claimId: string; page: DocumentPage }) {
-  const id = useId();
   const reclassify = useReclassifyPage(claimId);
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="sr-only">
-        {`${CHOOSE_PAGE_TYPE_LABEL} for page ${page.claimPageNo}`}
-      </label>
-      <div className="relative">
-        <select
-          id={id}
-          value={reclassify.isPending ? reclassify.variables.pageType : ""}
-          disabled={reclassify.isPending}
-          aria-describedby={reclassify.isError ? `${id}-error` : undefined}
-          onChange={(event) => {
-            if (event.target.value) {
-              reclassify.mutate({ pageId: page.id, pageType: event.target.value as ChosenPageType });
-            }
-          }}
-          className="min-h-7 w-full cursor-pointer appearance-none truncate rounded-sm border border-warning/40 bg-warning-container py-1 pr-6 pl-2 text-xs font-medium text-warning disabled:cursor-wait disabled:opacity-70"
-        >
-          <option value="" disabled>
-            {CHOOSE_PAGE_TYPE_LABEL}
-          </option>
-          {CHOSEN_PAGE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {PAGE_TYPE_LABEL[type]}
-            </option>
-          ))}
-        </select>
-        <span
-          className="material-symbols-outlined pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[14px] text-warning"
-          aria-hidden="true"
-        >
-          expand_more
-        </span>
-      </div>
-      {reclassify.isError && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-danger">
-          {problemMessage(
-            reclassify.error instanceof ApiProblem ? reclassify.error : new ApiProblem(0, null),
-            PAGE_TYPE_NOT_SAVED,
-          )}
-        </p>
-      )}
-    </div>
+    <PageTypeSelect
+      label={`${CHOOSE_PAGE_TYPE_LABEL} for page ${page.claimPageNo}`}
+      placeholder={CHOOSE_PAGE_TYPE_LABEL}
+      pendingType={reclassify.isPending ? reclassify.variables.pageType : undefined}
+      error={
+        reclassify.isError
+          ? problemMessage(
+              reclassify.error instanceof ApiProblem ? reclassify.error : new ApiProblem(0, null),
+              PAGE_TYPE_NOT_SAVED,
+            )
+          : undefined
+      }
+      onChoose={(pageType) => reclassify.mutate({ pageId: page.id, pageType })}
+    />
   );
 }
 

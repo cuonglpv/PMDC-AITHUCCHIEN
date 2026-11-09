@@ -73,6 +73,23 @@ export function formatDateTime(moment: string | null | undefined): string {
   return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`;
 }
 
+/** How long ago a moment was, for a queue row: "2d 5h", "8h", "35m", or "<1m". */
+export function formatAge(moment: string, now: number): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(moment)) / 60_000));
+  if (minutes < 1) {
+    return "<1m";
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  return hours % 24 === 0 ? `${days}d` : `${days}d ${hours % 24}h`;
+}
+
 /** Today's business date, `YYYY-MM-DD`, in Vietnam whatever the browser's time zone. The API uses the same day. */
 export function todayInVietnam(now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-GB", {

@@ -64,6 +64,22 @@ export function canOpen(role: StaffRole, pathname: string): boolean {
   return roles === undefined || roles.includes(role);
 }
 
+/**
+ * Where a claim opens for this role, and null for a role that never reads claims (BR-11). The top bar lookup is offered
+ * only to roles with a path here.
+ */
+export function claimPathFor(role: StaffRole, claimId: string): string | null {
+  switch (role) {
+    case "INTAKE_OFFICER":
+      return `/intake/${claimId}`;
+    case "CLAIMS_REVIEWER":
+    case "SENIOR_APPROVER":
+      return `/claims/${claimId}`;
+    default:
+      return null;
+  }
+}
+
 /** Only a path inside this app may be a return target, so a crafted link cannot send a user elsewhere. */
 export function safeReturnPath(next: string | null): string | null {
   return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : null;

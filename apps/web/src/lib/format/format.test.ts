@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatAge,
   formatDate,
   formatDateTime,
   formatFileSize,
@@ -60,5 +61,25 @@ describe("formats", () => {
     expect(formatPeriod("2026-01-01", "2026-12-31")).toBe("01/01/2026 – 31/12/2026");
     expect(formatFileSize(2_048)).toBe("2 KB");
     expect(formatFileSize(5_452_595)).toBe("5.2 MB");
+  });
+});
+
+describe("formatAge", () => {
+  const now = Date.parse("2026-10-17T12:00:00Z");
+  const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
+
+  it.each([
+    [0, "<1m"],
+    [35, "35m"],
+    [8 * 60, "8h"],
+    [24 * 60, "1d"],
+    [27 * 60, "1d 3h"],
+    [53 * 60, "2d 5h"],
+  ])("shows %i minutes as %s", (minutes, shown) => {
+    expect(formatAge(ago(minutes), now)).toBe(shown);
+  });
+
+  it("does not go negative when the clocks differ", () => {
+    expect(formatAge(ago(-5), now)).toBe("<1m");
   });
 });
