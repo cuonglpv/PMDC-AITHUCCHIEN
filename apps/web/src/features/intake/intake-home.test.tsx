@@ -59,7 +59,7 @@ beforeEach(() => {
 describe("Intake home (SCR-10)", () => {
   it("shows a skeleton while the drafts load", async () => {
     renderPage();
-    expect(screen.getByLabelText("Loading drafts")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading drafts" })).toBeTruthy();
     // Let the request finish inside this test, so it cannot answer the next one.
     await screen.findByRole("row", { name: /CLM-2026-000184/ });
   });

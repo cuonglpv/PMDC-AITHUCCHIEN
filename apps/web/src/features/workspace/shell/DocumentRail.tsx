@@ -26,7 +26,7 @@ export function DocumentRail() {
       {mustStartReview ? (
         <p className="text-xs text-on-surface-muted">Documents appear after you start review.</p>
       ) : documentsLoading ? (
-        <div aria-busy="true" aria-label="Loading documents" className="h-24 animate-pulse rounded-sm bg-surface-sunken" />
+        <div role="status" aria-busy="true" aria-label="Loading documents" className="h-24 animate-pulse rounded-sm bg-surface-sunken" />
       ) : (
         <>
           <p className="font-mono text-[11px] font-medium tracking-[0.08em] text-on-surface-muted uppercase">
