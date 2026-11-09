@@ -28,6 +28,11 @@ public static class ErrorCodes
     public const string UnknownCategory = "UNKNOWN_CATEGORY";
     public const string EffectiveDateNotLater = "EFFECTIVE_DATE_NOT_LATER";
     public const string CategoryNotConfigured = "CATEGORY_NOT_CONFIGURED";
+    public const string ClaimAlreadyAssigned = "CLAIM_ALREADY_ASSIGNED";
+    public const string SourceRequired = "SOURCE_REQUIRED";
+    public const string FieldHasNoAiValue = "FIELD_HAS_NO_AI_VALUE";
+    public const string FieldsToVerify = "FIELDS_TO_VERIFY";
+    public const string PageUnclassified = "PAGE_UNCLASSIFIED";
     public const string InternalError = "INTERNAL_ERROR";
 }
 

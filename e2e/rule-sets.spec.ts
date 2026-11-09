@@ -108,6 +108,7 @@ test("a reviewer reads the published version and cannot change it (US19)", async
   await page.getByRole("link", { name: "v3" }).click();
 
   await expect(page.getByText("A published version cannot be changed.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("textbox")).toHaveCount(0);
+  // The top bar has the claim lookup on every page; the version itself has nothing to type in.
+  await expect(page.getByRole("main").getByRole("textbox")).toHaveCount(0);
   await expect(page.getByText("COV-01")).toBeVisible();
 });

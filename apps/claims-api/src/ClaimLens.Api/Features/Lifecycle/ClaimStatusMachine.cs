@@ -43,6 +43,30 @@ public static class ClaimStatusMachine
     public static void FinishExtraction(Claim claim, bool readyForReview, DateTimeOffset now) =>
         Move(claim, readyForReview ? ClaimStatus.ReadyForReview : ClaimStatus.NeedsVerification, now);
 
+    /// <summary>
+    /// US23: the reviewer takes the claim. READY_FOR_REVIEW moves to IN_REVIEW, because IN_REVIEW is the status of a
+    /// claim that is ready and has an owner; NEEDS_VERIFICATION stays until its fields are done.
+    /// </summary>
+    public static void StartReview(Claim claim, Guid reviewerId, DateTimeOffset now)
+    {
+        claim.AssigneeId = reviewerId;
+        claim.AssignedAt = now;
+        if (claim.Status == ClaimStatus.ReadyForReview)
+        {
+            Move(claim, ClaimStatus.InReview, now);
+            return;
+        }
+
+        claim.UpdatedAt = now;
+        claim.RowVersion++;
+    }
+
+    /// <summary>US06: the last required field was resolved. The first of the two moves an assigned claim makes.</summary>
+    public static void FinishVerification(Claim claim, DateTimeOffset now) => Move(claim, ClaimStatus.ReadyForReview, now);
+
+    /// <summary>US06: an assigned claim that reached READY_FOR_REVIEW goes straight on. The second of the two moves.</summary>
+    public static void BeginAssignedReview(Claim claim, DateTimeOffset now) => Move(claim, ClaimStatus.InReview, now);
+
     private static void Move(Claim claim, ClaimStatus to, DateTimeOffset now)
     {
         if (!CanMove(claim.Status, to))

@@ -45,7 +45,7 @@ Some data stays inside the system and is never sent:
 
 - `password_hash`, object-storage keys, `input_hash`, `golden_scenario` and `eval_label`.
 - `ai_value` when its level is `MISSING`, because a value below 0.70 is kept but never shown (US05).
-- A full national ID. Responses carry `nationalIdMasked`.
+- A full national ID. Responses carry `nationalIdMasked`; `listFields` and the audit trail mask a `national_id` field, in the value in use and in `ai.value`, and `updateField` refuses text with a `*` in it, so a mask is never saved as the value.
 
 Member search is a `POST`, so a citizen ID never reaches a URL or an access log.
 
@@ -99,7 +99,9 @@ Other operations are protected by the state they require: `startReview` by the a
 
 ## Key flows
 
-**Taking a claim.** The reviewer sees unassigned claims in the `AVAILABLE` view with no member name (BR-11), then calls `startReview`. Two reviewers racing get one success and one 409 `CLAIM_ALREADY_ASSIGNED`. "Open next claim" is `listClaims` with `pageSize=1` followed by `startReview`.
+**Taking a claim.** The reviewer sees unassigned claims in the `AVAILABLE` view with no member name (BR-11), then calls `startReview`. Two reviewers racing get one success and one 409 `CLAIM_ALREADY_ASSIGNED`. "Open next claim" is `listClaims` with `pageSize=1` followed by `startReview`. `AVAILABLE` filters only by claim number; any other filter is 422 `VALIDATION_FAILED`, because those columns would say something about a claim the reviewer has not taken. A reviewer who has not taken a claim gets 403 on `getClaim` and 404 on `getClaimByNumber`, so a claim is taken from its queue row, and `START_REVIEW` in `allowedActions` is not reached today.
+
+**Verifying a field.** `updateField` with the value the AI read gives `CONFIRMED`, a different value `CORRECTED`, and a value where the AI had none (or level `MISSING`) `ENTERED`. A value keeps the AI's source when no region is sent, also one read below 0.70, because the reviewer sees that region highlighted and can redraw it. A claim that is `IN_REVIEW` does not go back when a re-read, an added line or a new page type leaves a required field unresolved: the field is counted in `blockers` and `fieldsToVerify`.
 
 **AI is down.** A failed run sets `fallbackActive` on the claim. The reviewer sets each page type with `reclassifyPage`, which creates the empty header fields, adds lines with `addExpenseLine`, and enters values with `updateField`. Each value still needs a drawn source region (BR-02).
 
@@ -137,6 +139,7 @@ A claim outside the caller's scope gives 403 by id, as UC11 requires. `getClaimB
 | `UPLOAD_IN_PROGRESS` | 409 | A file is still uploading or converting | US03 |
 | `NO_READY_DOCUMENT` | 409 | Nothing to submit | US03 |
 | `CLAIM_ALREADY_ASSIGNED` | 409 | Another reviewer took the claim | US23 |
+| `FIELDS_TO_VERIFY`, `PAGE_UNCLASSIFIED` | None | Codes of `blockers` in `getClaim`, never an error response: fields left to verify, pages without a type | US06 |
 | `ALERT_NOT_OPEN`, `FLAG_NOT_OPEN` | 409 | Already handled | `alert_status`, `flag_status` |
 | `BLOCKING_ALERT_OPEN` | 409 | An open Blocking alert stops this | US07 |
 | `MAPPING_UNCONFIRMED` | 409 | A category still needs confirming | US10 |
@@ -333,6 +336,6 @@ The prototypes in [docs/ui](ui/) include these changes. Each file opens on its m
 | SCR-35 Decision, [approver](ui/scr-35-decision-approver.html) | New. Read-only recommendation, line results, kept flag and attested values, with the decision dialogs and the balance-changed state. | `#confirm`, `#reject`, `#return`, `#balance-changed` |
 | SCR-50 AI quality | Added the mapping correction tile. | |
 
-SCR-31 and SCR-33 are shown at 1600 px. At the 1280 px minimum they are cramped: amounts wrap in SCR-33 and a badge is clipped in SCR-31, because zone C keeps its 480 px. That was already the case, and is to be fixed when the screens are built.
+SCR-33 is shown at 1600 px. At the 1280 px minimum it is cramped: amounts wrap, because zone C keeps its 480 px. To be fixed when the screen is built, as SCR-31 was: zone C is 400 px below 1440 px wide, and nothing is clipped at 1280 px.
 
 **Related:** [Use cases](03-use-cases.md) · [Information architecture](04-information-architecture.md) · [Data model](06-data-model.md) · [User stories](08-invest-requirements.md) · [C4 model](architecture/c4/README.md)

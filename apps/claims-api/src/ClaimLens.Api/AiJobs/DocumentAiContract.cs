@@ -50,6 +50,16 @@ public sealed record FieldExtractionResponse(
     IReadOnlyList<ExtractionDocumentResult> Documents,
     IReadOnlyList<PageFailure> FailedPages);
 
+public sealed record PageRereadRequest(
+    Guid RunId,
+    ModelRef Model,
+    Guid DocumentId,
+    TypedPageRef Page,
+    IReadOnlyList<FieldKey> FieldCatalogue);
+
+/// <summary>The same suggestions as field extraction, for one page.</summary>
+public sealed record PageRereadResponse(Guid RunId, ModelRef Model, Guid DocumentId, IReadOnlyList<FieldSuggestion> Fields);
+
 /// <summary>An answer with the bytes it arrived as, which the runner keeps in object storage (ai_run.raw_output_key).</summary>
 public sealed record DocumentAiAnswer<T>(T Body, byte[] Raw);
 

@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 /** Specs that upload whole packets. One at a time, so they do not queue behind each other in Document Preparation. */
-const UPLOADS = /(intake|ai-reading)\.spec\.ts$/;
+const UPLOADS = /(intake|ai-reading|review)\.spec\.ts$/;
 
 // Runs against the whole stack: docker compose -f infra/compose.yaml --profile full up -d --build
 export default defineConfig({

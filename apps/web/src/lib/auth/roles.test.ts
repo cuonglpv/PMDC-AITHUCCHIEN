@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StaffRole } from "@/lib/api/types";
-import { canOpen, navFor, ROLE_HOME, safeReturnPath } from "./roles";
+import { canOpen, claimPathFor, navFor, ROLE_HOME, safeReturnPath } from "./roles";
 
 const ROLES: StaffRole[] = ["INTAKE_OFFICER", "CLAIMS_REVIEWER", "SENIOR_APPROVER", "ADMINISTRATOR"];
 
@@ -55,5 +55,22 @@ describe("return path after sign-in", () => {
 
   it.each(["https://evil.test", "//evil.test", "/\\evil.test", "evil"])("refuses %s", (target) => {
     expect(safeReturnPath(target)).toBeNull();
+  });
+});
+
+describe("where a claim opens", () => {
+  it("is the workspace for reviewers and approvers, who may open it", () => {
+    (["CLAIMS_REVIEWER", "SENIOR_APPROVER"] as const).forEach((role) => {
+      expect(claimPathFor(role, "abc")).toBe("/claims/abc");
+      expect(canOpen(role, "/claims/abc/evidence")).toBe(true);
+    });
+  });
+
+  it("is the intake page for the officer", () => {
+    expect(claimPathFor("INTAKE_OFFICER", "abc")).toBe("/intake/abc");
+  });
+
+  it("is nowhere for the Administrator (BR-11)", () => {
+    expect(claimPathFor("ADMINISTRATOR", "abc")).toBeNull();
   });
 });

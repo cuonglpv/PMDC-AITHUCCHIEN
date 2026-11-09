@@ -97,7 +97,7 @@ public static class CreateClaim
             after: new { claim.ClaimNumber, claim.Status, facts.MemberId, facts.PolicyId, facts.ServiceDate, facts.ProviderName, facts.ClaimedTotal, facts.Channel }));
         await db.SaveChangesAsync(cancel);
 
-        var detail = await ClaimResponses.DetailAsync(db, priority, claim.Id, role, cancel);
+        var detail = await ClaimResponses.DetailAsync(db, priority, claim.Id, staffId, role, cancel);
         return Results.Created($"/api/v1/claims/{claim.Id}", new ClaimSaved(detail, ClaimRules.Warnings(policy!, facts.ServiceDate)));
     }
 

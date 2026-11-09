@@ -1,5 +1,11 @@
-import { HomePlaceholder } from "@/features/shell/HomePlaceholder";
+import { Suspense } from "react";
+import { Loading } from "@/components/states/PageState";
+import { ReviewQueuePage } from "@/features/queues/ReviewQueuePage";
 
 export default function ReviewQueue() {
-  return <HomePlaceholder title="Review queue" screen="SCR-20" stories="US23" />;
+  return (
+    <Suspense fallback={<Loading label="Loading the review queue" />}>
+      <ReviewQueuePage />
+    </Suspense>
+  );
 }

@@ -15,6 +15,14 @@ export const PAGE_AI_STATUS_LABEL: Record<PageAiStatus, string> = {
   FAILED: "AI check failed",
 };
 
+/** The AI status line of a page in the document rail (docs/04-information-architecture.md, AI status). */
+export const PAGE_AI_RAIL_LABEL: Record<PageAiStatus, string> = {
+  QUEUED: "AI queued",
+  READING: "AI reading",
+  DONE: "AI done",
+  FAILED: "AI failed, manual",
+};
+
 /** The page-type control on an Unclassified page (SCR-13). */
 export const CHOOSE_PAGE_TYPE_LABEL = "Choose type";
 

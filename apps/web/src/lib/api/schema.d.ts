@@ -373,7 +373,7 @@ export interface paths {
         get?: never;
         /**
          * Set a page type
-         * @description The officer may choose a type before submission, and the reviewer must choose one for every Unclassified page. When a page gets a type after a failed extraction, the system creates the empty header field slots for that type.
+         * @description The officer may choose a type before submission, and the reviewer must choose one for every Unclassified page. When a reviewer chooses a type, the system creates the missing empty header field slots of that type and of the document's type, and keeps the slots already there.
          */
         put: operations["reclassifyPage"];
         post?: never;
@@ -451,7 +451,7 @@ export interface paths {
         head?: never;
         /**
          * Correct, enter or mark a field not present
-         * @description The server sets the status: `CORRECTED` when an AI value was changed, `ENTERED` when AI gave none, `NOT_PRESENT` for that action. A value needs a source (BR-02): send `sourcePageId` and `sourceBbox`, or the AI source is kept if there is one. In `IN_REVIEW` the change re-runs validation and adjudication within this request; `progress` shows the result (US13).
+         * @description The server sets the status: `CONFIRMED` when the value is the one AI read, `CORRECTED` when an AI value was changed, `ENTERED` when AI gave none, `NOT_PRESENT` for that action. A value needs a source (BR-02): send `sourcePageId` and `sourceBbox`, or the AI source is kept if there is one. In `IN_REVIEW` the change re-runs validation and adjudication within this request; `progress` shows the result (US13).
          */
         patch: operations["updateField"];
         trace?: never;
@@ -1252,7 +1252,7 @@ export interface components {
          * @description Stable error codes; the meaning of each is in 07-api-contract.md.
          * @enum {string}
          */
-        ErrorCode: "INVALID_CREDENTIALS" | "REFRESH_TOKEN_INVALID" | "AUTH_REQUIRED" | "ORIGIN_NOT_ALLOWED" | "TOO_MANY_ATTEMPTS" | "FORBIDDEN_ROLE" | "CLAIM_OUT_OF_SCOPE" | "MAKER_CHECKER" | "NOT_FOUND" | "VALIDATION_FAILED" | "FILE_TOO_LARGE" | "UNSUPPORTED_FILE_TYPE" | "POLICY_MEMBER_MISMATCH" | "CLAIM_STATE_CONFLICT" | "VERSION_CONFLICT" | "UPLOAD_IN_PROGRESS" | "NO_READY_DOCUMENT" | "CLAIM_ALREADY_ASSIGNED" | "SOURCE_REQUIRED" | "FIELD_HAS_NO_AI_VALUE" | "ALERT_NOT_OPEN" | "ALERT_NOT_DISMISSIBLE" | "FLAG_NOT_OPEN" | "BLOCKING_ALERT_OPEN" | "MAPPING_UNCONFIRMED" | "LINE_AMOUNT_MISSING" | "NO_EFFECTIVE_RULE_SET" | "NO_CALCULATION_REVISION" | "NO_ACTIVE_OVERRIDE" | "UNKNOWN_CATEGORY" | "OVERRIDE_EXCEEDS_LINE" | "OVERRIDE_AMOUNT_MISMATCH" | "REVISION_OUTDATED" | "REVISION_STALE" | "ATTESTATION_OUTDATED" | "SUMMARY_REQUIRED" | "OUTCOME_NOT_ALLOWED" | "OUTCOME_REASON_REQUIRED" | "DECISION_NOT_ALLOWED" | "DECISION_REASON_REQUIRED" | "DECISION_COMMENT_REQUIRED" | "BALANCE_CHANGED" | "DRAFT_ALREADY_EXISTS" | "RULE_SET_NOT_DRAFT" | "RULE_INVALID" | "EFFECTIVE_DATE_NOT_LATER" | "CATEGORY_NOT_CONFIGURED" | "INTERNAL_ERROR";
+        ErrorCode: "INVALID_CREDENTIALS" | "REFRESH_TOKEN_INVALID" | "AUTH_REQUIRED" | "ORIGIN_NOT_ALLOWED" | "TOO_MANY_ATTEMPTS" | "FORBIDDEN_ROLE" | "CLAIM_OUT_OF_SCOPE" | "MAKER_CHECKER" | "NOT_FOUND" | "VALIDATION_FAILED" | "FILE_TOO_LARGE" | "UNSUPPORTED_FILE_TYPE" | "POLICY_MEMBER_MISMATCH" | "CLAIM_STATE_CONFLICT" | "VERSION_CONFLICT" | "UPLOAD_IN_PROGRESS" | "NO_READY_DOCUMENT" | "FIELDS_TO_VERIFY" | "PAGE_UNCLASSIFIED" | "CLAIM_ALREADY_ASSIGNED" | "SOURCE_REQUIRED" | "FIELD_HAS_NO_AI_VALUE" | "ALERT_NOT_OPEN" | "ALERT_NOT_DISMISSIBLE" | "FLAG_NOT_OPEN" | "BLOCKING_ALERT_OPEN" | "MAPPING_UNCONFIRMED" | "LINE_AMOUNT_MISSING" | "NO_EFFECTIVE_RULE_SET" | "NO_CALCULATION_REVISION" | "NO_ACTIVE_OVERRIDE" | "UNKNOWN_CATEGORY" | "OVERRIDE_EXCEEDS_LINE" | "OVERRIDE_AMOUNT_MISMATCH" | "REVISION_OUTDATED" | "REVISION_STALE" | "ATTESTATION_OUTDATED" | "SUMMARY_REQUIRED" | "OUTCOME_NOT_ALLOWED" | "OUTCOME_REASON_REQUIRED" | "DECISION_NOT_ALLOWED" | "DECISION_REASON_REQUIRED" | "DECISION_COMMENT_REQUIRED" | "BALANCE_CHANGED" | "DRAFT_ALREADY_EXISTS" | "RULE_SET_NOT_DRAFT" | "RULE_INVALID" | "EFFECTIVE_DATE_NOT_LATER" | "CATEGORY_NOT_CONFIGURED" | "INTERNAL_ERROR";
         /** @enum {string} */
         StaffRole: "INTAKE_OFFICER" | "CLAIMS_REVIEWER" | "SENIOR_APPROVER" | "ADMINISTRATOR";
         /** @enum {string} */
@@ -3302,6 +3302,8 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description Code: VALIDATION_FAILED. `documentId` is not an id, or `status` is not a field status. */
+            422: components["responses"]["Unprocessable"];
         };
     };
     updateField: {

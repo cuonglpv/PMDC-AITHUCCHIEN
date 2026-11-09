@@ -16,6 +16,9 @@ public interface IDocumentAiClient
 
     /// <summary>runFieldExtraction. Throws <see cref="DocumentAiException"/> when the call fails.</summary>
     Task<DocumentAiAnswer<FieldExtractionResponse>> RunFieldExtractionAsync(FieldExtractionRequest request, CancellationToken cancel);
+
+    /// <summary>runPageReread. Throws <see cref="DocumentAiException"/> when the call fails.</summary>
+    Task<DocumentAiAnswer<PageRereadResponse>> RunPageRereadAsync(PageRereadRequest request, CancellationToken cancel);
 }
 
 /// <summary>
@@ -48,6 +51,9 @@ public sealed partial class DocumentAiClient(HttpClient http, IOptions<AiOptions
             request,
             options.Value.FieldExtraction.TimeoutSeconds,
             cancel);
+
+    public Task<DocumentAiAnswer<PageRereadResponse>> RunPageRereadAsync(PageRereadRequest request, CancellationToken cancel) =>
+        PostAsync<PageRereadRequest, PageRereadResponse>("tasks/page-reread", request, options.Value.PageReread.TimeoutSeconds, cancel);
 
     private async Task<DocumentAiAnswer<TResponse>> PostAsync<TRequest, TResponse>(
         string path,

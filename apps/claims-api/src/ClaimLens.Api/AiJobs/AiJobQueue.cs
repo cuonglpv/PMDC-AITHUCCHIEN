@@ -18,15 +18,28 @@ public sealed class AiJobQueue(IOptions<AiOptions> options, TimeProvider clock)
     public AiRun FieldExtraction(ClaimLensDbContext db, Guid claimId) =>
         Add(db, claimId, AiTask.FieldExtraction, options.Value.FieldExtraction, null);
 
-    private AiRun Add(ClaimLensDbContext db, Guid claimId, AiTask task, PipelineOptions pipeline, Guid? documentId)
+    /// <summary>rerunExtraction: a reviewer asked for this one page to be read again.</summary>
+    public AiRun PageReread(ClaimLensDbContext db, Guid claimId, Guid documentId, Guid pageId, Guid requestedBy) =>
+        Add(db, claimId, AiTask.PageReread, options.Value.PageReread, documentId, pageId, requestedBy);
+
+    private AiRun Add(
+        ClaimLensDbContext db,
+        Guid claimId,
+        AiTask task,
+        PipelineOptions pipeline,
+        Guid? documentId,
+        Guid? pageId = null,
+        Guid? triggeredBy = null)
     {
-        // triggered_by stays empty: the system starts these runs as part of an upload or a submission.
+        // triggered_by stays empty when the system starts a run as part of an upload or a submission.
         var run = new AiRun
         {
             Id = Guid.CreateVersion7(),
             ClaimId = claimId,
             Task = task,
             ScopeDocumentId = documentId,
+            ScopePageId = pageId,
+            TriggeredBy = triggeredBy,
             ModelName = pipeline.Name,
             ModelVersion = pipeline.Version,
             Status = AiRunStatus.Queued,

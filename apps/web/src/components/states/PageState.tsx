@@ -3,7 +3,7 @@ import { ApiProblem } from "@/lib/api/problem";
 /** Loading and error states from the UI state contract (docs/04-information-architecture.md). */
 export function Loading({ label }: { label: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="space-y-2 p-6">
+    <div role="status" aria-busy="true" aria-label={label} className="space-y-2 p-6">
       <div className="h-6 w-48 animate-pulse rounded-sm bg-surface-sunken" />
       <div className="h-32 animate-pulse rounded-sm bg-surface-sunken" />
     </div>

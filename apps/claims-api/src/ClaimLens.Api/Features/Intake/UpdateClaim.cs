@@ -105,7 +105,7 @@ public static class UpdateClaim
             }
         }
 
-        var detail = await ClaimResponses.DetailAsync(db, priority, claim.Id, role, cancel);
+        var detail = await ClaimResponses.DetailAsync(db, priority, claim.Id, staffId, role, cancel);
         return Results.Ok(new ClaimSaved(detail, ClaimRules.Warnings(policy!, after.ServiceDate)));
     }
 
