@@ -225,6 +225,49 @@ describe("the workspace shell", () => {
     expect(await screen.findByText("2 required fields are not resolved.")).toBeTruthy();
   });
 
+  it("does not repeat the fields blocker, which the count already says and which goes stale", async () => {
+    // The real API's wording. `blockers` comes with the claim, so after a change it would say something older than the count.
+    state.claim = reviewerClaim({
+      blockers: [{ code: "FIELDS_TO_VERIFY", message: "3 fields left to verify." }],
+    });
+    onAccept(() => changed(resolved(checkField())));
+    renderPage();
+    const item = await row("Invoice total");
+
+    expect(within(actionBar()).getByText("3 fields to verify")).toBeTruthy();
+    expect(screen.queryByText("3 fields left to verify.")).toBeNull();
+
+    await userEvent.click(within(item).getByRole("button", { name: "Accept" }));
+
+    await within(actionBar()).findByText("2 fields to verify");
+    expect(screen.queryByText("3 fields left to verify.")).toBeNull();
+  });
+
+  it("shows the page type blocker until a type is chosen", async () => {
+    const chosen = summary({ pageType: "UNCLASSIFIED", pageTypeSource: null });
+    state.documents = [invoice(), chosen];
+    state.fields = [checkField()];
+    state.claim = reviewerClaim({
+      blockers: [
+        { code: "FIELDS_TO_VERIFY", message: "1 field left to verify." },
+        { code: "PAGE_UNCLASSIFIED", message: "1 page still needs a type." },
+      ],
+    });
+    server.use(
+      http.put(`${CLAIM}/pages/:pageId/type`, () => {
+        state.claim = reviewerClaim({ blockers: [{ code: "FIELDS_TO_VERIFY", message: "1 field left to verify." }] });
+        return HttpResponse.json({ ...chosen.pages[0]!, pageType: "OTHER", pageTypeSource: "USER" });
+      }),
+    );
+    renderPage();
+    const select = await screen.findByRole("combobox", { name: "Choose type for page 3" });
+    expect(within(actionBar()).getByText("1 page still needs a type.")).toBeTruthy();
+
+    await userEvent.selectOptions(select, "OTHER");
+
+    await waitFor(() => expect(screen.queryByText("1 page still needs a type.")).toBeNull());
+  });
+
   it("shows the fallback banner when the claim says the AI failed", async () => {
     state.claim = reviewerClaim({ ai: { fallbackActive: true, clinicalCheck: "NOT_RUN" } });
     renderPage();
@@ -833,7 +876,7 @@ describe("Re-run AI on this page", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Re-run AI on this page" }));
 
-    expect(await screen.findByText(/AI is reading the page again/)).toBeTruthy();
+    expect(await screen.findByText(/AI is reading p1 again/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Re-run AI on this page" }) as HTMLButtonElement).disabled).toBe(true);
     expect(posted).toBe(PAGE_1);
 
@@ -844,6 +887,81 @@ describe("Re-run AI on this page", () => {
     const settled = polls;
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(polls).toBeLessThanOrEqual(settled + 1);
+  });
+
+  /** A run that stays queued until the test says it has ended, with the fields it will have changed by then. */
+  function runUntilEnded(end: AiRunState["status"]) {
+    let ended = false;
+    let fieldReads = 0;
+    server.use(
+      http.get(`${CLAIM}/fields`, () => {
+        fieldReads += 1;
+        return HttpResponse.json({ items: state.fields, remainingToVerify: state.remaining });
+      }),
+      http.post(`${CLAIM}/pages/:pageId/rerun-extraction`, () => {
+        state.runs = () => [run(ended ? end : "RUNNING")];
+        return HttpResponse.json(
+          { id: RERUN_ID, task: "PAGE_REREAD", status: "QUEUED", requestedAt: "2026-10-14T04:00:00Z" },
+          { status: 202 },
+        );
+      }),
+    );
+    return {
+      end: () => {
+        state.fields = [checkField({ ai: { ...checkField().ai!, value: "1,450,000" } }), missingField(), autoAcceptedField()];
+        ended = true;
+      },
+      fieldReads: () => fieldReads,
+    };
+  }
+
+  it("reloads the fields once and names the page, after the reviewer moved to another page", async () => {
+    const run_ = runUntilEnded("SUCCEEDED");
+    renderPage();
+    const item = await row("Invoice total");
+    await userEvent.click(screen.getByRole("button", { name: "Re-run AI on this page" }));
+    await screen.findByText(/AI is reading p1 again/);
+
+    await selectRow("Service date");
+    expect(within(viewer()).getByText("p2 / 3")).toBeTruthy();
+    expect(screen.getByText(/AI is reading p1 again/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Re-run AI on this page" }) as HTMLButtonElement).disabled).toBe(true);
+    const before = run_.fieldReads();
+
+    run_.end();
+
+    expect(await within(item).findByText("1,450,000", {}, { timeout: 3_000 })).toBeTruthy();
+    expect(screen.getByText("AI read p1 again. Fields a person resolved kept their values.")).toBeTruthy();
+    expect(within(viewer()).getByText("p2 / 3")).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(run_.fieldReads()).toBe(before + 1);
+  });
+
+  it("names the page when the run fails after moving away", async () => {
+    const run_ = runUntilEnded("FAILED");
+    renderPage();
+    await row("Invoice total");
+    await userEvent.click(screen.getByRole("button", { name: "Re-run AI on this page" }));
+    await screen.findByText(/AI is reading p1 again/);
+
+    await selectRow("Diagnosis");
+    run_.end();
+
+    expect(await screen.findByText("AI could not read p1. Enter its fields by hand.", {}, { timeout: 3_000 })).toBeTruthy();
+    expect(within(viewer()).getByText("p3 / 3")).toBeTruthy();
+  });
+
+  it("follows a run already going when the claim opens, such as after a reload", async () => {
+    state.runs = () => [run("RUNNING")];
+    renderPage();
+    const item = await row("Invoice total");
+    expect(await screen.findByText(/AI is reading the page again/)).toBeTruthy();
+
+    state.fields = [checkField({ ai: { ...checkField().ai!, value: "1,450,000" } })];
+    state.runs = () => [run("SUCCEEDED")];
+
+    expect(await within(item).findByText("1,450,000", {}, { timeout: 3_000 })).toBeTruthy();
+    expect(screen.getByText("AI read the page again. Fields a person resolved kept their values.")).toBeTruthy();
   });
 
   it("says to enter by hand when the run fails, and shows the banner", async () => {

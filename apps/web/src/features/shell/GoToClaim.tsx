@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { api } from "@/lib/api/client";
 import { ApiProblem, unwrap } from "@/lib/api/problem";
 import type { StaffRole } from "@/lib/api/types";
@@ -17,6 +17,7 @@ export function GoToClaim({ role }: { role: StaffRole }) {
   const router = useRouter();
   const id = useId();
   const [text, setText] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   const lookup = useMutation({
     mutationFn: (claimNumber: string) =>
       unwrap(api.GET("/claim-numbers/{claimNumber}", { params: { path: { claimNumber } } })),
@@ -24,6 +25,8 @@ export function GoToClaim({ role }: { role: StaffRole }) {
       const path = claimPathFor(role, claim.id);
       if (path) {
         setText("");
+        // Focus left here would keep the claim's keyboard shortcuts from working. A failed lookup stays, to be corrected.
+        input.current?.blur();
         router.push(path);
       }
     },
@@ -55,6 +58,7 @@ export function GoToClaim({ role }: { role: StaffRole }) {
         search
       </span>
       <input
+        ref={input}
         id={id}
         value={text}
         placeholder="Go to claim no."

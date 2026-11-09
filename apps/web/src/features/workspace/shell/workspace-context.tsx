@@ -14,9 +14,9 @@ import {
 } from "react";
 import { isListBehind, withLiveState } from "@/features/intake/processing";
 import { claimKeys, useDocuments } from "@/lib/api/claim-queries";
-import type { Bbox, ClaimDetail, ClaimStatusSnapshot, Document, DocumentPage } from "@/lib/api/types";
+import type { AiRunRef, Bbox, ClaimDetail, ClaimStatusSnapshot, Document, DocumentPage } from "@/lib/api/types";
 import type { RegionTone } from "../viewer/RegionOverlay";
-import { useWorkspaceStatus, type PageRegion } from "../queries";
+import { useRereadFollow, useWorkspaceStatus, type PageRegion, type RereadFollowed } from "../queries";
 
 /** What zone C draws over the page. */
 export type SourceHighlight = { pageId: string; bbox: Bbox; label: string; tone: RegionTone };
@@ -34,6 +34,9 @@ type Workspace = {
   documentsLoading: boolean;
   pages: DocumentPage[];
   snapshot: ClaimStatusSnapshot | undefined;
+  /** "Re-run AI on this page", followed here because the reviewer may move to another page while it runs. */
+  reread: RereadFollowed;
+  followReread: (run: AiRunRef, pageNo: number) => void;
   viewedPage: DocumentPage | null;
   viewPage: (pageId: string) => void;
   highlight: SourceHighlight | null;
@@ -64,6 +67,7 @@ export function WorkspaceProvider({ claim, children }: { claim: ClaimDetail; chi
   const list = useDocuments(claimId, { enabled: !mustStartReview });
   const status = useWorkspaceStatus(claimId, !mustStartReview);
   const snapshot = status.data;
+  const { reread, follow: followReread } = useRereadFollow(claimId, snapshot);
 
   const [viewedPageId, setViewedPageId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<SourceHighlight | null>(null);
@@ -110,6 +114,8 @@ export function WorkspaceProvider({ claim, children }: { claim: ClaimDetail; chi
     documentsLoading: list.isPending && !mustStartReview,
     pages,
     snapshot,
+    reread,
+    followReread,
     viewedPage,
     viewPage,
     highlight,

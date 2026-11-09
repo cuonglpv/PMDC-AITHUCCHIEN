@@ -1,11 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isProcessing, POLL_INTERVAL_MS } from "@/features/intake/processing";
 import { claimKeys, useReclassifyPage } from "@/lib/api/claim-queries";
 import { api } from "@/lib/api/client";
 import { unwrap } from "@/lib/api/problem";
 import type {
+  AiRunRef,
   AiRunState,
   Bbox,
   ClaimDetail,
@@ -167,14 +169,74 @@ export function useRemoveExpenseLine(claimId: string) {
   });
 }
 
-/** Queues a run for one page. The poll is refreshed before this resolves, so the screen sees the run as soon as it does. */
-export function useRerunExtraction(claimId: string) {
+/**
+ * Queues a run for one page and hands it to `onQueued`, whoever is on screen by then: the viewer may have moved on while
+ * the request was out. The poll is refreshed before this resolves, so the screen sees the run as soon as it does.
+ */
+export function useRerunExtraction(claimId: string, onQueued: (run: AiRunRef, pageNo: number) => void) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pageId: string) =>
+    mutationFn: ({ pageId }: { pageId: string; pageNo: number }) =>
       unwrap(api.POST("/claims/{claimId}/pages/{pageId}/rerun-extraction", { params: { path: { claimId, pageId } } })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: claimKeys.status(claimId) }),
+    onSuccess: (run, { pageNo }) => {
+      onQueued(run, pageNo);
+      return queryClient.invalidateQueries({ queryKey: claimKeys.status(claimId) });
+    },
   });
+}
+
+/** The re-read being followed. `pageNo` is null for a run this screen did not start, such as one still going after a reload. */
+export type RereadFollowed = {
+  pageNo: number | null;
+  running: boolean;
+  /** How the followed run ended; null while it runs, and when a newer run replaced it. */
+  outcome: "SUCCEEDED" | "FAILED" | null;
+};
+
+/**
+ * Follows "Re-run AI on this page" through the poll. It belongs above the per-page controls, because the reviewer goes on
+ * working on other pages meanwhile. When the run ends, what it may have changed reloads, whichever page is on screen.
+ */
+export function useRereadFollow(claimId: string, snapshot: ClaimStatusSnapshot | undefined) {
+  const queryClient = useQueryClient();
+  const [watched, setWatched] = useState<{ runId: string; pageNo: number | null; requestedAt: string } | null>(null);
+
+  const run = watched ? snapshot?.aiRuns.find((item) => item.id === watched.runId) : undefined;
+  const activeRun = snapshot?.aiRuns.find(isRereadActive);
+  // The poll lists only the latest run of each page, so a newer run can replace this one. A run simply not listed yet
+  // has not ended: the poll in hand may be older than the request.
+  const replaced =
+    watched !== null &&
+    !run &&
+    (snapshot?.aiRuns.some(
+      (item) => item.task === "PAGE_REREAD" && Date.parse(item.requestedAt) > Date.parse(watched.requestedAt),
+    ) ??
+      false);
+  const ended = watched !== null && (run ? !isRereadActive(run) : replaced);
+
+  // A run already going when nothing is being followed: the page was reloaded, or it was started in another tab.
+  if ((watched === null || ended) && activeRun && activeRun.id !== watched?.runId) {
+    setWatched({ runId: activeRun.id, pageNo: null, requestedAt: activeRun.requestedAt });
+  }
+
+  const reloaded = useRef<string | null>(null);
+  useEffect(() => {
+    if (ended && watched && reloaded.current !== watched.runId) {
+      reloaded.current = watched.runId;
+      reloadAfterReread(queryClient, claimId);
+    }
+  }, [ended, watched, claimId, queryClient]);
+
+  const follow = useCallback((started: AiRunRef, pageNo: number) => {
+    setWatched({ runId: started.id, pageNo, requestedAt: started.requestedAt });
+  }, []);
+
+  const reread: RereadFollowed = {
+    pageNo: watched?.pageNo ?? null,
+    running: activeRun !== undefined,
+    outcome: ended && (run?.status === "SUCCEEDED" || run?.status === "FAILED") ? run.status : null,
+  };
+  return { reread, follow };
 }
 
 /** Everything a re-read may have changed. */

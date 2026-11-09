@@ -1,7 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { PageTypeSelect } from "@/components/ui/PageTypeSelect";
 import { ApiProblem } from "@/lib/api/problem";
@@ -9,41 +7,19 @@ import type { DocumentPage } from "@/lib/api/types";
 import { PAGE_TYPE_LABEL, PAGE_TYPE_NOT_SAVED } from "@/lib/labels/documents";
 import { EVIDENCE_PROBLEM_LABEL, RERUN_NOT_STARTED } from "@/lib/labels/fields";
 import { useWorkspace } from "../shell/workspace-context";
-import { isRereadActive, reloadAfterReread, useRerunExtraction, useReviewerReclassify } from "../queries";
+import { useRerunExtraction, useReviewerReclassify } from "../queries";
 
 /**
  * What can be done to the page in the viewer: change a misread type, and "Re-run AI on this page", which never touches
- * the rest of the claim (docs/04-information-architecture.md, Re-run scope). The poll follows the run, and once it ends
- * the fields reload, so the reviewer sees what it changed.
+ * the rest of the claim (docs/04-information-architecture.md, Re-run scope). The workspace follows the run, and what it
+ * says here names the page it was about, because the viewer may be on another one by then.
  */
 export function PageStrip({ page }: { page: DocumentPage }) {
-  const { claimId, canEdit, snapshot } = useWorkspace();
-  const queryClient = useQueryClient();
-  const rerun = useRerunExtraction(claimId);
+  const { claimId, canEdit, reread, followReread } = useWorkspace();
+  const rerun = useRerunExtraction(claimId, followReread);
   const reclassify = useReviewerReclassify(claimId);
-  const [watched, setWatched] = useState<{ runId: string; pageNo: number; requestedAt: string } | null>(null);
-
-  const run = watched ? snapshot?.aiRuns.find((item) => item.id === watched.runId) : undefined;
-  const anyActive = snapshot?.aiRuns.some(isRereadActive) ?? false;
-  // The poll lists only the latest run of each page, so a newer run can replace this one. A run simply not listed yet
-  // has not ended: the poll in hand may be older than the request.
-  const replaced =
-    watched !== null &&
-    !run &&
-    (snapshot?.aiRuns.some(
-      (item) => item.task === "PAGE_REREAD" && Date.parse(item.requestedAt) > Date.parse(watched.requestedAt),
-    ) ??
-      false);
-  const ended = watched !== null && (run ? !isRereadActive(run) : replaced);
-  const running = anyActive || rerun.isPending;
-
-  const reloaded = useRef<string | null>(null);
-  useEffect(() => {
-    if (ended && watched && reloaded.current !== watched.runId) {
-      reloaded.current = watched.runId;
-      reloadAfterReread(queryClient, claimId);
-    }
-  }, [ended, watched, claimId, queryClient]);
+  const running = reread.running || rerun.isPending;
+  const rereadPage = reread.pageNo === null ? "the page" : `p${reread.pageNo}`;
 
   const rerunProblem =
     rerun.error instanceof ApiProblem && rerun.error.code ? EVIDENCE_PROBLEM_LABEL[rerun.error.code] : undefined;
@@ -74,11 +50,7 @@ export function PageStrip({ page }: { page: DocumentPage }) {
             <Button
               className="h-7 px-3 text-xs"
               disabled={running}
-              onClick={() =>
-                rerun.mutate(page.id, {
-                  onSuccess: (ref) => setWatched({ runId: ref.id, pageNo: page.claimPageNo, requestedAt: ref.requestedAt }),
-                })
-              }
+              onClick={() => rerun.mutate({ pageId: page.id, pageNo: page.claimPageNo })}
             >
               <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
                 refresh
@@ -90,17 +62,17 @@ export function PageStrip({ page }: { page: DocumentPage }) {
       </div>
       {running && !rerun.isPending && (
         <p role="status" className="mt-1 text-xs text-info">
-          AI is reading the page again. Fields a person resolved keep their values.
+          AI is reading {rereadPage} again. Fields a person resolved keep their values.
         </p>
       )}
-      {ended && run?.status === "SUCCEEDED" && (
+      {reread.outcome === "SUCCEEDED" && (
         <p role="status" className="mt-1 text-xs text-success">
-          AI read p{watched.pageNo} again. Fields a person resolved kept their values.
+          AI read {rereadPage} again. Fields a person resolved kept their values.
         </p>
       )}
-      {ended && run?.status === "FAILED" && (
+      {reread.outcome === "FAILED" && (
         <p role="status" className="mt-1 text-xs text-warning">
-          AI could not read p{watched.pageNo}. Enter its fields by hand.
+          AI could not read {rereadPage}. Enter its fields by hand.
         </p>
       )}
       {rerun.isError && (

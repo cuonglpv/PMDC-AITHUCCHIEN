@@ -56,6 +56,27 @@ describe("Go to claim (US23)", () => {
     expect((box() as HTMLInputElement).value).toBe("");
   });
 
+  it("lets go of the keyboard when a claim opens, so the claim's shortcuts work", async () => {
+    server.use(http.get(`${API}/claim-numbers/:number`, () => HttpResponse.json(claimDetail())));
+    renderShell("CLAIMS_REVIEWER");
+
+    await userEvent.type(box(), "CLM-2026-000184{Enter}");
+
+    await waitFor(() => expect(navigation.push).toHaveBeenCalled());
+    expect(document.activeElement).not.toBe(box());
+  });
+
+  it("keeps the keyboard when the lookup fails, so the number can be corrected", async () => {
+    server.use(http.get(`${API}/claim-numbers/:number`, () => problem(404, "NOT_FOUND")));
+    renderShell("CLAIMS_REVIEWER");
+
+    await userEvent.type(box(), "CLM-2026-999999{Enter}");
+
+    await screen.findByRole("alert");
+    expect(document.activeElement).toBe(box());
+    expect((box() as HTMLInputElement).value).toBe("CLM-2026-999999");
+  });
+
   it("is not offered to the Administrator, who reads no claims", () => {
     renderShell("ADMINISTRATOR");
 
