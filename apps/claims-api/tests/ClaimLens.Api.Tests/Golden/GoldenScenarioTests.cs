@@ -1,18 +1,17 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using ClaimLens.Api.AiJobs;
 using ClaimLens.Api.Domain.Enums;
-using ClaimLens.Api.Features.Evidence;
-using ClaimLens.Api.Persistence;
 using ClaimLens.Api.Tests.AiJobs;
 using ClaimLens.Api.Tests.Features;
-using Microsoft.Extensions.DependencyInjection;
 using static ClaimLens.Api.Tests.Features.IntakeData;
+using static ClaimLens.Api.Tests.Review.ReviewData;
 
 namespace ClaimLens.Api.Tests.Golden;
 
 /// <summary>
-/// The golden scenarios through intake, page check and field extraction (Definition of Done). The documents are the files
+/// The golden scenarios through intake, page check, field extraction and review (Definition of Done). The documents are the files
 /// in fixtures/golden, and the Document AI answers are the same recordings the fake gateway replays in the full stack
 /// (fixtures/golden/*/ai-responses/pages.json), so these tests and the e2e run see the same AI.
 /// </summary>
@@ -73,11 +72,56 @@ public sealed class GoldenScenarioTests(ApiFactory api) : IDisposable
             "Kem dưỡng phục hồi da Obagi",
             await api.Scalar<string>($"select description from expense_line where claim_id = '{claim}' and line_no = 4"));
 
-        // The visit summary's diagnosis is the one required field left: once a person enters it, the claim is ready.
-        await EnterAsync(packet["visit-summary.pdf"], "diagnosis", "J02.9");
-        await using var scope = api.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ClaimLensDbContext>();
-        Assert.True(await ReviewReadiness.IsReadyAsync(db, Guid.Parse(claim), Cancel));
+        // US23: a reviewer finds it in Available, with no member name, and takes it. Nobody else can after that.
+        var reviewer = await api.SignedInAs(Staff.Reviewer);
+        var number = await api.Scalar<string>($"select claim_number from claim where id = '{claim}'");
+        var available = (await JsonOf(await reviewer.GetAsync($"claims?view=AVAILABLE&claimNumber={number}", Cancel)))
+            .GetProperty("items").EnumerateArray().Single();
+        Assert.Equal(claim, Id(available));
+        Assert.Equal(JsonValueKind.Null, available.GetProperty("memberName").ValueKind);
+        await StartAsync(reviewer, claim);
+
+        var (other, _) = await NewReviewerAsync(api);
+        var refused = await other.PostAsync($"claims/{claim}/start-review", null, Cancel);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal("CLAIM_ALREADY_ASSIGNED", (await JsonOf(refused)).GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"claim-numbers/{number}", Cancel)).StatusCode);
+
+        // US06: lowest confidence first, the two diagnoses at the top with their values withheld, and the ID number masked.
+        var fields = await FieldsAsync(reviewer, claim);
+        var confidences = fields.Select(field => field.GetProperty("ai").GetProperty("confidence").GetDecimal()).ToList();
+        Assert.Equal(confidences.Order(), confidences);
+        Assert.Equal(["diagnosis", "diagnosis"], fields.Take(2).Select(field => field.GetProperty("fieldKey").GetString()));
+        Assert.All(fields.Take(2), field => Assert.Equal(JsonValueKind.Null, field.GetProperty("ai").GetProperty("value").ValueKind));
+        Assert.Equal("********0001", FieldOf(fields, "national_id").GetProperty("valueText").GetString());
+
+        // The visit summary's diagnosis is the one required field left: entering it with a drawn region moves the claim on.
+        var visitSummary = packet["visit-summary.pdf"];
+        var diagnosis = fields.Single(field =>
+            field.GetProperty("fieldKey").GetString() == "diagnosis"
+            && field.GetProperty("documentId").GetString() == visitSummary.DocumentId.ToString());
+        Assert.True(diagnosis.GetProperty("required").GetBoolean());
+        var entered = await PatchAsync(reviewer, claim, diagnosis, new
+        {
+            rowVersion = Version(diagnosis),
+            action = "SET_VALUE",
+            valueText = "J02.9",
+            sourcePageId = visitSummary.Pages[1],
+            sourceBbox = Region,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, entered.StatusCode);
+        var answer = await JsonOf(entered);
+        Assert.Equal("ENTERED", answer.GetProperty("field").GetProperty("status").GetString());
+        Assert.Equal("IN_REVIEW", answer.GetProperty("progress").GetProperty("status").GetString());
+        Assert.Equal(0, answer.GetProperty("progress").GetProperty("fieldsToVerify").GetInt32());
+        Assert.Equal(
+            "PROCESSING,NEEDS_VERIFICATION,READY_FOR_REVIEW,IN_REVIEW",
+            await api.Scalar<string>(
+                $"select string_agg(after_value->>'status', ',' order by id) from audit_event where claim_id = '{claim}' and event_type = 'CLAIM_STATUS_CHANGED'"));
+
+        // The prescription's diagnosis is optional, so it never held the claim back.
+        Assert.Equal(new[] { "prescription.docx diagnosis#0 NEEDS_ENTRY" }, await OpenFieldsAsync(claim));
     }
 
     [Fact]
@@ -123,6 +167,44 @@ public sealed class GoldenScenarioTests(ApiFactory api) : IDisposable
         Assert.DoesNotContain(api.Ai.Extractions, request => request.Documents.Any(document => packet.Values.Any(file => file.DocumentId == document.DocumentId)));
         var status = await JsonOf(await client.GetAsync($"claims/{claim}/status", Cancel));
         Assert.True(status.GetProperty("fallbackActive").GetBoolean());
+
+        // US06: the reviewer takes it, chooses each page's type, which creates the empty fields, and works by hand.
+        var reviewer = await api.SignedInAs(Staff.Reviewer);
+        await StartAsync(reviewer, claim);
+        Assert.Empty(await FieldsAsync(reviewer, claim));
+        foreach (var page in Recording.Load("clean"))
+        {
+            var chosen = await reviewer.PutAsJsonAsync(
+                $"claims/{claim}/pages/{packet[page.Document].Pages[page.PageNo]}/type",
+                new { pageType = FieldName(page.PageCheck.PageType) },
+                Cancel);
+            Assert.Equal(HttpStatusCode.OK, chosen.StatusCode);
+        }
+
+        // AI read nothing, so nothing has a source: a value needs a region drawn (BR-02).
+        var invoice = packet["invoice.pdf"];
+        var total = (await FieldsAsync(reviewer, claim)).Single(field =>
+            field.GetProperty("fieldKey").GetString() == "invoice_total"
+            && field.GetProperty("documentId").GetString() == invoice.DocumentId.ToString());
+        var noSource = await PatchAsync(reviewer, claim, total, new { rowVersion = Version(total), action = "SET_VALUE", valueAmount = 1_400_000 });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, noSource.StatusCode);
+        Assert.Equal("SOURCE_REQUIRED", (await JsonOf(noSource)).GetProperty("code").GetString());
+
+        // The invoice's line, added by hand, brings its empty fields.
+        var added = await reviewer.PostAsJsonAsync($"claims/{claim}/expense-lines", new { documentId = invoice.DocumentId }, Cancel);
+        Assert.Equal(HttpStatusCode.Created, added.StatusCode);
+
+        var pageOf = packet.Values.ToDictionary(file => file.DocumentId.ToString(), file => file.Pages[1]);
+        foreach (var field in (await FieldsAsync(reviewer, claim)).Where(field => field.GetProperty("required").GetBoolean()))
+        {
+            var entered = await PatchAsync(reviewer, claim, field, Entry(field, pageOf[field.GetProperty("documentId").GetString()!]));
+            Assert.Equal(HttpStatusCode.OK, entered.StatusCode);
+        }
+
+        Assert.Equal("IN_REVIEW", await api.Scalar<string>($"select status::text from claim where id = '{claim}'"));
+        Assert.Equal(
+            "1 MANUAL 300000 Khám nội tổng quát",
+            await api.Scalar<string>($"select line_no || ' ' || origin || ' ' || amount || ' ' || description from expense_line where claim_id = '{claim}'"));
     }
 
     // ---- The packet and the recorded answers.
@@ -198,15 +280,32 @@ public sealed class GoldenScenarioTests(ApiFactory api) : IDisposable
                 """) ?? "")
             .Split('|', StringSplitOptions.RemoveEmptyEntries)];
 
-    /// <summary>What a reviewer's entry will write in Slice 3 (US06): the value, its drawn source and who entered it.</summary>
-    private Task EnterAsync(UploadedFile file, string fieldKey, string value) =>
-        api.Sql(
-            $$"""
-            update claim_field
-            set status = 'ENTERED', value_text = '{{value}}', source_page_id = '{{file.Pages[1]}}',
-                source_bbox = '{"x":0.1,"y":0.4,"w":0.3,"h":0.04}', resolved_by = '10000000-0000-4000-8000-000000000002', resolved_at = now()
-            where document_id = '{{file.DocumentId}}' and field_key = '{{fieldKey}}' and item_no = 0
-            """);
+    /// <summary>What a reviewer types for a field by its kind, with the region they drew.</summary>
+    private static Dictionary<string, object> Entry(JsonElement field, Guid page)
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["rowVersion"] = Version(field),
+            ["action"] = "SET_VALUE",
+            ["sourcePageId"] = page,
+            ["sourceBbox"] = Region,
+        };
+        var key = field.GetProperty("fieldKey").GetString();
+        switch (field.GetProperty("valueKind").GetString())
+        {
+            case "MONEY":
+                body["valueAmount"] = key == "line_amount" ? 300_000 : 1_400_000;
+                break;
+            case "DATE":
+                body["valueDate"] = "2026-10-12";
+                break;
+            default:
+                body["valueText"] = key == "line_description" ? "Khám nội tổng quát" : "Đã nhập tay";
+                break;
+        }
+
+        return body;
+    }
 
     private static string FieldName(PageType type) => JsonNamingPolicy.SnakeCaseUpper.ConvertName(type.ToString());
 
