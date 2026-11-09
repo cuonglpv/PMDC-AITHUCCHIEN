@@ -215,6 +215,8 @@ Both workers are `BackgroundService` classes inside the API process, and tests c
 
 `uploadDocument` stores the original first and then inserts the row as `CONVERTING`, so a failed store leaves no row that would block submission. It checks a file's type by its first bytes, not its name: LibreOffice turns any bytes into a PDF, so a corrupted DOCX would otherwise become a page of garbage instead of being refused (section 13). Images are rotated according to their EXIF data before a page image is written, because every bounding box is relative to that image.
 
+`FieldExtractionApplier` and `PageRereadApplier` share `Appliers/FieldReadings`, which records a reading and applies the thresholds. After any change to a claim's evidence, `Features/Lifecycle/ClaimProgression` moves the claim on if it is ready and calls `ClaimRecheck`, an empty hook that Slices 4a and 4b fill with validation and calculation.
+
 ### Configuration
 
 Settings without a UI (06, section 2) live in `appsettings.json` and environment variables. Secrets come only from the environment.
@@ -224,7 +226,7 @@ Settings without a UI (06, section 2) live in `appsettings.json` and environment
 | `Auth` | Token lifetimes, signing key (at least 32 bytes), allowed origins, issuer and audience; checked when the API starts |
 | `Proxy` | `KnownProxies` and `KnownNetworks` allowed to set `X-Forwarded-For`. With neither set, forwarded headers are ignored |
 | `Thresholds` | `PageType` 0.80, `GeneralField` 0.90, `MoneyAndIdentityField` 0.95, `NeedsEntryBelow` 0.70, `PageQuality` 0.50 (to tune on the golden set), `BenefitMapping` 0.85; checked when the API starts |
-| `Ai` | `BaseUrl` (the service root), `ServiceKey` (environment only), and per task the pipeline name and version and `TimeoutSeconds` (page check 30, extraction 120) |
+| `Ai` | `BaseUrl` (the service root), `ServiceKey` (environment only), and per task the pipeline name and version and `TimeoutSeconds` (page check 30, extraction 120, page re-read 60) |
 | `Converter`, `Storage` | Base URL, timeout, bucket and credentials |
 | `Limits` | 20 MB per file, 30 pages per claim |
 | `Queue` | BR-09 high-value threshold |
@@ -280,6 +282,7 @@ apps/web/
     │   ├── api/
     │   │   ├── schema.d.ts     # Generated from claims-api.yaml
     │   │   ├── client.ts       # openapi-fetch, bearer token, retry once on AUTH_REQUIRED
+    │   │   ├── claim-queries.ts # The claim hooks and keys intake and the workspace share
     │   │   ├── session.ts      # Access token in memory, one refresh at a time
     │   │   └── problem.ts      # Error code to behaviour
     │   ├── auth/roles.ts       # Role to home and navigation; UX only
@@ -301,8 +304,8 @@ Tests sit next to the code they test, as `*.test.tsx`.
 | `/intake/:claimId` | SCR-13 | Intake | Step 3 while `DRAFT`; a read-only header and documents after submission |
 | `/queue` | SCR-20 | Reviewer | |
 | `/approvals` | SCR-21 | Approver | |
-| `/claims/:id` | | Reviewer, Approver | Redirects to `overview` |
-| `/claims/:id/overview` to `/timeline` | SCR-30 to SCR-36 | Reviewer, Approver | One folder per tab |
+| `/claims/:id` | | Reviewer, Approver | Redirects to `evidence`, and to `overview` once that tab exists |
+| `/claims/:id/overview` to `/timeline` | SCR-30 to SCR-36 | Reviewer, Approver | One folder per tab. Only `evidence` exists so far, and a tab that is not built is not shown |
 | `/plans` | SCR-41 | Admin, Reviewer, Approver | |
 | `/plans/:id` | | Admin, Reviewer, Approver | Redirects to `versions` |
 | `/plans/:id/versions` | SCR-41 | Admin, Reviewer, Approver | |
@@ -424,7 +427,7 @@ Generated files are committed, so a build needs no generator. CI generates them 
 | Contract, Claims API | `ClaimLens.Api.Tests/Contract` | JsonSchema.Net | Every response any test sees matches the YAML: the check sits in the test client |
 | Authorization | `ClaimLens.Api.Tests/Authorization` | Cases from `x-claimlens` | Every role on every operation (Definition of Done) |
 | Architecture | `ClaimLens.Api.Tests/Architecture` | NetArchTest | The rules in section 4 |
-| Golden | `ClaimLens.Api.Tests/Golden` (planned, arrives with the extraction slice, US04/US05; the intake slice tests the clean packet in `Integration/` and `e2e/intake.spec.ts`) | `fixtures/golden` | Definition of Done, with AI on and AI off |
+| Golden | `ClaimLens.Api.Tests/Golden` | `fixtures/golden` | Definition of Done, with AI on and AI off. So far through intake, page check, extraction and review |
 | Document AI | `apps/document-ai/tests` | pytest, Schemathesis | Tasks and contract; no provider is called |
 | Web | Next to the code | Vitest, Testing Library, MSW | UI states |
 | End to end | `e2e/` | Playwright, axe | The three task flows, the keyboard path, WCAG AA |
@@ -443,7 +446,7 @@ fixtures/golden/
     └── expected.json           # Statuses, alerts, flags, line results, payable
 ```
 
-Today `clean/documents/` holds the golden packet (5 files, 6 pages), `blurry/documents/` one blurred receipt for US04, `invalid/` a file whose name lies about its type, and `excluded-line/` and `limit-capped/` the Rule Engine expectations. `ai-responses/` arrives with the extraction slice (US04/US05). `tools/golden/generate.mjs` makes the documents from HTML with Playwright's Chromium and writes the DOCX and XLSX files itself, with no dependency; two runs on one machine give the same bytes, and another machine's fonts change them. Each file stays small enough to commit directly, without Git LFS ([fixtures/golden/README.md](../fixtures/golden/README.md)).
+Today `clean/documents/` holds the golden packet (5 files, 6 pages), `blurry/documents/` one blurred receipt for US04, `invalid/` a file whose name lies about its type, and `excluded-line/` and `limit-capped/` the Rule Engine expectations. `clean/ai-responses/` and `blurry/ai-responses/` hold the recorded AI answers, replayed by the fake gateway and by the golden tests. `tools/golden/generate.mjs` makes the documents from HTML with Playwright's Chromium and writes the DOCX and XLSX files itself, with no dependency; two runs on one machine give the same bytes, and another machine's fonts change them. Each file stays small enough to commit directly, without Git LFS ([fixtures/golden/README.md](../fixtures/golden/README.md)).
 
 ## 11. Should stories
 
@@ -555,21 +558,30 @@ Latest stable on 04/11/2026. Lock files pin the exact version when each part is 
 
 ## 14. What is built
 
-Four slices work end to end: US01 sign-in, US19 rule sets, Slice 1 intake (US02, US03) and Slice 2 AI reading (US04, US05).
+Five slices work end to end: US01 sign-in, US19 rule sets, Slice 1 intake (US02, US03), Slice 2 AI reading (US04, US05) and Slice 3 the review queue and Evidence (US23, US06).
 
 | Part | State |
 |---|---|
 | `infra/`, `db/`, generators, CI | Done |
 | `ClaimLens.RuleEngine` | Done: US11 and US12 on the golden numbers |
-| Claims API | Sign-in, the 8 Must operations of Rule Set Management, and the 12 of intake: `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `submitClaim`, `listDocuments`, `getPage`, `getClaim`, `getClaimStatus` and `listClaims` for `MY_DRAFTS` and `MY_SUBMISSIONS`, plus `reclassifyPage` for the Intake Officer. Document Store on S3, Document Preparation with Gotenberg, PDFium and SkiaSharp, `ClaimStatusMachine`, and the AI Job Runner with the page check and field extraction appliers, `Thresholds` and `FieldCatalogue`. The role, scope, status and audit rules of all 59 operations run; the other 34 answer 501 until their features are built, and so do the reviewer's and approver's queue views and the reviewer's `reclassifyPage` |
+| Claims API | Sign-in, the 8 Must operations of Rule Set Management, and the 12 of intake: `searchMembers`, `getPolicySummary`, `createClaim`, `updateClaim`, `uploadDocument`, `deleteDocument`, `submitClaim`, `listDocuments`, `getPage`, `getClaim`, `getClaimStatus` and `listClaims` for `MY_DRAFTS` and `MY_SUBMISSIONS`, plus `reclassifyPage`, and the 9 of review: `startReview`, `getClaimByNumber`, `listFields`, `updateField`, `acceptField`, `rerunExtraction`, `listExpenseLines`, `addExpenseLine` and `removeExpenseLine`, with the reviewer's four queue views. Document Store on S3, Document Preparation with Gotenberg, PDFium and SkiaSharp, `ClaimStatusMachine`, and the AI Job Runner with the page check, field extraction and page re-read appliers, `Thresholds` and `FieldCatalogue`. The role, scope, status and audit rules of all 59 operations run; the other 25 answer 501 until their features are built, and so do the approver's queue views |
 | Document AI Service | All six routes with the fake gateway, which replays the recorded answers for the golden pages when `DOCUMENT_AI_REPLAY_DIR` is set (a page is recognised by its dHash and sharpness) |
-| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor, SCR-10 to SCR-13 intake, with the AI page check on SCR-13 (type, AI marker and level, Choose type, the fallback banner). The reviewer's and approver's homes are placeholders |
+| Staff Web App | Sign-in, shell, role routing, SCR-41 plans and versions, SCR-42 rule set editor, SCR-10 to SCR-13 intake, with the AI page check on SCR-13 (type, AI marker and level, Choose type, the fallback banner), SCR-20 the review queue, the top bar lookup, the Claim workspace with its page viewer, and SCR-31 Evidence. The approver's home is a placeholder, and the approver reaches Evidence by the lookup, read only |
 
 US19 adds three checks the documents did not spell out, because the Rule Engine would otherwise quietly use one rule and ignore the other: a category has one coverage or exclusion rule, a version has one reimbursement rate, and one limit per scope. A repeat is refused with `VALIDATION_FAILED` and the field that repeats. The eligibility rule `ELIG-01` is added by the system with order 10, the value the seeded rule sets use, and has no tab. Rules apply by kind (eligibility, waiting periods, exclusions, coverage, then the rate and limits), and a save or publish that orders a rule before a kind that applies first is refused with `RULE_INVALID`. A version is published with an effective date of today or later in Vietnam time. US20 test runs (`testRuleSet`, `listSampleClaims`) are Should and still hidden.
 
-Slice 1 queues a `PAGE_CHECK` run for each ready file and a `FIELD_EXTRACTION` run on submission ([seq-01-intake](diagrams/seq-01-intake.md)); Slice 2 runs them, fills the field slots of the [field catalogue](03-use-cases.md#field-catalogue) and moves the claim to `READY_FOR_REVIEW` or `NEEDS_VERIFICATION` ([seq-02-ai-reading](diagrams/seq-02-ai-reading.md)). A claim whose pages are all Other has no required field and is `READY_FOR_REVIEW`; the required-document check of US07 catches it. `ai_value` keeps a national ID in full, so `listFields` (Slice 3) must mask it. The fallback banner follows the latest run of each task, so a failed page check on an earlier file shows only on that file's pages once a later file was checked.
+Slice 1 queues a `PAGE_CHECK` run for each ready file and a `FIELD_EXTRACTION` run on submission ([seq-01-intake](diagrams/seq-01-intake.md)); Slice 2 runs them, fills the field slots of the [field catalogue](03-use-cases.md#field-catalogue) and moves the claim to `READY_FOR_REVIEW` or `NEEDS_VERIFICATION` ([seq-02-ai-reading](diagrams/seq-02-ai-reading.md)). A claim whose pages are all Other has no required field and is `READY_FOR_REVIEW`; the required-document check of US07 catches it. `ai_value` keeps a national ID in full, and `listFields` masks it. The fallback banner follows the latest run of each task, so a failed page check on an earlier file shows only on that file's pages once a later file was checked.
 
-Next, in the order the stories depend on each other: the review queue and the Evidence tab (US23, US06), then validation and adjudication.
+Slice 3 ([seq-03-review](diagrams/seq-03-review.md)) lets a reviewer take a claim and verify each field beside its source. What it leaves for later:
+
+- **Below 1280 px** the workspace keeps a 1100 px minimum and the page scrolls sideways. The overlay for zone C and the dropdown for zone A that the [information architecture](04-information-architecture.md) asks for are not built. To settle with the non-functional requirements.
+- **Slice 4a** adds `updateClaimFacts`, and fills `ClaimRecheck`.
+- **Slice 4b:** a hand-classified invoice with no lines passes readiness, because readiness only checks the lines that exist. Calculation has to refuse it.
+- **Slice 5:** `submitRecommendation` has to refuse an `IN_REVIEW` claim with an unresolved required field, and one with a `PAGE_REREAD` queued or running, because that applier does not check the claim's status.
+- **A prescription read by hand** has no way to add a medication line: only an invoice has "Add expense line". To look at with US09, the first feature that reads medication.
+- The fallback banner says "AI assistance unavailable" for the whole claim when one page's re-read failed, because `fallbackActive` follows the latest run of each task. The page's own message and its rail status are the precise ones.
+
+Next, in the order the stories depend on each other: validation (US07, US08), then adjudication.
 
 ## Still open
 

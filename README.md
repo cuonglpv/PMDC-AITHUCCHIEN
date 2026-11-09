@@ -355,6 +355,7 @@ docker compose -f infra/compose.yaml --profile full up -d --build
 - [x] Audit code and docs, fix the findings, and plan the remaining slices ([audit and roadmap](docs/11-audit-and-roadmap.md))
 - [x] Build Slice 1, intake: member search, claim registration, document upload and preparation, submission (US02, US03)
 - [x] Build Slice 2, AI reading: the AI Job Runner, page check and field extraction with thresholds and the manual fallback (US04, US05)
+- [x] Build Slice 3, review: the review queue, the Claim workspace and the Evidence tab, with page re-reads and expense lines (US23, US06)
 - [ ] Design class diagrams and sequence diagrams (written per slice; closes when the last slice ships)
 - [ ] Build the backend, Rule Engine and Document AI service
 - [ ] Build the frontend and connect it to the API

@@ -549,7 +549,7 @@ What must be true in the tables before a claim can enter each status. The move i
 | `PROCESSING` | At least one `document` in `READY`; `submitted_at` set; a `FIELD_EXTRACTION` run queued. |
 | `NEEDS_VERIFICATION` | Extraction finished with a required `claim_field` in `NEEDS_VERIFICATION` or `NEEDS_ENTRY`, or the run `FAILED`. |
 | `READY_FOR_REVIEW` | Every required field slot resolved (`AUTO_ACCEPTED`, `CONFIRMED`, `CORRECTED`, `ENTERED` or `NOT_PRESENT`) and no page left `UNCLASSIFIED`. |
-| `IN_REVIEW` | `assignee_id` set (`ck_claim_assignee_required`). Returned = latest `recommendation` is `RETURNED`. |
+| `IN_REVIEW` | `assignee_id` set (`ck_claim_assignee_required`). Returned = latest `recommendation` is `RETURNED`. It may hold an unresolved required field after a re-read, an added line or a new page type: the status does not go back, and `submitRecommendation` has to refuse the claim until the field is resolved. |
 | Adjudication may run | No `alert` that is `OPEN` and `BLOCKING`; every `expense_line` has an amount and a mapping that is not `PENDING` or `NEEDS_CONFIRMATION`; a `PUBLISHED` `rule_set_version` is effective on the service date. |
 | `PENDING_APPROVAL` | A `SUBMITTED` `recommendation` on the latest revision, which is not stale (its `input_hash` matches the current inputs), with `attested_at` and `attested_values`. |
 | `APPROVED`, `PARTIALLY_APPROVED`, `REJECTED` | The `recommendation` is `DECIDED` by a `SENIOR_APPROVER` who is not the submitter, with an action that matches BR-13. An approval adds `final_payable` to `policy.consumed_amount` and raises `balance_version`. |

@@ -373,7 +373,7 @@ export interface paths {
         get?: never;
         /**
          * Set a page type
-         * @description The officer may choose a type before submission, and the reviewer must choose one for every Unclassified page. When a page gets a type after a failed extraction, the system creates the empty header field slots for that type.
+         * @description The officer may choose a type before submission, and the reviewer must choose one for every Unclassified page. When a reviewer chooses a type, the system creates the missing empty header field slots of that type and of the document's type, and keeps the slots already there.
          */
         put: operations["reclassifyPage"];
         post?: never;
@@ -451,7 +451,7 @@ export interface paths {
         head?: never;
         /**
          * Correct, enter or mark a field not present
-         * @description The server sets the status: `CORRECTED` when an AI value was changed, `ENTERED` when AI gave none, `NOT_PRESENT` for that action. A value needs a source (BR-02): send `sourcePageId` and `sourceBbox`, or the AI source is kept if there is one. In `IN_REVIEW` the change re-runs validation and adjudication within this request; `progress` shows the result (US13).
+         * @description The server sets the status: `CONFIRMED` when the value is the one AI read, `CORRECTED` when an AI value was changed, `ENTERED` when AI gave none, `NOT_PRESENT` for that action. A value needs a source (BR-02): send `sourcePageId` and `sourceBbox`, or the AI source is kept if there is one. In `IN_REVIEW` the change re-runs validation and adjudication within this request; `progress` shows the result (US13).
          */
         patch: operations["updateField"];
         trace?: never;
